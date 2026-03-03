@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-09-03 22:03:36
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-01 22:23:36
+ * @LastEditTime: 2026-03-03 14:08:51
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/mqtt.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -16,7 +16,7 @@
 #include "utility.h"
 
 TaskHandle_t myTaskHandle = NULL;
-static const char* TAG = "mqtt.c";
+static const char* TAG = "mqtt";
 //MQTT客户端操作句柄
 static esp_mqtt_client_handle_t     s_mqtt_client = NULL;
 //MQTT连接标志

@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-08-31 13:41:35
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-02-27 23:18:22
+ * @LastEditTime: 2026-03-03 14:09:41
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/simple_wifi_sta.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -37,8 +37,9 @@
 #define NVS_SSID_KEY                    "ssid"
 #define NVS_PASSWORD_KEY                "password"
 
-static const char *TAG = "wifi";
 
+static const char* TAG = "wifista";
+  
 SYSPARAM g_sysParam ={0} ;
 //缓存一份ssid
 static char s_ssid_value[33] = {0};
