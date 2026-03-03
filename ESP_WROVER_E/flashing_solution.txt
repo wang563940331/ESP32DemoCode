@@ -1,0 +1,48 @@
+# ESP32烧录失败解决方案
+
+## 问题分析
+烧录过程中出现错误：
+"A fatal error occurred: Unable to verify flash chip connection (No serial data received.)"
+
+错误发生在esptool.py尝试将波特率从初始值改为460800之后，这通常是因为较高的波特率导致通信不稳定。
+
+## 解决方案
+
+### 1. 使用较低波特率烧录
+使用115200波特率（更稳定）进行烧录：
+
+```bash
+# 使用esptool.py直接烧录
+esptool.py --chip esp32 --port /dev/ttyS1 --baud 115200 write_flash -z 0x1000 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin 0x10000 build/RemoteControlO_Com.bin
+
+# 或者使用idf.py命令
+idf.py -p /dev/ttyS1 -b 115200 flash
+```
+
+### 2. 手动进入下载模式
+如果自动烧录失败，可以尝试手动进入下载模式：
+
+1. 按住开发板上的BOOT键
+2. 短暂按下RESET键
+3. 松开RESET键
+4. 保持按住BOOT键，同时执行烧录命令
+5. 看到烧录开始后，松开BOOT键
+
+### 3. 检查串口连接
+确保：
+- USB线质量良好（使用数据线而非充电线）
+- 串口端口正确（/dev/ttyS1是否为正确的端口）
+- 用户有串口访问权限
+
+### 4. 其他检查项
+- 确保开发板供电稳定
+- 检查硬件连接是否松动
+- 尝试使用不同的USB端口
+
+## 验证命令
+可以先尝试读取flash芯片ID来验证连接：
+```bash
+esptool.py --chip esp32 --port /dev/ttyS1 --baud 115200 flash_id
+```
+
+如果成功读取到flash ID，则说明连接正常，可以继续尝试烧录。
