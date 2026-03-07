@@ -280,3 +280,21 @@ esp_err_t wifi_ap_deinit(void)
     
     return ESP_OK;
 }
+
+
+void apmod_init(void)
+{
+   ESP_LOGI(TAG, "Starting WiFi AP example");
+    
+    // Initialize WiFi in AP mode
+    esp_err_t ret = wifi_ap_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi AP");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "WiFi AP initialized successfully");
+    ESP_LOGI(TAG, "Connect to AP: ESP32_AP with password: 12345678");
+    ESP_LOGI(TAG, "Then open http://192.168.4.1 in your browser");
+    
+}

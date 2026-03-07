@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-07 16:43:16
+ * @LastEditTime: 2026-03-07 20:34:39
  * @Description: 
  */
 
@@ -103,7 +103,7 @@ void en_log_set(void)
 void app_main(void)
 {
      en_log_set();
-# if 0
+# if 1
     esp_err_t ret;
     ESP_LOGI(TAG, "app_main runnig!");
  
@@ -115,12 +115,12 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-
     led_init();
     pwm_init();
     wifi_sta_init();
-    simple_init();
-    init_mqtt();
+    apmod_init();
+    // simple_init();
+    // init_mqtt();
 
     //vTaskDelete(NULL);
     while(1)
@@ -143,7 +143,8 @@ void app_main(void)
 
     
     }
-#else
+#endif
+#if 0 
    ESP_LOGI(TAG, "Starting WiFi AP example");
     
     // Initialize WiFi in AP mode

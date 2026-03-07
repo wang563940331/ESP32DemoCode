@@ -12,5 +12,5 @@ extern char g_string_var[256];
 // Function declarations
 esp_err_t wifi_ap_init(void);
 esp_err_t wifi_ap_deinit(void);
-
+void apmod_init(void);
 #endif /* __WIFI_AP_H__ */
