@@ -44,14 +44,19 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 // Root handler - serves the configuration page
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    char response[1024];
+    char response[2048];
     
     // Create HTML page
     snprintf(response, sizeof(response),
         "<!DOCTYPE html>"
         "<html>"
         "<head>"
-        "    <title>ESP32 Configuration</title>"
+        "    <title>ESP32 Config</title>"
+        "    <meta charset='utf-8'>"
+        "    <meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "    <meta http-equiv='Cache-Control' content='no-cache, no-store, must-revalidate'>"
+        "    <meta http-equiv='Pragma' content='no-cache'>"
+        "    <meta http-equiv='Expires' content='0'>"
         "    <style>"
         "        body { font-family: Arial, sans-serif; margin: 20px; }"
         "        h1 { color: #333; }"
@@ -64,20 +69,20 @@ static esp_err_t root_handler(httpd_req_t *req)
         "</head>"
         "<body>"
         "    <h1>ESP32 Configuration</h1>"
-        "    <form action='/save' method='POST'>"
-        "        <label for='domain'>Domain:</label>"
-        "        <input type='text' id='domain' name='domain' value='%s'><br>"
-        "        <label for='port'>Port:</label>"
-        "        <input type='number' id='port' name='port' value='%d'><br>"
-        "        <label for='string'>String Variable:</label>"
-        "        <input type='text' id='string' name='string' value='%s'><br>"
-        "        <br><input type='submit' value='Save Configuration'>"
+        "    <form action='/save' method='POST' enctype='application/x-www-form-urlencoded'>"
+        "        <label>Domain:</label>"
+        "        <input type='text' name='domain' value='%s'><br>"
+        "        <label>Port:</label>"
+        "        <input type='number' name='port' value='%d'><br>"
+        "        <label>String:</label>"
+        "        <input type='text' name='string' value='%s'><br>"
+        "        <br><input type='submit' value='Save'>"
         "    </form>"
         "    <div class='config'>"
-        "        <h3>Current Configuration:</h3>"
+        "        <h3>Current:</h3>"
         "        <p>Domain: %s</p>"
         "        <p>Port: %d</p>"
-        "        <p>String Variable: %s</p>"
+        "        <p>String: %s</p>"
         "    </div>"
         "</body>"
         "</html>",
