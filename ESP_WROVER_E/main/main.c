@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-03 15:30:47
+ * @LastEditTime: 2026-03-07 16:32:32
  * @Description: 
  */
 
@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include <esp_log.h>
 #include <esp_heap_caps.h>
+#include "wifi_ap.h"
 // 使用自定义的日志头文件代替原始的esp_log.h
 #include "my_log.h"
 #include <esp_heap_caps.h>
@@ -69,7 +70,7 @@ void system_info_timercb(void *timer)
     // u8Ver,
     // sGetTimestamp(),
     // u32SysTime);
-    print_detailed_mem_info();
+    // print_detailed_mem_info();
     mdf_mem_print_heap();
 }
 
@@ -101,6 +102,7 @@ void en_log_set(void)
 
 void app_main(void)
 {
+# if 0
     esp_err_t ret;
     ESP_LOGI(TAG, "app_main runnig!");
     en_log_set();
@@ -140,4 +142,24 @@ void app_main(void)
 
     
     }
+#else
+   ESP_LOGI(TAG, "Starting WiFi AP example");
+    
+    // Initialize WiFi in AP mode
+    esp_err_t ret = wifi_ap_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi AP");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "WiFi AP initialized successfully");
+    ESP_LOGI(TAG, "Connect to AP: ESP32_AP with password: 12345678");
+    ESP_LOGI(TAG, "Then open http://192.168.4.1 in your browser");
+    
+    // Keep the task running
+    while (1) {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "Current configuration - Domain: %s, Port: %d, String: %s", g_domain, g_port, g_string_var);
+    }
+#endif
 }

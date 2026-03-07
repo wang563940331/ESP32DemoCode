@@ -1,30 +1,31 @@
-set(src_dirs            
-            EXIT
-            LED
-            PWM
-            WIFI_STA
-            UTILITY
-            )
-
+set(src_dirs        
+        EXIT
+        LED
+        PWM
+        WIFI_STA
+        WIFI_AP
+        UTILITY
+        )
 
 set(include_dirs
-            EXIT
-            LED
-            PWM
-            WIFI_STA
-            UTILITY
-            )
-
+        EXIT
+        LED
+        PWM
+        WIFI_STA
+        WIFI_AP
+        UTILITY
+        )
 
 set(requires
-            driver
-            nvs_flash
-            esp_wifi
-            mqtt
-            json)
+        driver
+        nvs_flash
+        esp_wifi
+        esp_event
+        esp_http_server
+        lwip
+        mqtt
+        json)
 
 idf_component_register(SRC_DIRS ${src_dirs} INCLUDE_DIRS ${include_dirs} REQUIRES ${requires})
-
 # component_compile_options(-ffast-math -O3 -Wno-error=format=-Wno-format)
 component_compile_options(-ffast-math -O3 -Wno-error=format -Wno-format)
-
