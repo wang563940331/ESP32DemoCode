@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-08-31 13:41:35
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-03 14:09:41
+ * @LastEditTime: 2026-03-07 20:50:52
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/simple_wifi_sta.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -417,16 +417,10 @@ esp_err_t wifi_sta_init(void)
 
     print_device_info();
 
-    ESP_ERROR_CHECK(esp_netif_init());  //用于初始化tcpip协议栈
+    // 创建事件组
     s_wifi_event_group = xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_event_loop_create_default());       //创建一个默认系统事件调度循环，之后可以注册回调函数来处理系统的一些事件
-    esp_netif_create_default_wifi_sta();    //使用默认配置创建STA对象
-
-    //初始化WIFI
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     
-    //注册事件
+    // 注册事件
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT,ESP_EVENT_ANY_ID,&event_handler,NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT,IP_EVENT_STA_GOT_IP,&event_handler,NULL));
     ESP_ERROR_CHECK( esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
@@ -446,7 +440,7 @@ esp_err_t wifi_sta_init(void)
         wifi_config_t wifi_config = 
         {
             .sta = 
-            { 
+            {
                 .threshold.authmode = WIFI_AUTH_WPA2_PSK,
                 .pmf_cfg = 
                 {
@@ -457,15 +451,16 @@ esp_err_t wifi_sta_init(void)
         };
         snprintf((char*)wifi_config.sta.ssid,32,"%s",s_ssid_value);
         snprintf((char*)wifi_config.sta.password,64,"%s",s_password_value);
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     }
     else
     {
          ESP_LOGI(TAG, "wifi nvs为空,请使用smartconfig进行配网");
          set_ones_smartconfig(true);
     }
-    //启动WIFI
+    //设置回调
     wifi_cb = wifi_event_handler;
-    ESP_ERROR_CHECK(esp_wifi_start() );                         //启动WIFI
+    
     ESP_LOGI(TAG, "wifi_init_sta finished.");
     return ESP_OK;
 }

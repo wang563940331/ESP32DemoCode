@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-07 20:34:39
+ * @LastEditTime: 2026-03-07 22:23:07
  * @Description: 
  */
 
@@ -75,6 +75,69 @@ void system_info_timercb(void *timer)
 }
 
 
+void init_netWork(void)
+{
+    esp_err_t ret;
+    ESP_LOGI(TAG, "初始化网络配置");
+    // 初始化网络栈
+    ret = esp_netif_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize netif: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    ESP_LOGI(TAG, "创建事件...");
+    // 创建事件循环
+    ret = esp_event_loop_create_default();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "创建事件失败: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    ESP_LOGI(TAG, "创建WiFi STA和AP接口...");
+    // 创建WiFi STA和AP接口
+    esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();
+    
+    ESP_LOGI(TAG, "初始化WiFi...");
+    // 初始化WiFi
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ret = esp_wifi_init(&cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "初始化WiFi失败: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    ESP_LOGI(TAG, "设置WiFi模式为APSTA...");
+    // 设置WiFi模式为APSTA
+    ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "设置WiFi模式为APSTA失败: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    // 先初始化AP模式（用于配置）
+    ESP_LOGI(TAG, "始化AP模式...");
+    ret = wifi_ap_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "始化AP模式失败");
+    }
+    
+    // 再初始化STA模式（用于连接网络）
+    ESP_LOGI(TAG, "初始化STA模式...");
+    ret = wifi_sta_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "初始化STA模式失败");
+    }
+    
+    // 启动WiFi
+    ESP_LOGI(TAG, "启动WiFi...");
+    ret = esp_wifi_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "启动WiFi失败: %s", esp_err_to_name(ret));
+        return;
+    }
+}
 
 void en_log_set(void)
 {
@@ -115,12 +178,16 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
+    ESP_ERROR_CHECK(ret);
+    // 初始化基本硬件
     led_init();
     pwm_init();
-    wifi_sta_init();
-    apmod_init();
-    // simple_init();
-    // init_mqtt();
+    
+    init_netWork();
+    // 初始化其他网络服务
+    ESP_LOGI(TAG, "初始化网络服务...");
+    simple_init();
+    init_mqtt();
 
     //vTaskDelete(NULL);
     while(1)

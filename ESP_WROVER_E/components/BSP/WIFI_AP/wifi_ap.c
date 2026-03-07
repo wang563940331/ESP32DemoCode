@@ -200,26 +200,7 @@ esp_err_t wifi_ap_init(void)
 {
     esp_err_t ret = ESP_OK;
     
-    // Initialize NVS
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-    
     ESP_LOGI(TAG, "ESP_WIFI_MODE_AP Init");
-    
-    // Initialize TCP/IP stack
-    ESP_ERROR_CHECK(esp_netif_init());
-    
-    // Create default event loop
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-    
-    // Configure WiFi
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     
     // Register event handlers
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
@@ -242,9 +223,7 @@ esp_err_t wifi_ap_init(void)
     }
     
     // Apply WiFi configuration
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
     
     ESP_LOGI(TAG, "WiFi AP started with SSID: %s, password: %s", AP_SSID, AP_PASS);
     
