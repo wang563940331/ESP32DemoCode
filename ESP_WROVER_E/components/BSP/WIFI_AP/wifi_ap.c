@@ -11,7 +11,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "esp_http_server.h"
-
+#include "utility.h"
 // Global configuration variables
 char g_domain[128] = "default.domain.com";
 uint16_t g_port = 8080;

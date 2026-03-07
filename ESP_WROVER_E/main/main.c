@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-07 16:32:32
+ * @LastEditTime: 2026-03-07 16:43:16
  * @Description: 
  */
 
@@ -79,7 +79,7 @@ void system_info_timercb(void *timer)
 void en_log_set(void)
 {
     // 设置日志级别为调试
-    esp_log_level_set("*", ESP_LOG_NONE);
+    esp_log_level_set("*", ESP_LOG_DEBUG);
     esp_log_level_set("main", ESP_LOG_DEBUG);
     esp_log_level_set("pwm", ESP_LOG_DEBUG);
     esp_log_level_set("json", ESP_LOG_DEBUG);
@@ -102,10 +102,11 @@ void en_log_set(void)
 
 void app_main(void)
 {
+     en_log_set();
 # if 0
     esp_err_t ret;
     ESP_LOGI(TAG, "app_main runnig!");
-    en_log_set();
+ 
     // psram_example();
     ret = nvs_flash_init();                             /* 初始化NVS */
     // nvs_flash_erase();
