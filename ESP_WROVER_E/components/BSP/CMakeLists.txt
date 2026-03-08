@@ -5,6 +5,7 @@ set(src_dirs
         WIFI_STA
         WIFI_AP
         UTILITY
+        PARAM
         )
 
 set(include_dirs
@@ -14,6 +15,7 @@ set(include_dirs
         WIFI_STA
         WIFI_AP
         UTILITY
+        PARAM
         )
 
 set(requires

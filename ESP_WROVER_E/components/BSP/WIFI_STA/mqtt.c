@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-09-03 22:03:36
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-03 14:08:51
+ * @LastEditTime: 2026-03-08 23:06:30
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/mqtt.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -53,7 +53,7 @@ bool wait_sntp_sync(uint32_t timeout_ms) {
         
         // 检查是否同步完成（年份大于2020）
         if (timeinfo.tm_year > (2020 - 1900)) {
-            ESP_LOGI(TAG, "SNTP synced successfully");
+            ESP_LOGI(TAG, "SNTP 同步完成");
             return true;
         }
         
@@ -85,7 +85,7 @@ void initialize_sntp() {
     sntp_init();
     // 等待SNTP同步完成（超时3秒）
     wait_sntp_sync(10000);
-    ESP_LOGI(TAG, "Initializing SNTP");
+    ESP_LOGI(TAG, "SNTP 初始化完成");
 }
 /**
  * mqtt连接事件处理函数
@@ -106,22 +106,22 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
     {
         case MQTT_EVENT_CONNECTED:  //连接成功
             initialize_sntp();
-            ESP_LOGI(TAG, "mqtt connected");
+            ESP_LOGI(TAG, "MQTT 连接成功");
             s_is_mqtt_connected = true;
             //连接成功后，订阅测试主题
             esp_mqtt_client_subscribe_single(s_mqtt_client,MQTT_SUBSCRIBE_TOPIC,1);
             break;
         case MQTT_EVENT_DISCONNECTED:   //连接断开
-            ESP_LOGI(TAG, "mqtt disconnected");
+            ESP_LOGI(TAG, "MQTT 连接断开");
             s_is_mqtt_connected = false;
             break;
         case MQTT_EVENT_SUBSCRIBED:     //收到订阅消息ACK
-            ESP_LOGI(TAG, " mqtt subscribed ack, msg_id=%d", event->msg_id);
+            ESP_LOGI(TAG, "MQTT 订阅确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_UNSUBSCRIBED:   //收到解订阅消息ACK
             break;
         case MQTT_EVENT_PUBLISHED:      //收到发布消息ACK
-            ESP_LOGI(TAG, "mqtt publish ack, msg_id=%d", event->msg_id);
+            ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_DATA:
             printf("topic=%.*s\r\n", event->topic_len, event->topic);       //收到Pub消息直接打印出来
@@ -129,7 +129,7 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
             parse_json(event->data,&Start_once);
             break;
         case MQTT_EVENT_ERROR:
-            ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+            ESP_LOGI(TAG, "MQTT 错误");
             break;
         default:
             break;
@@ -148,7 +148,7 @@ void mqtt_start(void)
     char* mac = getg_mac();
     char macbuf[50]={0};
     esp_mqtt_client_config_t mqtt_cfg = {0};
-    ESP_LOGI(TAG,"mqtt init!\n");
+    ESP_LOGI(TAG,"MQTT初始化!\n");
     mqtt_cfg.broker.address.uri = MQTT_ADDRESS;
     mqtt_cfg.broker.address.port = MQTT_PORT;
     //Client ID
@@ -165,7 +165,7 @@ void mqtt_start(void)
 
     mqtt_cfg.session.disable_clean_session = false;  // 设置为true禁用持久会话
 
-    ESP_LOGI(TAG,"mqtt connect->clientId:%s,username:%s,password:%s",mqtt_cfg.credentials.client_id,
+    ESP_LOGI(TAG,"MQTT连接配置:clientId:%s,username:%s,password:%s",mqtt_cfg.credentials.client_id,
     mqtt_cfg.credentials.username,mqtt_cfg.credentials.authentication.password);
     //设置mqtt配置，返回mqtt操作句柄
     s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
@@ -226,6 +226,7 @@ void my_task(void *pvParameters)
     static uint32_t tims=0;
     char mqtt_pub_buff[64]={0};
     EventBits_t ev = 0;
+    ESP_LOGI(TAG, "初始化MQTT网络服务...");
     EventGroupHandle_t   wifi_ev = get_s_wifi_ev(); 
         //一直监听WIFI连接事件，直到WiFi连接成功后，才启动MQTT连接
     ev = xEventGroupWaitBits(wifi_ev,WIFI_CONNECT_BIT,pdTRUE,pdFALSE,portMAX_DELAY);

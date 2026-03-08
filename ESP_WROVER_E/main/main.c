@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-07 22:23:07
+ * @LastEditTime: 2026-03-08 23:32:50
  * @Description: 
  */
 
@@ -20,47 +20,18 @@
 #include "wifi_ap.h"
 // 使用自定义的日志头文件代替原始的esp_log.h
 #include "my_log.h"
+
 #include <esp_heap_caps.h>
 // 定义日志标签
 static const char* TAG = "main";
 
 
-void print_detailed_mem_info(void)
-{
-    ESP_LOGI(TAG, "=== 内存详细分布信息 ===");
-    
-    // 打印内部RAM信息
-    ESP_LOGI(TAG, "内部RAM分布:");
-    heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
-    
-    // 打印默认内存信息
-    ESP_LOGI(TAG, "\n默认内存分布:");
-    heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
-    
-    // 如果有外部RAM，也可以打印
-    ESP_LOGI(TAG, "\n外部RAM分布:");
-    heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
-}
-/**********************************************************************************************
-* Description       :     网关-打印RAM大小
-* Author            :     XRG
-* modified Date     :     2024-03-18
-* notice            :     
-***********************************************************************************************/
-void mdf_mem_print_heap(void)
-{
-// 修复后
-ESP_LOGI(TAG, "internal:%zu, mini:%zu, spiram:%zu, mini:%zu, total:%zu, mini:%zu",
-         heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-         heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-         heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-         heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
-         heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
-         heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT));
-}
-
 void system_info_timercb(void *timer)
 {
+char *bnus = heap_caps_malloc(1024*10, MALLOC_CAP_SPIRAM);
+if (bnus == NULL) {
+    ESP_LOGE(TAG, "Failed to allocate PSRAM");
+}
     // static u32 u32SysTime = 0;
     // u8 u8Ver[64 + 2]={"V1.1.0"};
     
@@ -86,11 +57,11 @@ void init_netWork(void)
         return;
     }
     
-    ESP_LOGI(TAG, "创建事件...");
+    ESP_LOGI(TAG, "创建网络事件...");
     // 创建事件循环
     ret = esp_event_loop_create_default();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "创建事件失败: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "创建网络事件失败: %s", esp_err_to_name(ret));
         return;
     }
     
@@ -163,29 +134,22 @@ void en_log_set(void)
 
 }
 
+
+
 void app_main(void)
 {
      en_log_set();
 # if 1
     esp_err_t ret;
-    ESP_LOGI(TAG, "app_main runnig!");
- 
-    // psram_example();
-    ret = nvs_flash_init();                             /* 初始化NVS */
-    // nvs_flash_erase();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "ESP32运行");
+
+    NVS_init();
     // 初始化基本硬件
     led_init();
     pwm_init();
     
     init_netWork();
     // 初始化其他网络服务
-    ESP_LOGI(TAG, "初始化网络服务...");
     simple_init();
     init_mqtt();
 

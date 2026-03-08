@@ -34,10 +34,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station join, AID=%d", event->aid);
+        ESP_LOGI(TAG, "客户端连接, AID=%d", event->aid);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station leave, AID=%d", event->aid);
+        ESP_LOGI(TAG, "客户端断开, AID=%d", event->aid);
     }
 }
 
@@ -150,7 +150,7 @@ static esp_err_t save_handler(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, NULL, 0);
     
-    ESP_LOGI(TAG, "Configuration saved: domain=%s, port=%d, string=%s", g_domain, g_port, g_string_var);
+    ESP_LOGI(TAG, "配置保存: domain=%s, port=%d, string=%s", g_domain, g_port, g_string_var);
     
     return ESP_OK;
 }
@@ -163,7 +163,7 @@ static httpd_handle_t start_webserver(void)
     
     // Start the server
     if (httpd_start(&server, &config) != ESP_OK) {
-        ESP_LOGI(TAG, "Error starting server!");
+        ESP_LOGI(TAG, "服务器启动失败");
         return NULL;
     }
     
@@ -200,7 +200,7 @@ esp_err_t wifi_ap_init(void)
 {
     esp_err_t ret = ESP_OK;
     
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP Init");
+    ESP_LOGI(TAG, "wifi APmode初始化");
     
     // Register event handlers
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
@@ -225,11 +225,11 @@ esp_err_t wifi_ap_init(void)
     // Apply WiFi configuration
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     
-    ESP_LOGI(TAG, "WiFi AP started with SSID: %s, password: %s", AP_SSID, AP_PASS);
+    ESP_LOGI(TAG, "wifi APmod SSID: %s, password: %s", AP_SSID, AP_PASS);
     
     // Start web server
     start_webserver();
-    ESP_LOGI(TAG, "Web server started on http://192.168.4.1");
+    ESP_LOGI(TAG, "Web 地址 http://192.168.4.1");
     
     return ret;
 }
@@ -255,7 +255,7 @@ esp_err_t wifi_ap_deinit(void)
     ESP_ERROR_CHECK(nvs_flash_erase());
     ESP_ERROR_CHECK(nvs_flash_deinit());
     
-    ESP_LOGI(TAG, "WiFi AP deinitialized");
+    ESP_LOGI(TAG, "WiFi AP 模式已关闭");
     
     return ESP_OK;
 }
@@ -263,17 +263,17 @@ esp_err_t wifi_ap_deinit(void)
 
 void apmod_init(void)
 {
-   ESP_LOGI(TAG, "Starting WiFi AP example");
+   ESP_LOGI(TAG, "WiFi AP 模式初始化");
     
     // Initialize WiFi in AP mode
     esp_err_t ret = wifi_ap_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WiFi AP");
+        ESP_LOGE(TAG, "WiFi AP 模式初始化失败");
         return;
     }
     
-    ESP_LOGI(TAG, "WiFi AP initialized successfully");
-    ESP_LOGI(TAG, "Connect to AP: ESP32_AP with password: 12345678");
-    ESP_LOGI(TAG, "Then open http://192.168.4.1 in your browser");
+    ESP_LOGI(TAG, "WiFi AP 模式初始化成功");
+    ESP_LOGI(TAG, "连接到 ESP32_AP 网络, 密码: 12345678");
+    ESP_LOGI(TAG, "在浏览器中打开 http://192.168.4.1 配置");
     
 }

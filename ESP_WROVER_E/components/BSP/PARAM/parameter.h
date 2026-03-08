@@ -1,0 +1,45 @@
+/*
+ * @Author: yu.wang
+ * @Date: 2025-10-08 18:03:59
+ * @LastEditors: yu.wang
+ * @LastEditTime: 2026-03-08 23:17:05
+ * @Description: 
+ */
+/**
+ ****************************************************************************************************
+ * @file        exIT.h
+ * @author      正点原子团队(ALIENTEK)
+ * @version     V1.0
+ * @date        2023-08-26
+ * @brief       外部中断驱动代码
+ * @license     Copyright (c) 2020-2032, 广州市星翼电子科技有限公司
+ ****************************************************************************************************
+ * @attention
+ *
+ * 实验平台:正点原子 ESP32-S3 开发板
+ * 在线视频:www.yuanzige.com
+ * 技术论坛:www.openedv.com
+ * 公司网址:www.alientek.com
+ * 购买地址:openedv.taobao.com
+ * 
+ ****************************************************************************************************
+ */
+
+#ifndef __PARAMETER_H_
+#define __PARAMETER_H_
+
+#include "esp_err.h"
+#include <inttypes.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "driver/gpio.h"
+#include "esp_system.h" 
+#include "my_log.h"
+#include "sdkconfig.h"
+#include "nvs_flash.h"
+
+
+void NVS_init(void);
+
+#endif

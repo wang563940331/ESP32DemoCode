@@ -81,5 +81,5 @@ typedef float                           f32;
 
 
 uint8_t tickOut(uint32_t *tick, uint32_t timeout);
-
+void mdf_mem_print_heap(void);
 #endif

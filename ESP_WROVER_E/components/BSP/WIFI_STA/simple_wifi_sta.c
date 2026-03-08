@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-08-31 13:41:35
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-07 20:50:52
+ * @LastEditTime: 2026-03-08 23:03:55
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/simple_wifi_sta.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -219,11 +219,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
             esp_wifi_connect();         //启动WIFI连接
             break;
         case WIFI_EVENT_STA_CONNECTED:  //WIFI连上路由器后，触发此事件
-            ESP_LOGI(TAG, "connected to AP");
+            ESP_LOGI(TAG, "wifi sta 连接成功");
             break;
         case WIFI_EVENT_STA_DISCONNECTED:   //WIFI从路由器断开连接后触发此事件
             esp_wifi_connect();             //继续重连
-            ESP_LOGI(TAG,"connect to the AP fail,retry now");
+            ESP_LOGI(TAG,"wifi sta 连接断开");
             break;
         default:
             break;
@@ -239,7 +239,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
                          wifi_cb(WIFI_CONNECTED);
                     }
                    
-                ESP_LOGI(TAG,"get ip address ok");
+                ESP_LOGI(TAG,"获取ip地址成功");
                 break;
         }
     }
@@ -248,14 +248,14 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
         switch (event_id)
         {
             case SC_EVENT_SCAN_DONE://smartconfig 扫描完成
-                ESP_LOGI(TAG, "Scan done");
+                ESP_LOGI(TAG, "smartconfig 扫描完成");
                 break;
             case SC_EVENT_FOUND_CHANNEL://smartconfig 找到对应的通道
-                ESP_LOGI(TAG, "Found channel");
+                ESP_LOGI(TAG, "smartconfig 找到对应的通道");
                 break;
             case SC_EVENT_GOT_SSID_PSWD: //smartconfig 获取到SSID和密码
                 {
-                    ESP_LOGI(TAG, "Got SSID and password");
+                    ESP_LOGI(TAG, "smartconfig 获取到SSID和密码");
                     smartconfig_event_got_ssid_pswd_t *evt = (smartconfig_event_got_ssid_pswd_t *)event_data;
                     wifi_config_t wifi_config;
                     uint8_t ssid[33] = { 0 };
@@ -279,10 +279,10 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
                     ESP_ERROR_CHECK( esp_wifi_disconnect() );
                     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
                     esp_err_t ret = esp_wifi_connect();
-                    ESP_LOGI(TAG,"esp_wifi_connect ret = %d",ret);
+                    ESP_LOGI(TAG,"smartconfig 连接wifi ret = %d",ret);
                     if(ret == ESP_ERR_WIFI_PASSWORD)
                     {
-                        ESP_LOGE(TAG, "Password incorrect");
+                        ESP_LOGE(TAG, "smartconfig 连接wifi 密码错误");
                     }
                 }
                 break;
@@ -428,10 +428,10 @@ esp_err_t wifi_sta_init(void)
     //WIFI配置
     //从NVS中读出SSID
     read_nvs_ssid(s_ssid_value,32);
-    ESP_LOGI(TAG,"ssid:%s",s_ssid_value);
+    ESP_LOGI(TAG,"NVS获取ssid:%s",s_ssid_value);
     //从NVS中读取PASSWORD
     read_nvs_password(s_password_value,64);
-    ESP_LOGI(TAG,"password:%s",s_password_value);
+    ESP_LOGI(TAG,"NVS获取password:%s",s_password_value);
 
     // sprintf(s_password_value,"%s",DEFAULT_WIFI_PASSWORD);
     // sprintf(s_ssid_value,"%s",DEFAULT_WIFI_SSID);
@@ -461,7 +461,7 @@ esp_err_t wifi_sta_init(void)
     //设置回调
     wifi_cb = wifi_event_handler;
     
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
+    ESP_LOGI(TAG, "wifi sta 初始化完成");
     return ESP_OK;
 }
 #else
@@ -513,6 +513,7 @@ esp_err_t wifi_sta_init(void)
 static void simple_task(void *pvParameters) 
 {
     uint8_t key =0;
+    ESP_LOGI(TAG, "初始化smartconfig网络服务...");
     simple_gpio_config();
     while(1) 
     {

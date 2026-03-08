@@ -1,13 +1,15 @@
 /*
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-09-06 11:37:55
- * @LastEditors: wang563940331 563940331@qq.com
- * @LastEditTime: 2025-09-06 11:50:54
+ * @LastEditors: yu.wang
+ * @LastEditTime: 2026-03-08 23:21:48
  * @FilePath: /RemoteControlO_Com/components/BSP/UTILITY/utility.c
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
 
 #include "utility.h"
+
+static const char *TAG = "utility";
 
 uint32_t HAL_GetTick()
 {
@@ -59,4 +61,69 @@ uint8_t tickOut(uint32_t *tick, uint32_t timeout)
     }
 
     return FALSE;
+}
+
+
+void print_detailed_mem_info(void)
+{
+    ESP_LOGI(TAG, "=== 内存详细分布信息 ===");
+    
+    // 打印内部RAM信息
+    ESP_LOGI(TAG, "内部RAM分布:");
+    heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
+    
+    // 打印默认内存信息
+    ESP_LOGI(TAG, "\n默认内存分布:");
+    heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
+    
+    // 如果有外部RAM，也可以打印
+    ESP_LOGI(TAG, "\n外部RAM分布:");
+    heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+}
+/**********************************************************************************************
+* Description       :     网关-打印RAM大小
+* Author            :     XRG
+* modified Date     :     2024-03-18
+* notice            :     
+***********************************************************************************************/
+void mdf_mem_print_heap(void)
+{
+// 修复后
+// ESP_LOGI(TAG, "internal:%zu, mini:%zu, spiram:%zu, mini:%zu, total:%zu, mini:%zu",
+// ESP_LOGI(TAG, "内部RAM可用:%zu, 最小:%zu, 外部RAM可用:%zu, 最小:%zu, 默认RAM可用:%zu, 最小:%zu",
+//          heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+//          heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+//          heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+//          heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
+//          heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
+//          heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT));
+
+   // 获取内存大小
+    size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    size_t internal_min = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    size_t internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+    size_t internal_used = internal_total - internal_free;
+    float internal_usage = (float)internal_used / internal_total * 100;
+    
+    size_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t spiram_min = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+    size_t spiram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    size_t spiram_used = spiram_total - spiram_free;
+    float spiram_usage = (float)spiram_used / spiram_total * 100;
+    
+    size_t default_free = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    size_t default_min = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+    
+
+ESP_LOGI(TAG, "内部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 外部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 默认RAM可用:%zu, 最小:%zu",
+         internal_free,
+         internal_min,
+         internal_total,
+         internal_usage,
+         spiram_free,
+         spiram_min,
+         spiram_total,
+         spiram_usage,
+         default_free,
+         default_min);
 }
