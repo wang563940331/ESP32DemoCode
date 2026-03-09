@@ -2,7 +2,7 @@
  * @Author: yu.wang
  * @Date: 2025-10-08 18:03:59
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-08 23:32:50
+ * @LastEditTime: 2026-03-09 22:08:15
  * @Description: 
  */
 
@@ -28,10 +28,10 @@ static const char* TAG = "main";
 
 void system_info_timercb(void *timer)
 {
-char *bnus = heap_caps_malloc(1024*10, MALLOC_CAP_SPIRAM);
-if (bnus == NULL) {
-    ESP_LOGE(TAG, "Failed to allocate PSRAM");
-}
+// char *bnus = heap_caps_malloc(1024*10, MALLOC_CAP_SPIRAM);
+// if (bnus == NULL) {
+//     ESP_LOGE(TAG, "Failed to allocate PSRAM");
+// }
     // static u32 u32SysTime = 0;
     // u8 u8Ver[64 + 2]={"V1.1.0"};
     

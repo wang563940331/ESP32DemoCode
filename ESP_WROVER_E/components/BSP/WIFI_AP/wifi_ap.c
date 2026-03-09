@@ -23,13 +23,13 @@ static const char *TAG = "WIFI_AP";
 // HTTP server handle
 static httpd_handle_t server = NULL;
 
-// Default AP configuration
+// HTTP服务器句柄
 #define AP_SSID      "ESP32_AP"
 #define AP_PASS      "12345678"
 #define AP_CHANNEL   1
 #define MAX_STA_CONN 4
 
-// WiFi event handler
+// WiFi事件处理程序
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
@@ -41,12 +41,12 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     }
 }
 
-// Root handler - serves the configuration page
+// 根处理程序 - 提供配置页面
 static esp_err_t root_handler(httpd_req_t *req)
 {
     char response[2048];
     
-    // Create HTML page
+    // 创建HTML页面
     snprintf(response, sizeof(response),
         "<!DOCTYPE html>"
         "<html>"
@@ -94,13 +94,13 @@ static esp_err_t root_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Save handler - processes configuration form submission
+// 保存处理程序 - 处理配置表单提交
 static esp_err_t save_handler(httpd_req_t *req)
 {
     char buf[1024];
     int ret, remaining = req->content_len;
     
-    // Read form data
+   // 读取表单数据
     while (remaining > 0) {
         if (remaining < sizeof(buf)) {
             ret = httpd_req_recv(req, buf, remaining);
@@ -115,37 +115,37 @@ static esp_err_t save_handler(httpd_req_t *req)
         }
         remaining -= ret;
     }
-    
-    // Null-terminate the received data
+    ESP_LOGI(TAG, "Received data: %s", buf);
+    // 终止接收到的数据
     buf[req->content_len] = '\0';
     
-    // Parse form data
+    // 解析表单数据
     char *domain = strstr(buf, "domain=");
     char *port = strstr(buf, "port=");
     char *string = strstr(buf, "string=");
     
     if (domain) {
-        domain += 7; // Skip "domain="
+        domain += 7; // 跳过 "domain="
         char *end = strchr(domain, '&');
         if (end) *end = '\0';
         strncpy(g_domain, domain, sizeof(g_domain) - 1);
     }
     
     if (port) {
-        port += 5; // Skip "port="
+        port += 5; // 跳过 "port="
         char *end = strchr(port, '&');
         if (end) *end = '\0';
         g_port = atoi(port);
     }
     
     if (string) {
-        string += 7; // Skip "string="
+        string += 7;// 跳过 "string="
         char *end = strchr(string, '&');
         if (end) *end = '\0';
         strncpy(g_string_var, string, sizeof(g_string_var) - 1);
     }
     
-    // Redirect back to root
+    // 重定向回根路径
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, NULL, 0);
@@ -155,19 +155,19 @@ static esp_err_t save_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Start HTTP server
+// 启动HTTP服务器
 static httpd_handle_t start_webserver(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     
-    // Start the server
+    // 启动服务器
     if (httpd_start(&server, &config) != ESP_OK) {
         ESP_LOGI(TAG, "服务器启动失败");
         return NULL;
     }
     
-    // Set URI handlers
+    // 设置URI处理程序
     httpd_uri_t root_uri = {
         .uri      = "/",
         .method   = HTTP_GET,
@@ -187,7 +187,7 @@ static httpd_handle_t start_webserver(void)
     return server;
 }
 
-// Stop HTTP server
+// 停止HTTP服务器
 static void stop_webserver(httpd_handle_t server)
 {
     if (server) {
@@ -195,17 +195,17 @@ static void stop_webserver(httpd_handle_t server)
     }
 }
 
-// Initialize WiFi in AP mode
+// 初始化WiFi AP模式
 esp_err_t wifi_ap_init(void)
 {
     esp_err_t ret = ESP_OK;
     
     ESP_LOGI(TAG, "wifi APmode初始化");
     
-    // Register event handlers
+    // 注册事件处理程序
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     
-    // Set WiFi configuration
+    // 设置WiFi配置
     wifi_config_t wifi_config = {
         .ap = {
             .ssid = AP_SSID,
@@ -217,41 +217,41 @@ esp_err_t wifi_ap_init(void)
         },
     };
     
-    // If password is empty, use open authentication
+    // 如果密码为空，使用开放认证
     if (strlen(AP_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
     
-    // Apply WiFi configuration
+    // 应用WiFi配置
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     
     ESP_LOGI(TAG, "wifi APmod SSID: %s, password: %s", AP_SSID, AP_PASS);
     
-    // Start web server
+    // 启动web服务器
     start_webserver();
     ESP_LOGI(TAG, "Web 地址 http://192.168.4.1");
     
     return ret;
 }
 
-// Deinitialize WiFi AP mode
+// 反初始化WiFi AP模式
 esp_err_t wifi_ap_deinit(void)
 {
-    // Stop web server
+   // 停止web服务器
     stop_webserver(server);
     
-    // Stop WiFi
+     // 停止WiFi
     ESP_ERROR_CHECK(esp_wifi_stop());
     ESP_ERROR_CHECK(esp_wifi_deinit());
     
-    // Unregister event handlers
+    // 注销事件处理程序
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, NULL));
     
-    // Clean up event loop and netif
+     // 清理事件循环和netif
     ESP_ERROR_CHECK(esp_event_loop_delete_default());
     esp_netif_deinit();
     
-    // Erase NVS
+    // 擦除NVS
     ESP_ERROR_CHECK(nvs_flash_erase());
     ESP_ERROR_CHECK(nvs_flash_deinit());
     
@@ -265,7 +265,7 @@ void apmod_init(void)
 {
    ESP_LOGI(TAG, "WiFi AP 模式初始化");
     
-    // Initialize WiFi in AP mode
+    // 初始化WiFi AP模式
     esp_err_t ret = wifi_ap_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "WiFi AP 模式初始化失败");
