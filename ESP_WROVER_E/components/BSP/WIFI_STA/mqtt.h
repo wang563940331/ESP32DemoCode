@@ -2,7 +2,7 @@
  * @Author: wang563940331 563940331@qq.com
  * @Date: 2025-09-03 22:03:36
  * @LastEditors: yu.wang
- * @LastEditTime: 2025-10-08 20:35:31
+ * @LastEditTime: 2026-03-12 13:58:04
  * @FilePath: /RemoteControlO_Com/components/BSP/WIFI_STA/mqtt.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -29,10 +29,10 @@
 #include "mqtt_client.h"
 
 
-#define MQTT_ADDRESS    "mqtt://broker-cn.emqx.io"     //MQTT连接地址
-#define MQTT_PORT       1883                        //MQTT连接端口号
+#define MQTT_ADDRESS    "mqtt://47.106.199.35"     //MQTT连接地址
+#define MQTT_PORT       6004                        //MQTT连接端口号
 #define MQTT_CLIENT     "mqttx_"              //Client ID（设备唯一，大家最好自行改一下）
-#define MQTT_USERNAME   "wang"                     //MQTT用户名
+#define MQTT_USERNAME   "admin"                     //MQTT用户名
 #define MQTT_PASSWORD   "520110"                  //MQTT密码
 
 #define MQTT_PUBLIC_TOPIC      "563940331/PubTopic"       //测试用的,推送消息主题
