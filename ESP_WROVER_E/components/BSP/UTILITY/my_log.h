@@ -5,7 +5,7 @@
  * @Author: yu.wang
  * @Date: 2026-03-01 17:20:47
  * @LastEditors: yu.wang
- * @LastEditTime: 2026-03-03 11:04:01
+ * @LastEditTime: 2026-03-19 15:21:16
  * @Description: Custom log header with date-time format
  */
 // 自定义日志头文件，用于显示行号、文件名和年月日时分秒时间格式
@@ -26,15 +26,22 @@ static inline const char* get_custom_timestamp(void)
     
     struct timeval tv;
     struct tm tm;
+ // 清空缓冲区
+    memset(timestamp, 0, sizeof(timestamp));
     
     // 获取当前时间
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &tm);
     
     // 使用更安全的方式格式化时间，避免编译器警告
-    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d",
+    int ret = snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d",
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
              tm.tm_hour, tm.tm_min, tm.tm_sec);
+    
+    // 确保字符串以NULL结尾
+    if (ret >= sizeof(timestamp)) {
+        timestamp[sizeof(timestamp) - 1] = '\0';
+    }
     
     return timestamp;
 }
@@ -82,5 +89,13 @@ static inline const char* get_filename_only(const char* path)
     esp_log_write(ESP_LOG_VERBOSE, tag, LOG_FORMAT(V, format), \
                   get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
 } } while(0)
+
+
+
+
+#define EN_SLOGD                        ESP_LOGD
+#define EN_SLOGI                        ESP_LOGI
+#define EN_SLOGW                        ESP_LOGW
+#define EN_SLOGE                        ESP_LOGE
 
 #endif /* MY_LOG_H */
