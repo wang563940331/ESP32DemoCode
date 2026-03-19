@@ -86,6 +86,94 @@ CJSON_PUBLIC(cJSON_bool)     cJSON_SetDoubleEx(cJSON *root, const char* key, dou
 }
 
 
+
+CJSON_PUBLIC(cJSON_bool)   cJSON_GetIntEx(const cJSON *root, const char* key, int *value)
+{
+    cJSON *item = NULL;
+    
+    if(!root || !key || !value)
+    {
+        return false;
+    }
+    
+    item = cJSON_GetObjectItem(root, key);
+    if(!item)
+    {
+        return false;
+    }
+    
+    if (!cJSON_IsNumber(item))
+    {
+        return false;
+    }
+    
+    *value = item->valueint;
+    
+    return true;
+}
+
+
+CJSON_PUBLIC(cJSON_bool)   cJSON_GetStringEx(const cJSON *root, const char* key, char *value, size_t max_len)
+{
+    cJSON *item = NULL;
+    
+    if(!root || !key || !value)
+    {
+        return false;
+    }
+    
+    item = cJSON_GetObjectItem(root, key);
+    if(!item)
+    {
+        return false;
+    }
+    
+    if (!cJSON_IsString(item))
+    {
+        return false;
+    }
+    
+    
+    if(strlen(item->valuestring) >= max_len)
+    {
+        return(false);
+    }
+    memset(value, 0, max_len);
+    memcpy(value, item->valuestring, strlen(item->valuestring));
+    
+    return true;
+}
+
+
+
+CJSON_PUBLIC(cJSON_bool)   cJSON_GetDoubleEx(const cJSON *root, const char* key, double *value)
+{
+    cJSON *item = NULL;
+    
+    if(!root || !key || !value)
+    {
+        return false;
+    }
+    
+    item = cJSON_GetObjectItem(root, key);
+    if(!item)
+    {
+        return false;
+    }
+    
+    if (!cJSON_IsNumber(item))
+    {
+    return false;
+    }
+    
+    *value = item->valuedouble;
+    
+    return true;
+}
+
+
+
+
 /**********************************************************************************************
 * Description       :     AP层-存储设置
 * Author            :     XRG
@@ -169,6 +257,143 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
     
     return eRst;
 }
+
+
+
+
+/**********************************************************************************************
+* Description       :     AP层-存储设置
+* Author            :     XRG
+* modified Date     :     2024-01-24
+* param[in]         :     eCmd      支持设置的列表
+* param[in]         :     pData         设置的内容
+* return            :     eStorageApRst_t
+* notice            :     
+***********************************************************************************************/
+eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
+{
+    eStorageApRst_t        eRst;
+    cJSON                 *pObj     = NULL;
+    double                 d64Value  = 0.0;
+    i32                    i32Value;
+    
+    
+    if((pData == NULL) || (eCmd >= eStorageApCmdMax))
+    {
+        EN_SLOGE(TAG, "输入参数为异常");
+        return(false);
+    }
+    
+    eRst = eStorageApRstObjNull;
+    sNvsParamLock();
+    pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageApNvsName);
+    if(pObj != NULL)
+    {
+        do
+        {
+            eRst = eStorageApRstSuccess;
+            switch(eCmd)
+            {
+                case eStorageApCmdFlg:
+                    if(!cJSON_GetIntEx(pObj, cStorageApNvsFlg, &i32Value))
+                    {
+                        EN_SLOGE(TAG, "Flg 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    if(i32Value < 0)
+                    {
+                        eRst = eStorageApRstFail;
+                        break;
+                    }
+                    (*pData) = (u8)i32Value;
+                    break;
+                case eStorageApCmdSsid:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsSsid, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Ssid 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdPassword:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsPassword, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Password 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdIp:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsIp, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Ip 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdDefGwIp:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsDefGwIp, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "DefGwIp 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdMask:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsMask, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Mask 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdValidityTime:
+                    if(!cJSON_GetDoubleEx(pObj, cStorageApNvsValidityTime, &d64Value))
+                    {
+                        EN_SLOGE(TAG, "ValidityTime 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    if(d64Value < 0)
+                    {
+                        eRst = eStorageApRstFail;
+                        break;
+                    }
+                    u32 value = (u32)d64Value;
+                    memcpy(pData, &value, 4);
+                    break;
+                case eStorageApCmdReqCode:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsReqCode, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "ReqCode 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case eStorageApCmdWebPassword:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsWebPassword, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "WebPassword 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                default:
+                    eRst = eStorageApRstParamErr;
+                    EN_SLOGE(TAG, "地址%d异常", eCmd);
+                    break;
+            }
+            
+            break;
+        }while (0);
+    }
+    sNvsParamUnlock();
+    
+    
+    return eRst;
+}
+
 
 
 /**********************************************************************************************

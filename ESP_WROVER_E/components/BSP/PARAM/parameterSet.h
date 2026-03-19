@@ -13,4 +13,5 @@
 
 
 extern bool sStorageApSetFlg(bool eFlg);
+eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData);
 #endif
