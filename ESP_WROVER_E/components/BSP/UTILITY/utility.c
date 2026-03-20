@@ -128,15 +128,15 @@ void mdf_mem_print_heap(void)
     default_min = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
     
 
-ESP_LOGI(TAG, "内部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 外部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 默认RAM可用:%zu, 最小:%zu",
-         internal_free,
-         internal_min,
-         internal_total,
+ESP_LOGI(TAG, "内部RAM可用:%.3fK, 最小:%.3fK, 总量:%.3fK, 使用率:%.1f%%, 外部RAM可用:%.3fK, 最小:%.3fK, 总量:%.3fK, 使用率:%.1f%%, 默认RAM可用:%.3fK, 最小:%.3fK",
+         internal_free/1024.0,
+         internal_min/1024.0,
+         internal_total/1024.0,
          internal_usage,
-         spiram_free,
-         spiram_min,
-         spiram_total,
+         spiram_free/1024.0,
+         spiram_min/1024.0,
+         spiram_total/1024.0,
          spiram_usage,
-         default_free,
-         default_min);
+         default_free/1024.0,
+         default_min/1024.0);
 }

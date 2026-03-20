@@ -27,7 +27,7 @@
 #include "esp_wifi_types.h"
 #include "esp_smartconfig.h"
 #include "mqtt_client.h"
-
+#include "cJSON.h"
 
 void parse_json(const char *json_string,void *Start_once) ;
 #endif

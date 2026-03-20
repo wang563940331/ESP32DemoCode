@@ -178,7 +178,7 @@ int pwm_init(void)
     ledc_cb_register(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, &cbs, NULL);
 
 
-    xTaskCreate(motor_task,"MyTask",4096,NULL,5,&motor_TaskHandle);
+    xTaskCreatePinnedToCore(motor_task,"MyTask",4096,NULL,5,&motor_TaskHandle,0);
     if(!motor_TaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");

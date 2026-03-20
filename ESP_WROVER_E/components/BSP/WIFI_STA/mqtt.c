@@ -208,25 +208,40 @@ void send_head(const char *data) {
     
     char time_str[32];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    
-    char mqtt_pub_buff[128] = {0};
-    snprintf(mqtt_pub_buff, sizeof(mqtt_pub_buff), 
-             "{\"device\":\"%s\",\"headid\":\"%s\", \"time\":\"%s\"}",
-             "ESP32-E-V3",
-             data, 
-             time_str);
-    
+
+    cJSON *root = cJSON_CreateObject();  // 创建根对象
+    cJSON_AddItemToObject(root, "device", cJSON_CreateString("ESP32-E-V3"));
+    // 添加字段：headid
+    cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
+    // 添加字段：time
+    cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
+    // 转为 JSON 字符串（压缩格式，适合MQTT发送）
+    char *mqtt_pub_buff = cJSON_PrintUnformatted(root);
+
     esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                            mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
+    cJSON_Delete(root);
+    free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存
+    mqtt_pub_buff = NULL;
 }
 
+/**
+ * @brief 自定义任务函数，用于处理MQTT网络服务
+ * @param pvParameters 任务参数（在此函数中未使用）
+ */
 void my_task(void *pvParameters) 
 {
+    // 静态变量count，用于计数发布的消息数量
     static int count = 0;
+    // 静态变量tims，用于记录时间戳
     static uint32_t tims=0;
+    // MQTT发布消息缓冲区，大小为64字节
     char mqtt_pub_buff[64]={0};
+    // 事件位变量，用于存储WiFi事件
     EventBits_t ev = 0;
+    //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
+    // 获取WiFi事件句柄
     EventGroupHandle_t   wifi_ev = get_s_wifi_ev(); 
         //一直监听WIFI连接事件，直到WiFi连接成功后，才启动MQTT连接
     ev = xEventGroupWaitBits(wifi_ev,WIFI_CONNECT_BIT,pdTRUE,pdFALSE,portMAX_DELAY);
@@ -239,7 +254,7 @@ void my_task(void *pvParameters)
         //延时2秒发布一条消息到/test/topic1主题
         if(s_is_mqtt_connected)
         {
-            if(tickOut(&tims,60*1000))
+            if(tickOut(&tims,30*1000))
             {
                 tickOut(&tims,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
@@ -254,7 +269,9 @@ void my_task(void *pvParameters)
 
 int init_mqtt(void)
 {
-    xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
+    // xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
+     // 使用外部RAM创建任务栈
+    xTaskCreatePinnedToCore(my_task, "MyTask", 4096, NULL, 5, &myTaskHandle, 0);
     if(!myTaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");

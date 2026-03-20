@@ -118,7 +118,7 @@ cJSON *sNvsParamGet(void)
     if(i32FileSize > 0)
     {
         //获取到的 i32FileSize 是包含结尾 \0 字符的 这里就不需要加1了
-        pBuf = malloc(i32FileSize);//申请刚好大小的内存
+        pBuf = heap_caps_malloc(i32FileSize,MALLOC_CAP_SPIRAM);//申请刚好大小的内存
         if(pBuf == NULL)
         {
             ESP_LOGE(TAG, "读取NVS参数区:%s@%s 出错:malloc失败", cNvsKeyParam, cNvsName);
@@ -146,7 +146,7 @@ cJSON *sNvsParamGet(void)
     }
     if(pBuf != NULL)
     {
-        free(pBuf);
+        heap_caps_free(pBuf);
         pBuf = NULL;
     }
     return(pObj);

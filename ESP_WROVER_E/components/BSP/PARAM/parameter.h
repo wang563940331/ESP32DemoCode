@@ -44,72 +44,15 @@
 #define cNvsName                        "nvs_file"                              //NVS 参数区 :name
 #define cNvsKeyParam                    "nvs_key_param"                         //NVS 参数区 :key name
 
-
-
-//网关NVS配置JSON文件默认内容格式
-//1.标准原始数据
-//2.ATE中用到数据(因为过ATE时会清除恢复默认数据)
-static  const char *pNvsKeyParamDefault = 
-"{\
-    \"gate\" :\
-    {\
-        \"sn\" : \"SN00000000000000\",\
-        \"deviceType\" : 94,\
-        \"formatCnt\" : 0,\
-        \"nvsOld\" : 0,\
-        \"deBugOn\" : 0,\
-        \"gwWork\" : 0,\
-        \"gwChgMode1\" : 1,\
-        \"gwChgMode2\" : 1,\
-        \"signInCycle\" : 60,\
-        \"heartCycle\" : 30,\
-        \"heartTimeoutCnt\" : 3,\
-        \"wifiname\" : 3,\
-        \"wifiname2\" : 3,\
-        \"otadeBugOn\" : 0\
-    },\
-    \"ap\" :\
-    {\
-        \"enableFlg\" : 0,\
-        \"ssid\" : \"SN00000000000000\",\
-        \"password\" : \"admin123\",\
-        \"ip\" : \"192.168.4.1\",\
-        \"defGwIp\" : \"192.168.4.1\",\
-        \"mask\" : \"255.255.255.0\",\
-        \"validityTime\" : 0,\
-        \"reqCode\" : \"null\",\
-        \"webPassword\" : \"123456\"\
-    },\
-    \"netHw\" :\
-    {\
-        \"netType\" : \"null\",\
-        \"wifiSsid\" : \"EN+SYS\",\
-        \"wifiPassword\" : \"enplus0429\",\
-        \"manualAssignFlg\" : 0,\
-        \"ip\" : \"192.168.192.66\",\
-        \"mask\" : \"255.255.255.0\",\
-        \"defGwIp\" : \"192.168.192.1\",\
-        \"mainDns\" : \"0.0.0.0\",\
-        \"backupDns\" : \"0.0.0.0\",\
-        \"mobileModel\" : \"SIMcom A7670C/E\",\
-        \"baudrate\" : 115200,\
-        \"mobileAteOn\" : 1,\
-        \"apn\" : \"null\",\
-        \"username\" : \"null\",\
-        \"password\" : \"null\",\
-        \"authMode\" : 0,\
-        \"lanInstallErr\" : 0\
-    },\
-    \"netApp\" :\
-    {\
-        \"connHost\" : \"host1\",\
-        \"host1\" : { \"protocol\" : \"tcp\", \"ip\" : \"sp.en-plus.cn\", \"port\" : 17746, \"path\" : \"null\", \"info\" : {} },\
-        \"host2\" : { \"protocol\" : \"tcp\", \"ip\" : \"sp.en-plus.cn\", \"port\" : 17746, \"path\" : \"null\", \"info\" : {} },\
-        \"whtdEn\" : 0,\
-        \"whtdHost\" : { \"ip\" : \"dev.en-plus.cn\", \"port\" : 18841 }\
-    }\
-}";
-
+#define cStorageGwNvsName               "gate"                                  //第一级
+#define cStorageGwNvsSn                 "sn"                                    //SN
+#define cStorageGwNvsDeviceType         "deviceType"                            //设备类型
+#define cStorageGwNvsFormatCnt          "formatCnt"                             //文件系统格式次数
+#define cStorageGwNvsDebug              "deBugOn"                               //调试
+#define cStorageGwNvsGwWorkMode         "gwWork"                                //网关工作模式
+#define cStorageGwNvsGwChargeMode1      "gwChgMode1"                            //1枪网关充电模式
+#define cStorageGwNvsGwChargeMode2      "gwChgMode2"                            //2枪网关充电模式
+     
 
 #define cStorageApNvsName               "ap"                                    //第一级
 #define cStorageApNvsFlg                "enableFlg"                             //使能标志,0不使能,非0使能
@@ -120,7 +63,59 @@ static  const char *pNvsKeyParamDefault =
 #define cStorageApNvsMask               "mask"                                  //连接固定子码掩码
 #define cStorageApNvsValidityTime       "validityTime"                          //WEB登录密码有效时间(必须U32)
 #define cStorageApNvsReqCode            "reqCode"                               //WEB申请码
-#define cStorageApNvsWebPassword        "webPassword"   
+#define cStorageApNvsWebPassword        "webPassword"  
+
+#define cStorageNetAppNvsName           "netApp"                               //第一级
+#define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
+#define cStorageNetAppNvsHost1          "host1"                                //主机1
+#define cStorageNetAppNvsHost2          "host2"                                //主机2
+#define cStorageNetAppNvsWhtdEn         "whtdEn"                               //WHT设备使能
+#define cStorageNetAppNvsWhtdHost       "whtdHost"                             //WHT设备主机
+#define cStorageNetAppNvsProtocol       "protocol"                             //协议
+#define cStorageNetAppNvsIp             "ip"                                   //IP地址
+#define cStorageNetAppNvsPort           "port"                                 //端口
+#define cStorageNetAppNvsPath           "path"                                 //路径
+#define cStorageNetAppNvsInfo           "info"  
+
+//网关NVS配置JSON文件默认内容格式
+//1.标准原始数据
+//2.ATE中用到数据(因为过ATE时会清除恢复默认数据)
+static const char *pNvsKeyParamDefault = 
+"{"
+    "\"" cStorageGwNvsName "\" :"
+    "{"
+        "\"" cStorageGwNvsSn "\" : \"SN00000000000000\","
+        "\"" cStorageGwNvsDeviceType "\" : 94,"
+        "\"" cStorageGwNvsFormatCnt "\" : 0,"
+        "\"" cStorageGwNvsDebug "\" : 0,"
+        "\"" cStorageGwNvsGwWorkMode "\" : 0,"
+        "\"" cStorageGwNvsGwChargeMode1 "\" : 1,"
+        "\"" cStorageGwNvsGwChargeMode2 "\" : 1"
+    "},"
+    "\"" cStorageApNvsName "\" :"
+    "{"
+        "\"" cStorageApNvsFlg "\" : 0,"
+        "\"" cStorageApNvsSsid "\" : \"SN00000000000000\","
+        "\"" cStorageApNvsPassword "\" : \"admin123\","
+        "\"" cStorageApNvsIp "\" : \"192.168.4.1\","
+        "\"" cStorageApNvsDefGwIp "\" : \"192.168.4.1\","
+        "\"" cStorageApNvsMask "\" : \"255.255.255.0\","
+        "\"" cStorageApNvsValidityTime "\" : 0,"
+        "\"" cStorageApNvsReqCode "\" : \"null\","
+        "\"" cStorageApNvsWebPassword "\" : \"123456\""
+    "},"
+    "\"netApp\" :"
+    "{"
+        "\"" cStorageNetAppNvsConnHost "\" : \"host1\"," 
+        "\"" cStorageNetAppNvsHost1 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+        "\"" cStorageNetAppNvsHost2 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+        "\"" cStorageNetAppNvsWhtdEn "\" : 0,"
+        "\"" cStorageNetAppNvsWhtdHost "\" : { \"" cStorageNetAppNvsIp "\" : \"dev.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 18841 }"
+    "}"
+"}";
+
+
+ 
 
 typedef enum 
 {

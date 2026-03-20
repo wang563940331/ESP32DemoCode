@@ -347,7 +347,7 @@ void smartconfig_start(void)
         // 确保WiFi处于STA模式
         esp_wifi_set_mode(WIFI_MODE_STA);
         esp_wifi_disconnect();
-        xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
+        xTaskCreatePinnedToCore(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL, 0);
     }
 }
 
@@ -557,7 +557,7 @@ static void simple_task(void *pvParameters)
 int simple_init(void)
 {
     TaskHandle_t TaskHandle = NULL;
-    xTaskCreate(simple_task,"MyTask",4096,NULL,5,&TaskHandle);
+    xTaskCreatePinnedToCore(simple_task,"MyTask",4096,NULL,5,&TaskHandle,0);
     if(!TaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");
