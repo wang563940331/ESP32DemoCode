@@ -58,14 +58,15 @@ typedef struct
 typedef void(*wifi_event_cb)(WIFI_EV_e);
 
 //WIFI STA初始化
-esp_err_t wifi_sta_init(void);
-void smartconfig_start(void);
-EventGroupHandle_t get_s_wifi_ev(void);
-int simple_init(void);
-bool gets_is_smartconfig(void);
-void set_ones_smartconfig(uint8_t data);
-bool get_ones_smartconfig(void);
-void print_device_info(void);
-void setg_mac(char* mac);
-char* getg_mac(void);
+extern esp_err_t wifi_sta_init(void);
+extern void smartconfig_start(void);
+extern EventGroupHandle_t get_s_wifi_ev(void);
+extern int simple_init(void);
+extern bool gets_is_smartconfig(void);
+extern void set_ones_smartconfig(uint8_t data);
+extern bool get_ones_smartconfig(void);
+extern void print_device_info(void);
+extern void setg_mac(char* mac);
+extern char* getg_mac(void);
+extern bool upwificonfig(void);
 #endif

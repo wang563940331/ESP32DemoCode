@@ -28,7 +28,7 @@
 #include "exit.h"
 #include "esp_chip_info.h"
 #include "simple_wifi_sta.h"
-
+#include "parameterSet.h"
 //需要把这两个修改成你家WIFI，测试是否连接成功
 #define DEFAULT_WIFI_SSID           "TTS"
 #define DEFAULT_WIFI_PASSWORD       "88888888"
@@ -41,11 +41,7 @@
 static const char* TAG = "wifista";
   
 SYSPARAM g_sysParam ={0} ;
-//缓存一份ssid
-static char s_ssid_value[33] = {0};
 
-//缓存一份password
-static char s_password_value[65] = {0};
 
 //一个事件组，用于表示
 EventGroupHandle_t s_wifi_event_group;
@@ -130,75 +126,75 @@ void print_device_info(void) {
  * @param maxlen 外部存储ssid数组的最大值
  * @return 读取到的字节数
 */
-static size_t read_nvs_ssid(char* ssid,int maxlen)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t ret_val = ESP_FAIL;
-    size_t required_size = 0;
-    ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
-    ret_val = nvs_get_str(nvs_handle, NVS_SSID_KEY, NULL, &required_size);
-    if(ret_val == ESP_OK && required_size <= maxlen)
-    {
-        nvs_get_str(nvs_handle,NVS_SSID_KEY,ssid,&required_size);
-    }
-    else
-        required_size = 0;
-    nvs_close(nvs_handle);
-    return required_size;
-}
+// static size_t read_nvs_ssid(char* ssid,int maxlen)
+// {
+//     nvs_handle_t nvs_handle;
+//     esp_err_t ret_val = ESP_FAIL;
+//     size_t required_size = 0;
+//     ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
+//     ret_val = nvs_get_str(nvs_handle, NVS_SSID_KEY, NULL, &required_size);
+//     if(ret_val == ESP_OK && required_size <= maxlen)
+//     {
+//         nvs_get_str(nvs_handle,NVS_SSID_KEY,ssid,&required_size);
+//     }
+//     else
+//         required_size = 0;
+//     nvs_close(nvs_handle);
+//     return required_size;
+// }
 
 /** 写入SSID到NVS中
  * @param ssid 需写入的ssid
  * @return ESP_OK or ESP_FAIL
 */
-static esp_err_t write_nvs_ssid(char* ssid)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t ret;
-    ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
+// static esp_err_t write_nvs_ssid(char* ssid)
+// {
+//     nvs_handle_t nvs_handle;
+//     esp_err_t ret;
+//     ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
     
-    ret = nvs_set_str(nvs_handle, NVS_SSID_KEY, ssid);
-    nvs_commit(nvs_handle);
-    nvs_close(nvs_handle);
-    return ret;
-}
+//     ret = nvs_set_str(nvs_handle, NVS_SSID_KEY, ssid);
+//     nvs_commit(nvs_handle);
+//     nvs_close(nvs_handle);
+//     return ret;
+// }
 
 /** 从NVS中读取PASSWORD
  * @param ssid 读到的password
  * @param maxlen 外部存储password数组的最大值
  * @return 读取到的字节数
 */
-static size_t read_nvs_password(char* pwd,int maxlen)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t ret_val = ESP_FAIL;
-    size_t required_size = 0;
-    ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
-    ret_val = nvs_get_str(nvs_handle, NVS_PASSWORD_KEY, NULL, &required_size);
-    if(ret_val == ESP_OK && required_size <= maxlen)
-    {
-        nvs_get_str(nvs_handle,NVS_PASSWORD_KEY,pwd,&required_size);
-    }
-    else 
-        required_size = 0;
-    nvs_close(nvs_handle);
-    return required_size;
-}
+// static size_t read_nvs_password(char* pwd,int maxlen)
+// {
+//     nvs_handle_t nvs_handle;
+//     esp_err_t ret_val = ESP_FAIL;
+//     size_t required_size = 0;
+//     ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
+//     ret_val = nvs_get_str(nvs_handle, NVS_PASSWORD_KEY, NULL, &required_size);
+//     if(ret_val == ESP_OK && required_size <= maxlen)
+//     {
+//         nvs_get_str(nvs_handle,NVS_PASSWORD_KEY,pwd,&required_size);
+//     }
+//     else 
+//         required_size = 0;
+//     nvs_close(nvs_handle);
+//     return required_size;
+// }
 
 /** 写入PASSWORD到NVS中
  * @param pwd 需写入的password
  * @return ESP_OK or ESP_FAIL
 */
-static esp_err_t write_nvs_password(char* pwd)
-{
-    nvs_handle_t nvs_handle;
-    esp_err_t ret;
-    ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
-    ret = nvs_set_str(nvs_handle, NVS_PASSWORD_KEY, pwd);
-    nvs_commit(nvs_handle);
-    nvs_close(nvs_handle);
-    return ret;
-}
+// static esp_err_t write_nvs_password(char* pwd)
+// {
+//     nvs_handle_t nvs_handle;
+//     esp_err_t ret;
+//     ESP_ERROR_CHECK(nvs_open(NVS_WIFI_NAMESPACE_NAME, NVS_READWRITE, &nvs_handle));
+//     ret = nvs_set_str(nvs_handle, NVS_PASSWORD_KEY, pwd);
+//     nvs_commit(nvs_handle);
+//     nvs_close(nvs_handle);
+//     return ret;
+// }
 
 
 
@@ -258,8 +254,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
                     ESP_LOGI(TAG, "smartconfig 获取到SSID和密码");
                     smartconfig_event_got_ssid_pswd_t *evt = (smartconfig_event_got_ssid_pswd_t *)event_data;
                     wifi_config_t wifi_config;
-                    uint8_t ssid[33] = { 0 };
-                    uint8_t password[65] = { 0 };
+                    char ssid[33] = { 0 };
+                    char password[65] = { 0 };
                     //从event_data中提取SSID和密码
                     bzero(&wifi_config, sizeof(wifi_config_t));
                     memcpy(wifi_config.sta.ssid, evt->ssid, sizeof(wifi_config.sta.ssid));
@@ -273,8 +269,12 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
                     memcpy(password, evt->password, sizeof(evt->password));
                     ESP_LOGI(TAG, "SSID:%s", ssid);
                     ESP_LOGI(TAG, "PASSWORD:%s", password);
-                    snprintf(s_ssid_value,33,"%s",(char*)ssid);
-                    snprintf(s_password_value,65,"%s",(char*)password);
+                    
+                    sStorageApSetssid(ssid);
+                    sStorageApSetPassword(password);
+                    // snprintf(s_ssid_value,33,"%s",(char*)ssid);
+                    // snprintf(s_password_value,65,"%s",(char*)password);
+
                     //重新连接WIFI
                     ESP_ERROR_CHECK( esp_wifi_disconnect() );
                     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
@@ -320,13 +320,13 @@ static void smartconfig_example_task(void * parm)
             ESP_LOGI(TAG, "WiFi Connected to ap");
         }
         if(uxBits & ESPTOUCH_DONE_BIT) {    //收到smartconfig配网完成通知
-            ESP_LOGI(TAG, "smartconfig over");
+            ESP_LOGI(TAG, "收到smartconfig配网完成通知");
             esp_smartconfig_stop();         //停止smartconfig配网
 
-            write_nvs_ssid(s_ssid_value);   //将ssid写入NVS
-            ESP_LOGI(TAG,"ssid:%s",s_ssid_value);
-            write_nvs_password(s_password_value);   //将password写入NVS
-             ESP_LOGI(TAG,"password:%s",s_password_value);
+            // write_nvs_ssid(s_ssid_value);   //将ssid写入NVS
+            // ESP_LOGI(TAG,"ssid:%s",s_ssid_value);
+            // write_nvs_password(s_password_value);   //将password写入NVS
+            //  ESP_LOGI(TAG,"password:%s",s_password_value);
             s_is_smartconfig = false;       
             vTaskDelete(NULL);              //退出任务
         }
@@ -342,6 +342,7 @@ void smartconfig_start(void)
 {
     if(!s_is_smartconfig)
     {
+        ESP_LOGI(TAG, "初始化smartconfig网络服务...");
         s_is_smartconfig = true;
         // 确保WiFi处于STA模式
         esp_wifi_set_mode(WIFI_MODE_STA);
@@ -406,8 +407,46 @@ void simple_gpio_config(void)
     gpio_init_struct.pin_bit_mask = 1ull << BOOT_INT_GPIO_PIN;  /* BOOT按键引脚 */
     gpio_config(&gpio_init_struct);      
 }
+bool upwificonfig(void)
+{
+    //缓存一份ssid
+    char ssid[33] = {0};
+    //缓存一份password
+    char password[65] = {0};
+    
+    sStorageApGet(eStorageApCmdSsid,sizeof(ssid),(u8 *)ssid);
+    ESP_LOGI(TAG,"获取ssid:%s",ssid);
+    //从NVS中读取PASSWORD
+    sStorageApGet(eStorageApCmdPassword,sizeof(password),(u8 *)password);
+    ESP_LOGI(TAG,"获取password:%s",password);
 
-
+    if(ssid[0] != 0)    //通过SSID第一个字节是否是0，判断是否读取成功，然后设置wifi_config_t
+    {
+        wifi_config_t wifi_config = 
+        {
+            .sta = 
+            {
+                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+                .pmf_cfg = 
+                {
+                    .capable = true,
+                    .required = false
+                },
+            },
+        };
+        snprintf((char*)wifi_config.sta.ssid,32,"%s",ssid);
+        snprintf((char*)wifi_config.sta.password,64,"%s",password);
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+        return true;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "wifi nvs为空,请使用smartconfig或APmod进行配网,注意APmod与Smartconfig不能同时使用");
+        //  set_ones_smartconfig(true); //启动smartconfig
+        return false;
+    }
+}
+       
 
 #if 1
 //WIFI STA初始化
@@ -425,39 +464,8 @@ esp_err_t wifi_sta_init(void)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT,IP_EVENT_STA_GOT_IP,&event_handler,NULL));
     ESP_ERROR_CHECK( esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
     
-    //WIFI配置
-    //从NVS中读出SSID
-    read_nvs_ssid(s_ssid_value,32);
-    ESP_LOGI(TAG,"NVS获取ssid:%s",s_ssid_value);
-    //从NVS中读取PASSWORD
-    read_nvs_password(s_password_value,64);
-    ESP_LOGI(TAG,"NVS获取password:%s",s_password_value);
+    upwificonfig();
 
-    // sprintf(s_password_value,"%s",DEFAULT_WIFI_PASSWORD);
-    // sprintf(s_ssid_value,"%s",DEFAULT_WIFI_SSID);
-    if(s_ssid_value[0] != 0)    //通过SSID第一个字节是否是0，判断是否读取成功，然后设置wifi_config_t
-    {
-        wifi_config_t wifi_config = 
-        {
-            .sta = 
-            {
-                .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-                .pmf_cfg = 
-                {
-                    .capable = true,
-                    .required = false
-                },
-            },
-        };
-        snprintf((char*)wifi_config.sta.ssid,32,"%s",s_ssid_value);
-        snprintf((char*)wifi_config.sta.password,64,"%s",s_password_value);
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    }
-    else
-    {
-         ESP_LOGI(TAG, "wifi nvs为空,请使用smartconfig进行配网");
-         set_ones_smartconfig(true);
-    }
     //设置回调
     wifi_cb = wifi_event_handler;
     
@@ -513,7 +521,6 @@ esp_err_t wifi_sta_init(void)
 static void simple_task(void *pvParameters) 
 {
     uint8_t key =0;
-    ESP_LOGI(TAG, "初始化smartconfig网络服务...");
     simple_gpio_config();
     while(1) 
     {
@@ -524,7 +531,7 @@ static void simple_task(void *pvParameters)
         {
             case BOOT_PRES:     /* BOOT被按下 */
             {
-                smartconfig_start();
+                set_ones_smartconfig(true);
                 break;
             }
             default:

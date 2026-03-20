@@ -11,6 +11,19 @@
 
 static const char *TAG = "utility";
 
+size_t internal_free = 0;
+size_t internal_min = 0;
+size_t internal_total =0;
+size_t internal_used = 0;
+float internal_usage = 0;
+size_t spiram_free = 0;
+size_t spiram_min = 0;
+size_t spiram_total =0;
+size_t spiram_used = 0;
+float spiram_usage = 0;
+size_t default_free = 0;
+size_t default_min = 0;
+
 uint32_t HAL_GetTick()
 {
     TickType_t ticks = xTaskGetTickCount(); // 返回系统节拍数
@@ -99,20 +112,20 @@ void mdf_mem_print_heap(void)
 //          heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT));
 
    // 获取内存大小
-    size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    size_t internal_min = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-    size_t internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-    size_t internal_used = internal_total - internal_free;
-    float internal_usage = (float)internal_used / internal_total * 100;
+    internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    internal_min = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+    internal_used = internal_total - internal_free;
+    internal_usage = (float)internal_used / internal_total * 100;
     
-    size_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    size_t spiram_min = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
-    size_t spiram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    size_t spiram_used = spiram_total - spiram_free;
-    float spiram_usage = (float)spiram_used / spiram_total * 100;
+    spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    spiram_min = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+    spiram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    spiram_used = spiram_total - spiram_free;
+    spiram_usage = (float)spiram_used / spiram_total * 100;
     
-    size_t default_free = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
-    size_t default_min = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+    default_free = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    default_min = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
     
 
 ESP_LOGI(TAG, "内部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 外部RAM可用:%zu, 最小:%zu, 总量:%zu, 使用率:%.1f%%, 默认RAM可用:%zu, 最小:%zu",

@@ -20,7 +20,7 @@
 #include "wifi_ap.h"
 // 使用自定义的日志头文件代替原始的esp_log.h
 #include "my_log.h"
-
+#include "parameterSet.h"
 #include <esp_heap_caps.h>
 // 定义日志标签
 static const char* TAG = "main";
@@ -119,6 +119,9 @@ void en_log_set(void)
     esp_log_level_set("json", ESP_LOG_DEBUG);
     esp_log_level_set("mqtt", ESP_LOG_DEBUG);
     esp_log_level_set("wifi", ESP_LOG_DEBUG);
+    esp_log_level_set("parameter", ESP_LOG_INFO);
+    esp_log_level_set("parameterSet", ESP_LOG_INFO);
+
 
     
     TimerHandle_t timer = xTimerCreate("show_system_info", pdMS_TO_TICKS(60*1000),true, NULL, system_info_timercb);

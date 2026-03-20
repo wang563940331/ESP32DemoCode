@@ -3,7 +3,12 @@
 
 static const char *TAG = "parameterSet";
 
-
+/*
+    JSON 配置中更新某个数字类型的参数
+    cJSON *root：要操作的 JSON 对象指针
+    const char* key：要设置的键名
+    int value：要设置的整数值
+*/
 CJSON_PUBLIC(cJSON_bool)   cJSON_SetIntEx(cJSON *root, const char* key, int value)
 {
     cJSON *item = NULL;
@@ -13,18 +18,19 @@ CJSON_PUBLIC(cJSON_bool)   cJSON_SetIntEx(cJSON *root, const char* key, int valu
         return false;
     }
     
-    item = cJSON_GetObjectItem(root, key);
+    item = cJSON_GetObjectItem(root, key);//使用 cJSON_GetObjectItem 在 root 对象中查找名为 key 的 JSON 项
     if(!item)
     {
         return false;
     }
     
-    if (!cJSON_IsNumber(item))
+    if (!cJSON_IsNumber(item))//检查找到的 JSON 项是否为数字类型
     {
         return false;
     }
-    
+    //使用 cJSON_CreateNumber 创建一个新的 JSON 数字对象，值为传入的 value
     cJSON *valuejson = cJSON_CreateNumber(value);
+    //用新创建的数字对象替换原有的 JSON 项
     cJSON_ReplaceItemInObject(root, key, valuejson);
     
     return true;
@@ -415,6 +421,41 @@ bool sStorageApSetFlg(bool eFlg)
     
     return(false);
 }
+
+
+
+
+
+bool sStorageApSetssid(char *data)
+{
+    // if((pStorageApCache != NULL))
+    {
+        if(sStorageApSet(eStorageApCmdSsid, (const u8 *)data) == eStorageApRstSuccess)
+        {
+           
+            return(true);
+        }
+    }
+    
+    return(false);
+}
+
+
+bool sStorageApSetPassword(char *data)
+{
+    // if((pStorageApCache != NULL))
+    {
+        if(sStorageApSet(eStorageApCmdPassword, (const u8 *)data) == eStorageApRstSuccess)
+        {
+           
+            return(true);
+        }
+    }
+    
+    return(false);
+}
+
+
 
 
 

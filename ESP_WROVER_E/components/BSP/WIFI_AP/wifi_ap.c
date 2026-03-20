@@ -12,6 +12,8 @@
 #include "lwip/sys.h"
 #include "esp_http_server.h"
 #include "utility.h"
+#include "parameterSet.h"
+#include "simple_wifi_sta.h"
 // Global configuration variables
 char g_domain[128] = "default.domain.com";
 uint16_t g_port = 8080;
@@ -45,7 +47,13 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 static esp_err_t root_handler(httpd_req_t *req)
 {
     char response[2048];
-    
+    char g_wifi_name[24] = "";
+    char g_wifi_passwd[24] = "";
+    sStorageApGet(eStorageApCmdSsid,sizeof(g_wifi_name),(u8 *)g_wifi_name);
+    //从NVS中读取PASSWORD
+    sStorageApGet(eStorageApCmdPassword,sizeof(g_wifi_passwd),(u8 *)g_wifi_passwd);
+
+
     // 创建HTML页面
     snprintf(response, sizeof(response),
         "<!DOCTYPE html>"
@@ -76,18 +84,24 @@ static esp_err_t root_handler(httpd_req_t *req)
         "        <input type='number' name='port' value='%d'><br>"
         "        <label>String:</label>"
         "        <input type='text' name='string' value='%s'><br>"
-        "        <br><input type='submit' value='Save'>"
+        "        <label>wifi名称:</label>"
+        "        <input type='text' name='wifi' value='%s'><br>"
+        "        <label>wifi密码:</label>"
+        "        <input type='text' name='passwd' value='%s'><br>"
+        "        <br><input type='submit' value='保存'>"
         "    </form>"
         "    <div class='config'>"
         "        <h3>Current:</h3>"
         "        <p>Domain: %s</p>"
         "        <p>Port: %d</p>"
         "        <p>String: %s</p>"
+        "        <p>Wifi名称: %s</p>"
+        "        <p>Wifi密码: %s</p>"
         "    </div>"
         "</body>"
         "</html>",
-        g_domain, g_port, g_string_var,
-        g_domain, g_port, g_string_var
+        g_domain, g_port, g_string_var, g_wifi_name, g_wifi_passwd,
+        g_domain, g_port, g_string_var, g_wifi_name, g_wifi_passwd
     );
     
     httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
@@ -98,6 +112,8 @@ static esp_err_t root_handler(httpd_req_t *req)
 static esp_err_t save_handler(httpd_req_t *req)
 {
     char buf[1024];
+    char g_wifi_name[24] = "";
+    char g_wifi_passwd[24] = "";
     int ret, remaining = req->content_len;
     
    // 读取表单数据
@@ -123,6 +139,8 @@ static esp_err_t save_handler(httpd_req_t *req)
     char *domain = strstr(buf, "domain=");
     char *port = strstr(buf, "port=");
     char *string = strstr(buf, "string=");
+    char *wifi = strstr(buf, "wifi=");
+    char *passwd = strstr(buf, "passwd=");
     
     if (domain) {
         domain += 7; // 跳过 "domain="
@@ -144,6 +162,25 @@ static esp_err_t save_handler(httpd_req_t *req)
         if (end) *end = '\0';
         strncpy(g_string_var, string, sizeof(g_string_var) - 1);
     }
+    
+    if (wifi) {
+        wifi += 5; // 跳过 "wifi="
+        char *end = strchr(wifi, '&');
+        if (end) *end = '\0';
+        strncpy(g_wifi_name, wifi, sizeof(g_wifi_name) - 1);
+        sStorageApSetssid(g_wifi_name);
+    }
+    
+    if (passwd) {
+        passwd += 7; // 跳过 "passwd="
+        char *end = strchr(passwd, '&');
+        if (end) *end = '\0';
+        strncpy(g_wifi_passwd, passwd, sizeof(g_wifi_passwd) - 1);
+        sStorageApSetPassword(g_wifi_passwd);
+    }
+
+    upwificonfig();
+
     
     // 重定向回根路径
     httpd_resp_set_status(req, "302 Found");

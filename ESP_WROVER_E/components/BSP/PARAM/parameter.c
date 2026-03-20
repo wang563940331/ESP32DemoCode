@@ -61,7 +61,7 @@ bool sNvsParamSet(void)
     pJsonTxt = cJSON_PrintUnformatted(stNvsCache.pJsonParam);
     if(pJsonTxt != NULL)
     {
-        EN_SLOGI(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
+        ESP_LOGD(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
         //调用 nvs_set_str 将 JSON 字符串写入 NVS，键名为 cNvsKeyParam
         nvs_set_str(handle, cNvsKeyParam, pJsonTxt);
         free(pJsonTxt);
@@ -317,7 +317,7 @@ bool NVS_init(void)
 
     //1.获取NVS信息
     nvs_get_stats(NULL, &nvs_stats);
-    ESP_LOGI(TAG, "已使用:%lu,可用:%lu,所有:%lu,命名空间:%lu\n",
+    ESP_LOGI(TAG, "命名空间已使用:%lu,可用:%lu,所有:%lu, 命名空间数量使用了:%lu\n",
                nvs_stats.used_entries,
                nvs_stats.free_entries,
                nvs_stats.total_entries,
