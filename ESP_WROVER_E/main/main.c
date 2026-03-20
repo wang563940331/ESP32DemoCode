@@ -22,6 +22,7 @@
 #include "my_log.h"
 #include "parameterSet.h"
 #include <esp_heap_caps.h>
+#include "shell.h"
 // 定义日志标签
 static const char* TAG = "main";
 
@@ -112,6 +113,7 @@ void init_netWork(void)
 
 void en_log_set(void)
 {
+    log_mutex = xSemaphoreCreateMutex();
     // 设置日志级别为调试
     esp_log_level_set("*", ESP_LOG_DEBUG);
     esp_log_level_set("main", ESP_LOG_DEBUG);
@@ -141,21 +143,34 @@ void en_log_set(void)
 
 void app_main(void)
 {
-     en_log_set();
-# if 1
     esp_err_t ret;
-    ESP_LOGI(TAG, "ESP32运行");
+
+     ESP_LOGI(TAG, "ESP32 Running...");
+
+     en_log_set();
+     mdf_mem_print_heap();
+
+     sShellHwInit();
+     mdf_mem_print_heap();
+
 
     NVS_init();
+    mdf_mem_print_heap();
     // 初始化基本硬件
     led_init();
+    mdf_mem_print_heap();
+
     pwm_init();
-    
+    mdf_mem_print_heap();
+
     init_netWork();
+    mdf_mem_print_heap();
     // 初始化其他网络服务
     simple_init();
-    init_mqtt();
+    mdf_mem_print_heap();
 
+    init_mqtt();
+    mdf_mem_print_heap();
     //vTaskDelete(NULL);
     while(1)
     {
@@ -177,25 +192,4 @@ void app_main(void)
 
     
     }
-#endif
-#if 0 
-   ESP_LOGI(TAG, "Starting WiFi AP example");
-    
-    // Initialize WiFi in AP mode
-    esp_err_t ret = wifi_ap_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WiFi AP");
-        return;
-    }
-    
-    ESP_LOGI(TAG, "WiFi AP initialized successfully");
-    ESP_LOGI(TAG, "Connect to AP: ESP32_AP with password: 12345678");
-    ESP_LOGI(TAG, "Then open http://192.168.4.1 in your browser");
-    
-    // Keep the task running
-    while (1) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        ESP_LOGI(TAG, "Current configuration - Domain: %s, Port: %d, String: %s", g_domain, g_port, g_string_var);
-    }
-#endif
 }
