@@ -31,7 +31,7 @@ void parse_json(const char *json_string,void *Start_once)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL) 
         {
-            ESP_LOGE(TAG, "Error before: %s", error_ptr);
+            ESP_LOGE("JSON", "解析错误位置: %s", error_ptr);
         }
         return;
     }
