@@ -141,3 +141,12 @@ ESP_LOGI(TAG, "外部RAM可用:%.3fK, 最小:%.3fK, 总量:%.3fK, 使用率:%.1f
          default_free/1024.0,
          default_min/1024.0);
 }
+
+
+
+u32 sGetTimestamp(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return(tv.tv_sec);
+}

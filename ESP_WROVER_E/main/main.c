@@ -145,13 +145,13 @@ void app_main(void)
 {
     esp_err_t ret;
 
-     ESP_LOGI(TAG, "ESP32 Running...");
+    ESP_LOGI(TAG, "ESP32 Running...");
 
-     en_log_set();
-     mdf_mem_print_heap();
+    en_log_set();
+    mdf_mem_print_heap();
 
-     sShellHwInit();
-     mdf_mem_print_heap();
+    sShellInit();
+    mdf_mem_print_heap();
 
 
     NVS_init();

@@ -37,6 +37,8 @@
 
 #endif
 
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 //通用 条件编译 开关
 
@@ -72,14 +74,25 @@ typedef float                           f32;
 
 
 //通用字符定义
-// #define cCr                             (0x0D)                                  // \r
-// #define cLf                             (0x0A)                                  // \n
-// #define cCrLf                           "\r\n"
-// #define cCrLfCrLf                       "\r\n\r\n"
-// #define cCtrlZ                          (0x1A)                                  // CTRL+Z
 
+//通用字符定义
+#define cCr                             (0x0D)                                  // \r
+#define cLf                             (0x0A)                                  // \n
+#define cCrLf                           "\r\n"
+#define cCrLfCrLf                       "\r\n\r\n"
+#define cCtrlZ                          (0x1A)                                  // CTRL+Z
+
+
+//网络协议常用head定义
+#define cNetProtoHeadTcp                "tcp://"
+#define cNetProtoHeadFtp                "ftp://"
+#define cNetProtoHeadHttp               "http://"
+#define cNetProtoHeadHttps              "https://"
+#define cNetProtoHeadMqtt               "mqtt://"
+#define cNetProtoHeadMqtts              "mqtts://"
 
 
 uint8_t tickOut(uint32_t *tick, uint32_t timeout);
 void mdf_mem_print_heap(void);
+u32 sGetTimestamp(void);
 #endif
