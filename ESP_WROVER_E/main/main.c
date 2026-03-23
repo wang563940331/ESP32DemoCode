@@ -151,7 +151,7 @@ void app_main(void)
     en_log_set();
     mdf_mem_print_heap();
 
-    // sShellInit();
+    sShellInit();
     mdf_mem_print_heap();
 
 

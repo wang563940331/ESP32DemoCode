@@ -86,7 +86,7 @@ if(cJSON_IsString(name))
 {
     // 3. 获取真实字符串
     char *str_val = cJSON_GetStringValue(name);
-    printf("name = %s\n", str_val);  // 输出：ESP32
+    EN_SLOGI(TAG,"name = %s\n", str_val);  // 输出：ESP32
 }
 
 cJSON *temp = cJSON_GetObjectItem(root, "temperature");
@@ -94,7 +94,7 @@ cJSON *temp = cJSON_GetObjectItem(root, "temperature");
 if(cJSON_IsNumber(temp))
 {
     double num_val = cJSON_GetNumberValue(temp);
-    printf("温度 = %.1f\n", num_val);  // 输出 25.6
+    EN_SLOGI(TAG,"温度 = %.1f\n", num_val);  // 输出 25.6
 }
 
 cJSON *status = cJSON_GetObjectItem(root, "status");
@@ -102,7 +102,7 @@ cJSON *status = cJSON_GetObjectItem(root, "status");
 if(cJSON_IsBool(status))
 {
     int bool_val = cJSON_GetBoolValue(status);
-    printf("状态 = %d\n", bool_val);  // 输出 1
+    EN_SLOGI(TAG,"状态 = %d\n", bool_val);  // 输出 1
 }
 
 ---

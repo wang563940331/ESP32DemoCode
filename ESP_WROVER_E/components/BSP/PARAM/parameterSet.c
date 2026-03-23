@@ -1,6 +1,6 @@
 
 #include "parameterSet.h"
-
+#include "utility.h"
 static const char *TAG = "parameterSet";
 
 /*
@@ -223,26 +223,25 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
                 case eStorageApCmdPassword:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsPassword, (const char *)pData);
                     break;
-                // case eStorageApCmdIp:
-                //     bRst = cJSON_SetStringEx(pObj , cStorageApNvsIp, (const char *)pData);
-                //     break;
-                // case eStorageApCmdDefGwIp:
-                //     bRst = cJSON_SetStringEx(pObj , cStorageApNvsDefGwIp, (const char *)pData);
-                //     break;
-                // case eStorageApCmdMask:
-                //     bRst = cJSON_SetStringEx(pObj , cStorageApNvsMask, (const char *)pData);
-                //     break;
-                // case eStorageApCmdValidityTime:
-                //     u32Value = 0;
-                //     memcpy(&u32Value, pData, 4);
-                //     bRst = cJSON_SetDoubleEx(pObj, cStorageApNvsValidityTime, (double)u32Value, 0);
-                //     break;
-                // case eStorageApCmdReqCode:
-                //     bRst = cJSON_SetStringEx(pObj , cStorageApNvsReqCode, (const char *)pData);
-                //     break;
-                // case eStorageApCmdWebPassword:
-                //     bRst = cJSON_SetStringEx(pObj , cStorageApNvsWebPassword, (const char *)pData);
-                //     break;
+                case cStorageApCmdNvsmqttIp:
+                    bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttIp, (const char *)pData);
+                    break;
+                case cStorageApCmdNvsmqttport:
+                    bRst = cJSON_SetIntEx(pObj , cStorageApNvsmqttport,  (*(u16 *)pData));
+                    break;
+                case cStorageApCmdNvsmqttsub:
+                    bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttsub, (const char *)pData);
+                    break;
+                case cStorageApCmdNvsmqttclient:
+                    bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttclient, (const char *)pData);
+                    break;
+                case cStorageApCmdNvsmqttuser:
+                    bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttuser, (const char *)pData);
+                    break;  
+                case cStorageApCmdNvsmqttpasswd:
+                    bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttpasswd, (const char *)pData);
+                    break;  
+            
                 default:
                     bRst    = false;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -330,61 +329,47 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     break;
-                // case eStorageApCmdIp:
-                //     if(!cJSON_GetStringEx(pObj, cStorageApNvsIp, (char *)pData, u16MaxLen))
-                //     {
-                //         EN_SLOGE(TAG, "Ip 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     break;
-                // case eStorageApCmdDefGwIp:
-                //     if(!cJSON_GetStringEx(pObj, cStorageApNvsDefGwIp, (char *)pData, u16MaxLen))
-                //     {
-                //         EN_SLOGE(TAG, "DefGwIp 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     break;
-                // case eStorageApCmdMask:
-                //     if(!cJSON_GetStringEx(pObj, cStorageApNvsMask, (char *)pData, u16MaxLen))
-                //     {
-                //         EN_SLOGE(TAG, "Mask 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     break;
-                // case eStorageApCmdValidityTime:
-                //     if(!cJSON_GetDoubleEx(pObj, cStorageApNvsValidityTime, &d64Value))
-                //     {
-                //         EN_SLOGE(TAG, "ValidityTime 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     if(d64Value < 0)
-                //     {
-                //         eRst = eStorageApRstFail;
-                //         break;
-                //     }
-                //     u32 value = (u32)d64Value;
-                //     memcpy(pData, &value, 4);
-                //     break;
-                // case eStorageApCmdReqCode:
-                //     if(!cJSON_GetStringEx(pObj, cStorageApNvsReqCode, (char *)pData, u16MaxLen))
-                //     {
-                //         EN_SLOGE(TAG, "ReqCode 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     break;
-                // case eStorageApCmdWebPassword:
-                //     if(!cJSON_GetStringEx(pObj, cStorageApNvsWebPassword, (char *)pData, u16MaxLen))
-                //     {
-                //         EN_SLOGE(TAG, "WebPassword 对象不存在");
-                //         eRst = eStorageApRstObjNull;
-                //         break;
-                //     }
-                //     break;
+                case cStorageApCmdNvsmqttIp:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttIp, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "NvsmqttIp 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdNvsmqttport:  
+                    if(!cJSON_GetIntEx(pObj, cStorageApNvsmqttport, &i32Value))
+                    {
+                        EN_SLOGE(TAG, "Nvsmqttport 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    *((u16 *)pData) = (u16)i32Value;
+                    break;  
+                case cStorageApCmdNvsmqttclient:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttclient, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Nvsmqttclient 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdNvsmqttuser:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttuser, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Nvsmqttuser 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdNvsmqttpasswd:    
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttpasswd, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Nvsmqttpasswd 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
                 default:
                     eRst = eStorageApRstParamErr;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -425,7 +410,7 @@ bool sStorageApSetFlg(bool eFlg)
 
 
 
-
+// 设置ssid
 bool sStorageApSetssid(char *data)
 {
     // if((pStorageApCache != NULL))
@@ -440,7 +425,7 @@ bool sStorageApSetssid(char *data)
     return(false);
 }
 
-
+// 设置密码
 bool sStorageApSetPassword(char *data)
 {
     // if((pStorageApCache != NULL))
@@ -455,20 +440,52 @@ bool sStorageApSetPassword(char *data)
     return(false);
 }
 
-// bool sStorageApSetMQTTDomain(char *data)
-// {
-//     // if((pStorageApCache != NULL))
-//     {
-//         if(sStorageApSet(eStorageApCmdMQTTDomain, (const u8 *)data) == eStorageApRstSuccess)
-//         {
+bool sStorageApSetNvsmqttIp(char *data)
+{
+    if(sStorageApSet(cStorageApCmdNvsmqttIp, (const u8 *)data) == eStorageApRstSuccess)
+    {
 
-//             return(true);
-//         }
-//     }
+        return(true);
+    }
+    return(false);
+}
 
-//     return(false);
-// }
+bool sStorageApSetNvsmqttport(u16 data)
+{
+    if(sStorageApSet(cStorageApCmdNvsmqttport, (const u8 *)&data) == eStorageApRstSuccess)
+    {
 
+        return(true);
+    }
+    return(false);
+}
 
+bool sStorageApSetNvsmqttclient(char *data)
+{
+    if(sStorageApSet(cStorageApCmdNvsmqttclient, (const u8 *)data) == eStorageApRstSuccess)
+    {
 
+        return(true);
+    }
+    return(false);
+}
 
+bool sStorageApSetNvsmqttuser(char *data)
+{
+    if(sStorageApSet(cStorageApCmdNvsmqttuser, (const u8 *)data) == eStorageApRstSuccess)
+    {
+
+        return(true);
+    }
+    return(false);
+}
+
+bool sStorageApSetNvsmqttpasswd(char *data)
+{
+    if(sStorageApSet(cStorageApCmdNvsmqttpasswd, (const u8 *)data) == eStorageApRstSuccess)
+    {
+
+        return(true);
+    }
+    return(false);
+}

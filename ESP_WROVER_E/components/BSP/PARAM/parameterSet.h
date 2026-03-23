@@ -16,4 +16,10 @@ extern bool sStorageApSetFlg(bool eFlg);
 eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData);
 bool sStorageApSetssid(char *data);
 bool sStorageApSetPassword(char *data);
+bool sStorageApSetPassword(char *data);
+bool sStorageApSetNvsmqttIp(char *data);
+bool sStorageApSetNvsmqttport(u16 data);
+bool sStorageApSetNvsmqttclient(char *data);
+bool sStorageApSetNvsmqttuser(char *data);
+bool sStorageApSetNvsmqttpasswd(char *data);
 #endif

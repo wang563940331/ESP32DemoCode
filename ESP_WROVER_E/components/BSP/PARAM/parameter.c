@@ -1,6 +1,6 @@
 
 #include "parameter.h"
-
+#include "utility.h"
 static const char *TAG = "parameter";
 
 stNvsCache_t stNvsCache;
@@ -242,6 +242,14 @@ bool sNvsParamCheck(void)
             i32Rst |= sNvsParamCheckObj(pDefObj, stNvsCache.pJsonParam,3);
             cJSON_Delete(pDefObj);
         }
+        else
+        {
+            EN_SLOGE(TAG, "pDefObj 无");
+        }
+    }
+    else
+    {
+        EN_SLOGE(TAG, "stNvsCache.pJsonParam 无");
     }
     EN_SLOGI(TAG, "默认检查:%s,状态:%d", (bRst)?"正在同步...":"无需同步",i32Rst);
     if(i32Rst > 0)
@@ -339,4 +347,3 @@ bool NVS_init(void)
 
     return bRst;
 }
-

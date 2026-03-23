@@ -40,7 +40,7 @@
 #include "nvs_flash.h"
 #include "json.h"
 #include "cJSON.h"
-#include "utility.h"
+
 #define cNvsName                        "nvs_file"                              //NVS 参数区 :name
 #define cNvsKeyParam                    "nvs_key_param"                         //NVS 参数区 :key name
 
@@ -102,7 +102,7 @@ static const char *pNvsKeyParamDefault =
         "\"" cStorageApNvsmqttIp "\" : \"192.168.4.1\","
         "\"" cStorageApNvsmqttport "\" : 1883,"
         "\"" cStorageApNvsmqttsub "\" : \"sub\","
-        "\"" cStorageApNvsmqttclient "\" : client,"
+        "\"" cStorageApNvsmqttclient "\" : \"client\","
         "\"" cStorageApNvsmqttuser "\" : \"tuser\","
         "\"" cStorageApNvsmqttpasswd "\" : \"passwd\""
     "}"

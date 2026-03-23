@@ -21,6 +21,20 @@
 
 static SemaphoreHandle_t log_mutex = NULL;
 
+// 自定义日志颜色
+#undef LOG_COLOR_E
+#undef LOG_COLOR_W
+#undef LOG_COLOR_I
+#undef LOG_COLOR_D
+#undef LOG_COLOR_V
+
+#define LOG_COLOR_E "\x1b[31m"  // 红色（错误）
+#define LOG_COLOR_W "\x1b[33m"  // 黄色（警告）
+#define LOG_COLOR_I "\x1b[36m"  // 青色（信息）
+#define LOG_COLOR_D "\x1b[34m"  // 蓝色（调试）
+#define LOG_COLOR_V "\x1b[35m"  // 紫色（详细）
+
+
 // 获取当前时间的年月日时分秒格式
 static inline const char* get_custom_timestamp(void)
 {

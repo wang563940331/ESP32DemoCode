@@ -14,7 +14,7 @@
 #include "esp_chip_info.h"
 #include <sys/time.h>  // 用于gettimeofday函数
 #include "utility.h"
-
+#include "parameterSet.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -129,8 +129,8 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
             ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_DATA:
-            printf("topic=%.*s\r\n", event->topic_len, event->topic);       //收到Pub消息直接打印出来
-            printf("data=%.*s\r\n", event->data_len, event->data);
+            EN_SLOGI(TAG,"topic=%.*s\r\n", event->topic_len, event->topic);       //收到Pub消息直接打印出来
+            EN_SLOGI(TAG,"data=%.*s\r\n", event->data_len, event->data);
             parse_json(event->data,&Start_once);
             break;
         case MQTT_EVENT_ERROR:
@@ -153,12 +153,34 @@ void mqtt_start(void)
     char* mac = getg_mac();
     char macbuf[50]={0};
     esp_mqtt_client_config_t mqtt_cfg = {0};
+    char MQTT_ADDRESS[32]={0};
+    char MQTT_USERNAME[32]={0};
+    char MQTT_PASSWORD[32]={0};
+    char MQTT_CLIENT[32]={0};
+
+    uint16_t MQTT_PORT=0;
     ESP_LOGI(TAG,"MQTT初始化!\n");
+
+    sStorageApGet(cStorageApCmdNvsmqttIp,sizeof(MQTT_ADDRESS),(u8 *)MQTT_ADDRESS);
+    sStorageApGet(cStorageApCmdNvsmqttport,sizeof(MQTT_PORT),(u16 *)&MQTT_PORT);
+    sStorageApGet(cStorageApCmdNvsmqttuser,sizeof(MQTT_USERNAME),(u8 *)MQTT_USERNAME);
+    sStorageApGet(cStorageApCmdNvsmqttpasswd,sizeof(MQTT_PASSWORD),(u8 *)MQTT_PASSWORD);
+    sStorageApGet(cStorageApCmdNvsmqttclient,sizeof(MQTT_CLIENT),(u8 *)MQTT_CLIENT);
+
+    
     mqtt_cfg.broker.address.uri = MQTT_ADDRESS;
     mqtt_cfg.broker.address.port = MQTT_PORT;
+    EN_SLOGI(TAG,"MQTT服务器地址:%s,端口:%d\n",mqtt_cfg.broker.address.uri,mqtt_cfg.broker.address.port);
     //Client ID
- 
-    sprintf(macbuf,"%s_%.2x%.2x%.2x%.2x%.2x%.2x",MQTT_CLIENT,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+    if(strlen(MQTT_CLIENT) == 0)
+    {
+        sprintf(macbuf,"%s_%.2x%.2x%.2x%.2x%.2x%.2x",MQTT_CLIENT,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+    }
+    else
+    {
+        sprintf(macbuf,"%s",MQTT_CLIENT);
+    }
+
     mqtt_cfg.credentials.client_id = macbuf;
 
     //用户名

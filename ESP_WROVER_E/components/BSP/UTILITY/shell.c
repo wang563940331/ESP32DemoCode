@@ -43,12 +43,12 @@ bool sShellDebugOff(const stShellPkt_t *pkg)
 {
     if(!esp_log_print_status())
     {
-        printf("[shell] debug has off....\r\n");
+        EN_SLOGI(TAG,"[shell] debug has off....\r\n");
         return(false);
     }
     
     esp_log_print_set(false);
-    printf("super password verify successful...\n");
+    EN_SLOGI(TAG,"super password verify successful...\n");
     return(true);
 }
 
