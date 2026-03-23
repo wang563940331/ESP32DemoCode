@@ -34,16 +34,13 @@ Below is short explanation of remaining files in the project folder.
 Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system.
 They are not used or needed when building with CMake and idf.py.
 
-
-
 shell
 
 blue
 
-
 //摄像头（OV2640）
 
-OTA 
+OTA
 
 //语音播报、对讲
 
@@ -52,3 +49,5 @@ TLS/SSL 加密
 SHA256（哈希）
 
 **RSA（非对称加密**
+
+Fatfs

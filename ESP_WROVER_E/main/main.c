@@ -176,20 +176,17 @@ void app_main(void)
     {
         if(gets_is_smartconfig() == true)
         {
-             LED_TOGGLE();   /* LED状态翻转 */
-             vTaskDelay(pdMS_TO_TICKS(100));
+             led_blink();   /* LED状态翻转 */
         }
         else if(gets_is_mqtt_connected() == false)
         {
-            LED_TOGGLE();   /* LED状态翻转 */
-            vTaskDelay(pdMS_TO_TICKS(500));
+            led_heartbeat();   /* LED状态翻转 */
         }
         else
         {
-            LED(0);
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            led_breath();
         }
 
-    
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
