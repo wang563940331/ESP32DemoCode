@@ -3,8 +3,8 @@
 
 static const char *TAG = "parameter";
 
-static ST_SYSPARAM gSysParam={0};
 stNvsCache_t stNvsCache;
+
 
 
 
@@ -166,14 +166,14 @@ i32 sNvsParamCheckObj(cJSON *pDefObj, cJSON *pNvsObj,int depth)
     cJSON *pNvsParentObj    = NULL;
     cJSON *pDefParentObj    = NULL;
     cJSON *pCopyObj         = NULL;
-    cJSON *pChildObj        = NULL;
+    cJSON *pDefChildObj        = NULL;
     
     if((pDefObj == NULL) || (pNvsObj == NULL))
     {
         return(-1);
     }
-    pChildObj = pDefObj->child;//child 是 cJSON 对象的一个成员，指向该对象的第一个子节点
-    if(pChildObj == NULL)//即检查 pDefObj 是否有子节点
+    pDefChildObj = pDefObj->child;//child 是 cJSON 对象的一个成员，指向该对象的第一个子节点
+    if(pDefChildObj == NULL)//即检查 pDefObj 是否有子节点
     {
         return(0);
     }
@@ -182,8 +182,8 @@ i32 sNvsParamCheckObj(cJSON *pDefObj, cJSON *pNvsObj,int depth)
    for(i = 0; i < list; i++)//通过循环遍历每个子节点，从第一个子节点开始，
     {
         //1.检查父对象是否存在一级,不存在则创建对象
-        pDefParentObj = cJSON_GetObjectItem(pDefObj, pChildObj->string);//从默认参数 JSON 对象中获取与当前子节点同名的对象
-        pNvsParentObj = cJSON_GetObjectItem(pNvsObj, pChildObj->string);//从当前 NVS 参数 JSON 对象中获取与当前子节点同名的对象
+        pDefParentObj = cJSON_GetObjectItem(pDefObj, pDefChildObj->string);//从默认参数 JSON 对象中获取与当前子节点同名的对象
+        pNvsParentObj = cJSON_GetObjectItem(pNvsObj, pDefChildObj->string);//从当前 NVS 参数 JSON 对象中获取与当前子节点同名的对象
         if(pDefParentObj == NULL)
         {
             EN_SLOGE(TAG, "pDefParentObj 无");
@@ -198,8 +198,8 @@ i32 sNvsParamCheckObj(cJSON *pDefObj, cJSON *pNvsObj,int depth)
             if(pCopyObj != NULL)
             {
                 //将拷贝的对象添加到 NVS 参数对象中
-                EN_SLOGE(TAG, "第%d级子对象%s进行拷贝",depth,pChildObj->string);
-                cJSON_AddItemToObject(pNvsObj, pChildObj->string, pCopyObj);
+                EN_SLOGE(TAG, "第%d级子对象%s进行拷贝",depth,pDefChildObj->string);
+                cJSON_AddItemToObject(pNvsObj, pDefChildObj->string, pCopyObj);
                 i32Rst = 1;//设置返回值为 1，表示需要同步参数
             }
             else
@@ -214,7 +214,7 @@ i32 sNvsParamCheckObj(cJSON *pDefObj, cJSON *pNvsObj,int depth)
             EN_SLOGI(TAG, "第%d级子对象%s检查完成",depth,pNvsParentObj->string);
             i32Rst |= sNvsParamCheckObj(pDefParentObj, pNvsParentObj, depth - 1);
         }
-        pChildObj = pChildObj->next;//通过 pChildObj->next 移动到下一个子节点
+        pDefChildObj = pDefChildObj->next;//通过 pChildObj->next 移动到下一个子节点
     }
     
     return(i32Rst);
@@ -289,11 +289,6 @@ bool sNvsParamPrint(void)
 
 
 
-
-ST_SYSPARAM *getgSysParam(void)
-{
-    return &gSysParam;
-}
 
 
 bool NVS_init(void)

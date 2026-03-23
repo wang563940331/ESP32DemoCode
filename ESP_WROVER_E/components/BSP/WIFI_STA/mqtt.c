@@ -16,13 +16,18 @@
 #include "utility.h"
 
 TaskHandle_t myTaskHandle = NULL;
-static const char* TAG = "mqtt";
+static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
 static esp_mqtt_client_handle_t     s_mqtt_client = NULL;
 //MQTT连接标志
 static bool   s_is_mqtt_connected = false;
 
 static eControl Start_once=POWEROF;
+
+
+
+
+
 
 eControl getStart_once()
 {

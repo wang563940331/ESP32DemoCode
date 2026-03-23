@@ -58,12 +58,14 @@
 #define cStorageApNvsFlg                "enableFlg"                             //使能标志,0不使能,非0使能
 #define cStorageApNvsSsid               "ssid"                                  //热点名称
 #define cStorageApNvsPassword           "password"                              //热点密码
-#define cStorageApNvsIp                 "ip"                                    //IP地址
-#define cStorageApNvsDefGwIp            "defGwIp"                               //默认网关地址
-#define cStorageApNvsMask               "mask"                                  //连接固定子码掩码
-#define cStorageApNvsValidityTime       "validityTime"                          //WEB登录密码有效时间(必须U32)
-#define cStorageApNvsReqCode            "reqCode"                               //WEB申请码
-#define cStorageApNvsWebPassword        "webPassword"  
+#define cStorageApNvsmqttIp             "mqttip"                                    //IP地址
+#define cStorageApNvsmqttport           "mqttport"                               //端口
+#define cStorageApNvsmqttsub            "mqttsub"                                  //连接固定子码掩码
+#define cStorageApNvsmqttclient         "mqttclient"                          //WEB登录密码有效时间(必须U32)
+#define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
+#define cStorageApNvsmqttpasswd         "mqttpasswd"  
+
+
 
 #define cStorageNetAppNvsName           "netApp"                               //第一级
 #define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
@@ -82,36 +84,36 @@
 //2.ATE中用到数据(因为过ATE时会清除恢复默认数据)
 static const char *pNvsKeyParamDefault = 
 "{"
-    "\"" cStorageGwNvsName "\" :"
-    "{"
-        "\"" cStorageGwNvsSn "\" : \"SN00000000000000\","
-        "\"" cStorageGwNvsDeviceType "\" : 94,"
-        "\"" cStorageGwNvsFormatCnt "\" : 0,"
-        "\"" cStorageGwNvsDebug "\" : 0,"
-        "\"" cStorageGwNvsGwWorkMode "\" : 0,"
-        "\"" cStorageGwNvsGwChargeMode1 "\" : 1,"
-        "\"" cStorageGwNvsGwChargeMode2 "\" : 1"
-    "},"
+    // "\"" cStorageGwNvsName "\" :"
+    // "{"
+    //     "\"" cStorageGwNvsSn "\" : \"SN00000000000000\","
+    //     "\"" cStorageGwNvsDeviceType "\" : 94,"
+    //     "\"" cStorageGwNvsFormatCnt "\" : 0,"
+    //     "\"" cStorageGwNvsDebug "\" : 0,"
+    //     "\"" cStorageGwNvsGwWorkMode "\" : 0,"
+    //     "\"" cStorageGwNvsGwChargeMode1 "\" : 1,"
+    //     "\"" cStorageGwNvsGwChargeMode2 "\" : 1"
+    // "},"
     "\"" cStorageApNvsName "\" :"
     "{"
         "\"" cStorageApNvsFlg "\" : 0,"
         "\"" cStorageApNvsSsid "\" : \"SN00000000000000\","
         "\"" cStorageApNvsPassword "\" : \"admin123\","
-        "\"" cStorageApNvsIp "\" : \"192.168.4.1\","
-        "\"" cStorageApNvsDefGwIp "\" : \"192.168.4.1\","
-        "\"" cStorageApNvsMask "\" : \"255.255.255.0\","
-        "\"" cStorageApNvsValidityTime "\" : 0,"
-        "\"" cStorageApNvsReqCode "\" : \"null\","
-        "\"" cStorageApNvsWebPassword "\" : \"123456\""
-    "},"
-    "\"netApp\" :"
-    "{"
-        "\"" cStorageNetAppNvsConnHost "\" : \"host1\"," 
-        "\"" cStorageNetAppNvsHost1 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
-        "\"" cStorageNetAppNvsHost2 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
-        "\"" cStorageNetAppNvsWhtdEn "\" : 0,"
-        "\"" cStorageNetAppNvsWhtdHost "\" : { \"" cStorageNetAppNvsIp "\" : \"dev.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 18841 }"
+        "\"" cStorageApNvsmqttIp "\" : \"192.168.4.1\","
+        "\"" cStorageApNvsmqttport "\" : 1883,"
+        "\"" cStorageApNvsmqttsub "\" : \"sub\","
+        "\"" cStorageApNvsmqttclient "\" : client,"
+        "\"" cStorageApNvsmqttuser "\" : \"tuser\","
+        "\"" cStorageApNvsmqttpasswd "\" : \"passwd\""
     "}"
+    // "\"netApp\" :"
+    // "{"
+    //     "\"" cStorageNetAppNvsConnHost "\" : \"host1\"," 
+    //     "\"" cStorageNetAppNvsHost1 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+    //     "\"" cStorageNetAppNvsHost2 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+    //     "\"" cStorageNetAppNvsWhtdEn "\" : 0,"
+    //     "\"" cStorageNetAppNvsWhtdHost "\" : { \"" cStorageNetAppNvsIp "\" : \"dev.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 18841 }"
+    // "}"
 "}";
 
 
@@ -122,16 +124,15 @@ typedef enum
     eStorageApCmdFlg                    = 0,                                    //使能标志
     eStorageApCmdSsid,                                                          //热点名称
     eStorageApCmdPassword,                                                      //热点密码
-    eStorageApCmdIp,                                                            //IP地址
-    eStorageApCmdDefGwIp,                                                       //默认网关地址
-    eStorageApCmdMask,                                                          //连接固定子码掩码
-    eStorageApCmdValidityTime,                                                  //WEB密码有效时间(4个字节时间戳)
-    eStorageApCmdReqCode,                                                       //WEB申请码
-    eStorageApCmdWebPassword,                                                   //WEB登录密码
+    cStorageApCmdNvsmqttIp,                                                            //IP地址
+    cStorageApCmdNvsmqttport,                                                       //默认网关地址
+    cStorageApCmdNvsmqttsub,                                                          //连接固定子码掩码
+    cStorageApCmdNvsmqttclient,                                                  //WEB密码有效时间(4个字节时间戳)
+    cStorageApCmdNvsmqttuser,                                                       //WEB申请码
+    cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
     
     eStorageApCmdMax
 }__attribute__((packed)) eStorageApCmd_t;
-
 
 typedef enum 
 {
@@ -146,13 +147,6 @@ typedef enum
     
 }__attribute__((packed)) eStorageApRst_t;
 
-typedef struct
-{
-    char SSID[24];
-    char Passwd[24];
-    char MqttIP[24];
-    uint16_t MqttPort;
-}ST_SYSPARAM;
 
 
 //nvs 参数组件 缓存结构

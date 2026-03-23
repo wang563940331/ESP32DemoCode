@@ -208,7 +208,20 @@ shell_exec_status_t  shell_exec(u8 *data, int len)
     return cmd_found ? SHELL_EXEC_SUCCESS : SHELL_EXEC_CMD_NOT_FOUND;
 }
 
-
+/*
+ASCII码	按键	处理逻辑
+8	Backspace (退格键)	发送退格字符，删除最后输入的字符
+13	Enter (回车)	执行命令，清空缓冲区，重置计数
+10	Enter (换行)	同上，执行命令，清空缓冲区
+37	Left (左箭头)	记录接收标志和时间戳，不做具体处理
+38	Up (上箭头)	记录接收标志和时间戳，不做具体处理
+39	Right (右箭头)	记录接收标志和时间戳，不做具体处理
+40	Down (下箭头)	记录接收标志和时间戳，不做具体处理
+9	Tab (制表符)	记录接收标志和时间戳，不做具体处理
+127	Delete (删除键)	记录接收标志和时间戳，不做具体处理
+27	Escape (转义键)	记录接收标志和时间戳，不做具体处理
+其他	普通字符	添加到输入缓冲区并回显
+*/
 void uart_shell_read(uart_port_t port, size_t size)
 {
     u8  buf[128] = {0};
@@ -273,6 +286,7 @@ void uart_shell_read(uart_port_t port, size_t size)
         {
             stShellCache.u16RxCnt = 0;
             stShellCache.bRxFlag = false;
+            EN_SLOGE(TAG, "SHELL超时,清空缓冲区");
         }
     }
 }

@@ -13,6 +13,7 @@
 #include "esp_http_server.h"
 #include "utility.h"
 #include "parameterSet.h"
+#include "shell.h"
 #include "simple_wifi_sta.h"
 // Global configuration variables
 char g_domain[128] = "default.domain.com";
@@ -30,6 +31,135 @@ static httpd_handle_t server = NULL;
 #define AP_PASS      "12345678"
 #define AP_CHANNEL   1
 #define MAX_STA_CONN 4
+
+bool ShellsetWifi(const stShellPkt_t *pkg);
+
+stShellCmd_t setWifi = 
+{
+    .pCmd       = "setWifi",
+    .pFormat    = "格式:setWifi <ssid> <password>",
+    .pFunction  = "功能:设置AP SSID和密码",
+    .pRemarks   = "备注:无",
+    .pFunc      = ShellsetWifi,
+};
+
+
+// stShellCmd_t setMQTT = 
+// {
+//     .pCmd       = "setMQTT",
+//     .pFormat    = "格式:setMQTT <domain> <port>",
+//     .pFunction  = "功能:设置MQTT服务器地址和端口",
+//     .pRemarks   = "备注:无",
+//     .pFunc      = ShellsetMQTT,
+// };
+
+
+/**********************************************************************************************
+* Description       :     文件系统-格式化文件系统
+* Author            :     XRG
+* modified Date     :     2024-05-13
+* notice            :     
+***********************************************************************************************/
+bool ShellsetWifi(const stShellPkt_t *pkg)
+{
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  Value;
+    char*                  Value2;
+
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    if(u8Num != 2)
+    {
+        EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求2个参数,请参考指令%s", u8Num, setWifi.pFormat);
+        return(false);
+    }
+    Value = pkg->para[0];
+    Value2 = pkg->para[1];
+    if(Value == NULL || Value2 == NULL)
+    {
+        EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求2个参数,请参考指令%s", setWifi.pFormat);
+        return(false);
+    }
+    if(strlen(Value) > 32 || strlen(Value2) > 32)
+    {
+        EN_SLOGE(TAG, "执行出错,参数长度%d %d 错误,本指令要求参数长度小于等于32,请参考指令%s", strlen(Value), strlen(Value2), setWifi.pFormat);
+        return(false);
+    }
+
+    sStorageApSetssid(Value);
+    sStorageApSetPassword(Value2);
+    upwificonfig();
+    EN_SLOGI(TAG, "设置AP SSID为:%s", Value);
+    EN_SLOGI(TAG, "设置AP密码为:%s", Value2);
+
+    return(bRst);
+}
+
+// bool ShellsetMQTT(const stShellPkt_t *pkg)
+// {
+//     bool                   bRst;
+//     u8                     u8Num;
+//     char*                  Value;
+//     char*                  Value2;
+
+//     bRst  = true;
+//     u8Num = pkg->paraNum;
+//     if(u8Num != 2)
+//     {
+//         EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求2个参数,请参考指令%s", u8Num, setMQTT.pFormat);
+//         return(false);
+//     }
+//     Value = pkg->para[0];
+//     Value2 = pkg->para[1];
+//     if(Value == NULL || Value2 == NULL)
+//     {
+//         EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求2个参数,请参考指令%s", setMQTT.pFormat);
+//         return(false);
+//     }
+//     if(strlen(Value) > 32 || strlen(Value2) > 32)
+//     {
+//         EN_SLOGE(TAG, "执行出错,参数长度%d %d 错误,本指令要求参数长度小于等于32,请参考指令%s", strlen(Value), strlen(Value2), setMQTT.pFormat);
+//         return(false);
+//     }
+//     // sStorageApSetMQTT(Value,atoi(Value2));
+//     upwificonfig();
+//     EN_SLOGI(TAG, "设置MQTT服务器地址为:%s", Value);
+//     EN_SLOGI(TAG, "设置MQTT端口为:%d", atoi(Value2));
+
+//     return(bRst);
+// }
+
+// bool Shellsetpasswd(const stShellPkt_t *pkg)
+// {
+//     bool                   bRst;
+//     u8                     u8Num;
+//     char*                  Value;
+//     bRst  = true;
+//     u8Num = pkg->paraNum;
+//     if(u8Num != 1)
+//     {
+//         EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求1个参数,请参考指令%s", u8Num, setpasswd.pFormat);
+//         return(false);
+//     }
+//     Value = pkg->para[0];
+//     if(Value == NULL)
+//     {
+//         EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求1个参数,请参考指令%s", setpasswd.pFormat);
+//         return(false);
+//     }
+//     if(strlen(Value) > 32)
+//     {
+//     EN_SLOGE(TAG, "执行出错,参数1长度:%d错误,本指令要求参数1长度小于等于32,请参考指令%s", strlen(Value), setpasswd.pFormat);
+//         return(false);
+//     }
+
+//     sStorageApSetPassword(Value);
+//     upwificonfig();
+//     EN_SLOGI(TAG, "设置AP密码为:%s", Value);
+
+//     return(bRst);
+// }
 
 // WiFi事件处理程序
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
@@ -235,10 +365,13 @@ static void stop_webserver(httpd_handle_t server)
 // 初始化WiFi AP模式
 esp_err_t wifi_ap_init(void)
 {
+    bool bRst = true;
     esp_err_t ret = ESP_OK;
     
     ESP_LOGI(TAG, "wifi APmode初始化");
-    
+
+    bRst = bRst & sShellCmdRegister(&setWifi);
+
     // 注册事件处理程序
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     
@@ -298,19 +431,3 @@ esp_err_t wifi_ap_deinit(void)
 }
 
 
-void apmod_init(void)
-{
-   ESP_LOGI(TAG, "WiFi AP 模式初始化");
-    
-    // 初始化WiFi AP模式
-    esp_err_t ret = wifi_ap_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "WiFi AP 模式初始化失败");
-        return;
-    }
-    
-    ESP_LOGI(TAG, "WiFi AP 模式初始化成功");
-    ESP_LOGI(TAG, "连接到 ESP32_AP 网络, 密码: 12345678");
-    ESP_LOGI(TAG, "在浏览器中打开 http://192.168.4.1 配置");
-    
-}

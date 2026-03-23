@@ -24,7 +24,7 @@
 #include <esp_heap_caps.h>
 #include "shell.h"
 // 定义日志标签
-static const char* TAG = "main";
+static const char*TAG = "main";
 
 
 void system_info_timercb(void *timer)
@@ -120,9 +120,11 @@ void en_log_set(void)
     esp_log_level_set("pwm", ESP_LOG_DEBUG);
     esp_log_level_set("json", ESP_LOG_DEBUG);
     esp_log_level_set("mqtt", ESP_LOG_DEBUG);
-    esp_log_level_set("wifi", ESP_LOG_DEBUG);
+    esp_log_level_set("wifista", ESP_LOG_DEBUG);
     esp_log_level_set("parameter", ESP_LOG_INFO);
     esp_log_level_set("parameterSet", ESP_LOG_INFO);
+    esp_log_level_set("WIFI_AP", ESP_LOG_DEBUG);
+    
 
 
     
@@ -143,14 +145,13 @@ void en_log_set(void)
 
 void app_main(void)
 {
-    esp_err_t ret;
 
     ESP_LOGI(TAG, "ESP32 Running...");
 
     en_log_set();
     mdf_mem_print_heap();
 
-    sShellInit();
+    // sShellInit();
     mdf_mem_print_heap();
 
 
