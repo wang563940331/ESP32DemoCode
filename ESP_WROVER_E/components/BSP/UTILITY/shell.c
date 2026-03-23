@@ -11,9 +11,9 @@
 
 static const char *TAG = "shell";
 
-stShellCache_t stShellCache;
-stShellCmdMap_t stShellCmdMap;
-static bool bLogPrintfFlag = true; 
+stShellCache_t stShellCache; // 保存 shell 缓存数据
+stShellCmdMap_t stShellCmdMap; // 保存命令映射表
+static bool bLogPrintfFlag = true; // 命令开关
 static SemaphoreHandle_t shell_exec_mutex = NULL;//防止shell指令执行并发冲突
 
 bool esp_log_print_status(void)
@@ -136,20 +136,21 @@ char* parseShellCmd(uint8_t *buf, stShellPkt_t *argss)
     memset(argss, 0, sizeof(stShellPkt_t));
     do
     {
-        pstr = strtok(p, " \n\t");
+        pstr = strtok(p, " \n\t");//按空格、换行和制表符分割输入字符串
         p = NULL;
         
         if(pstr)
         {
             if(argss->cmd)
             {
+                //后续分割出的字符串被识别为参数，依次存储在argss->para数组中
                 argss->para[argv] = pstr;
                 argss->paraLen[argv] = strlen(pstr);
                 argv ++;
             }
             else
             {
-                argss->cmd = pstr;
+                argss->cmd = pstr;//第一个分割出的字符串被识别为命令，存储在argss->cmd中
                 argss->cmdLen = strlen(pstr);
             }
         }
@@ -158,61 +159,53 @@ char* parseShellCmd(uint8_t *buf, stShellPkt_t *argss)
             break;
         }
     
-    }while(argv < cShellParamNum - 1);
+    }while(argv < cShellParamNum - 1);//参数数量不超过cShellParamNum - 1（防止数组越界）
     
-    argss->paraNum = argv;
+    argss->paraNum = argv;//最后设置参数数量argss->paraNum并返回命令字符串
     
     return argss->cmd;
 }
 
+// 提取命令匹配逻辑为单独函数
+static bool is_cmd_match(const stShellCmd_t *cmd, const stShellPkt_t *pkg) {
+    return (strlen(cmd->pCmd) == pkg->cmdLen) && 
+           (memcmp(cmd->pCmd, pkg->cmd, strlen(cmd->pCmd)) == 0);
+}
 
-void shell_exec(u8 *data, int len)
+shell_exec_status_t  shell_exec(u8 *data, int len)
 {
     int nr;
     stShellPkt_t shellPkg;
-    
+     bool cmd_found = false;
     // 获取信号量，最多等待 100ms
-    if (xSemaphoreTake(shell_exec_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    if (xSemaphoreTake(shell_exec_mutex, pdMS_TO_TICKS(BASE_TIMEOUT_MS )) != pdTRUE) {
         EN_SLOGW(TAG, "获取shell执行信号量失败，命令可能执行失败");
-        return;
+        return SHELL_EXEC_PARSE_ERROR; // 获取信号量失败，返回解析错误
+
     }
 
     memset((u8 *)&shellPkg, '\0', sizeof(shellPkg));
     
-    if(parseShellCmd(data, &shellPkg))
+    if(parseShellCmd(data, &shellPkg))//命令解析
     {
         for(nr = 0; nr < stShellCmdMap.i32CmdNum; nr++)
         {
             //串口打印功能已经开启,则允许输入指令
             //开启串口功能未开启,需要验证密码 串口指令 debugon password
-            if(esp_log_print_status())
+            bool is_allowed = esp_log_print_status() || (nr == 0);
+            if(is_allowed && is_cmd_match(stShellCmdMap.pCmd[nr], &shellPkg)) 
             {
-                if((strlen(stShellCmdMap.pCmd[nr]->pCmd) == shellPkg.cmdLen)
-                && (memcmp(stShellCmdMap.pCmd[nr]->pCmd, shellPkg.cmd, strlen(stShellCmdMap.pCmd[nr]->pCmd)) == 0))
-                {
-                    if(stShellCmdMap.pCmd[nr]->pFunc)
-                    {
-                        stShellCmdMap.pCmd[nr]->pFunc(&shellPkg);
-                    }
+                if(stShellCmdMap.pCmd[nr]->pFunc) {
+                    stShellCmdMap.pCmd[nr]->pFunc(&shellPkg);
                 }
-            }
-            else
-            {
-                if((strlen(stShellCmdMap.pCmd[0]->pCmd) == shellPkg.cmdLen)
-                && (memcmp(stShellCmdMap.pCmd[0]->pCmd, shellPkg.cmd, strlen(stShellCmdMap.pCmd[0]->pCmd)) == 0))
-                {
-                    if(stShellCmdMap.pCmd[0]->pFunc)
-                    {
-                        stShellCmdMap.pCmd[0]->pFunc(&shellPkg);
-                        xSemaphoreGive(shell_exec_mutex);
-                        return;
-                    }
-                }
+                cmd_found = true;
+                break; // 找到匹配命令后退出循环
             }
         }
     }
     // 释放信号量
     xSemaphoreGive(shell_exec_mutex);
+    return cmd_found ? SHELL_EXEC_SUCCESS : SHELL_EXEC_CMD_NOT_FOUND;
 }
 
 
