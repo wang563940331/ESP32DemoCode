@@ -79,6 +79,13 @@ bool wait_sntp_sync(uint32_t timeout_ms) {
 
 
 void initialize_sntp() {
+    // 检查SNTP是否已经运行
+    static bool sntp_initialized = false;
+    if (sntp_initialized) {
+        ESP_LOGI(TAG, "SNTP 已经初始化，跳过");
+        return;
+    }
+    
     // 设置时区（应在sntp_init之前调用）
     setenv("TZ", "CST-8", 1);
     tzset(); // 更新时区设置
@@ -89,6 +96,7 @@ void initialize_sntp() {
     sntp_setservername(2, "ntp.aliyun.com"); // 添加国内服务器
     sntp_init();
     // 等待SNTP同步完成（超时3秒）
+    sntp_initialized = true;
     wait_sntp_sync(10000);
     ESP_LOGI(TAG, "SNTP 初始化完成");
 }
@@ -250,6 +258,28 @@ void send_head(const char *data) {
     cJSON_Delete(root);
     free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存
     mqtt_pub_buff = NULL;
+}
+
+/**
+ * Reinitialize MQTT connection with new configuration
+ * @return ESP_OK on success, ESP_FAIL on failure
+ */
+esp_err_t mqtt_reinit(void) {
+    ESP_LOGI(TAG, "Reinitializing MQTT connection...");
+    
+    // Stop and destroy existing MQTT client if it exists
+    if (s_mqtt_client) {
+        ESP_LOGI(TAG, "Stopping existing MQTT client...");
+        esp_mqtt_client_stop(s_mqtt_client);
+        esp_mqtt_client_destroy(s_mqtt_client);
+        s_mqtt_client = NULL;
+        s_is_mqtt_connected = false;
+    }
+    
+    // Start MQTT with new configuration
+    mqtt_start();
+    
+    return ESP_OK;
 }
 
 /**

@@ -49,5 +49,6 @@ eControl getStart_once();
 void setStart_once(eControl data);
 bool gets_is_mqtt_connected();
 void send_ctrlacl(const char *data);
+esp_err_t mqtt_reinit(void);
 
 #endif

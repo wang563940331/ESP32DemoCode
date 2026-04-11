@@ -15,6 +15,8 @@
 #include "parameterSet.h"
 #include "shell.h"
 #include "simple_wifi_sta.h"
+// Forward declaration
+esp_err_t mqtt_reinit(void);
 // Global configuration variables
 char g_domain[128] = "default.domain.com";
 uint16_t g_port = 8080;
@@ -253,7 +255,7 @@ static esp_err_t root_handler(httpd_req_t *req)
     // sStorageApSetNvsmqttport(atoi(g_port));
 
     sStorageApGet(cStorageApCmdNvsmqttIp,sizeof(g_domain),(u8 *)g_domain);
-    sStorageApGet(cStorageApCmdNvsmqttport,sizeof(g_port),(u16 *)&g_port);
+    sStorageApGet(cStorageApCmdNvsmqttport,sizeof(g_port),(u8 *)&g_port);
 
     // 创建HTML页面
     snprintf(response, sizeof(response),
@@ -381,10 +383,7 @@ static esp_err_t save_handler(httpd_req_t *req)
         }
         
         // Add mqtt:// prefix
-        char mqtt_uri[128];
-        snprintf(mqtt_uri, sizeof(mqtt_uri), "mqtt://%s", domain);
-        
-        strncpy(g_domain, mqtt_uri, sizeof(g_domain) - 1);
+        snprintf(g_domain, sizeof(g_domain), "mqtt://%s", domain);
         sStorageApSetNvsmqttIp(g_domain);
 
     }
@@ -422,13 +421,16 @@ static esp_err_t save_handler(httpd_req_t *req)
 
     upwificonfig();
 
+    // Reinitialize MQTT connection with new configuration
+    mqtt_reinit();
+
     
     // 重定向回根路径
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, NULL, 0);
     
-    ESP_LOGI(TAG, "配置保存: domain=%s, port=%d, string=%s", g_domain, g_port, g_string_var);
+    ESP_LOGI(TAG, "配置保存: MqttIP=%s, MqttPort=%d, string=%s", g_domain, g_port, g_string_var);
     
     return ESP_OK;
 }
