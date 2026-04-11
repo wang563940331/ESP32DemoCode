@@ -249,6 +249,11 @@ static esp_err_t root_handler(httpd_req_t *req)
     //从NVS中读取PASSWORD
     sStorageApGet(eStorageApCmdPassword,sizeof(g_wifi_passwd),(u8 *)g_wifi_passwd);
 
+    // sStorageApSetNvsmqttIp(g_domain);
+    // sStorageApSetNvsmqttport(atoi(g_port));
+
+    sStorageApGet(cStorageApCmdNvsmqttIp,sizeof(g_domain),(u8 *)g_domain);
+    sStorageApGet(cStorageApCmdNvsmqttport,sizeof(g_port),(u16 *)&g_port);
 
     // 创建HTML页面
     snprintf(response, sizeof(response),
@@ -304,6 +309,31 @@ static esp_err_t root_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// URL 解码函数（新增）
+static void url_decode(char *str) {
+    char *p = str;
+    char *dec = str;
+    char hex[3];
+    while (*p != '\0') {
+        if (*p == '%' && *(p+1) != '\0' && *(p+2) != '\0') {
+            hex[0] = *(p+1);
+            hex[1] = *(p+2);
+            hex[2] = '\0';
+            *dec = (char)strtol(hex, NULL, 16);
+            p += 3;
+        } else if (*p == '+') {
+            *dec = ' ';
+            p += 1;
+        } else {
+            *dec = *p;
+            p += 1;
+        }
+        dec += 1;
+    }
+    *dec = '\0';
+}
+
+
 // 保存处理程序 - 处理配置表单提交
 static esp_err_t save_handler(httpd_req_t *req)
 {
@@ -342,7 +372,21 @@ static esp_err_t save_handler(httpd_req_t *req)
         domain += 7; // 跳过 "domain="
         char *end = strchr(domain, '&');
         if (end) *end = '\0';
-        strncpy(g_domain, domain, sizeof(g_domain) - 1);
+        url_decode(domain);      // <-- 修复点：解码
+        
+        // Remove http:// or https:// prefix if present
+        char *protocol_end = strstr(domain, "://");
+        if (protocol_end) {
+            domain = protocol_end + 3;
+        }
+        
+        // Add mqtt:// prefix
+        char mqtt_uri[128];
+        snprintf(mqtt_uri, sizeof(mqtt_uri), "mqtt://%s", domain);
+        
+        strncpy(g_domain, mqtt_uri, sizeof(g_domain) - 1);
+        sStorageApSetNvsmqttIp(g_domain);
+
     }
     
     if (port) {
@@ -350,6 +394,7 @@ static esp_err_t save_handler(httpd_req_t *req)
         char *end = strchr(port, '&');
         if (end) *end = '\0';
         g_port = atoi(port);
+        sStorageApSetNvsmqttport(g_port);
     }
     
     if (string) {
