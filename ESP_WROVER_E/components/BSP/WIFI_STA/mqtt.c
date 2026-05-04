@@ -294,6 +294,7 @@ esp_err_t mqtt_reinit(void) {
  */
 void my_task(void *pvParameters) 
 {
+    static bool login_status = false; // 登录状态标志，初始为未登录
     // 静态变量count，用于计数发布的消息数量
     static int count = 0;
     // 静态变量tims，用于记录时间戳
@@ -317,14 +318,21 @@ void my_task(void *pvParameters)
         //延时2秒发布一条消息到/test/topic1主题
         if(s_is_mqtt_connected)
         {
+            if(login_status == false)
+            {
+                login_status= true;
+                send_ctrlacl("设备上线");
+            }
             if(tickOut(&tims,30*1000))
             {
                 tickOut(&tims,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
                 send_head(mqtt_pub_buff);
-                // esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-                //mqtt_pub_buff, strlen(mqtt_pub_buff),1, 0);        
             }
+        }
+        else
+        {
+            login_status= false;
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
