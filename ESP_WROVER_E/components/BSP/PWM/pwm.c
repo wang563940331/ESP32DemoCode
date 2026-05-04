@@ -85,7 +85,7 @@ void motorStateMachine()
         expressionlod = expression;
         if(expressionlod == POWERON)
         {
-            send_ctrlacl("POWERON");
+            send_ctrlacl("开机执行");
             ESP_LOGI(TAG, "POWERON");
         }
         else if(expressionlod == POWEROF)
@@ -104,7 +104,7 @@ void motorStateMachine()
                 tickOut(&tick,0);
                 setStart_once(POWEROF);
                  pwm = PWMPCLOSE;
-                 send_ctrlacl("ctrl finish");
+                 send_ctrlacl("开机完成");
             }
             /* code */
             break;   
@@ -125,7 +125,6 @@ void motorStateMachine()
 }
 static void motor_task(void *pvParameters) 
 {
-    float angle = 0.05;
     while(1) 
     {
         motorStateMachine();

@@ -50,7 +50,7 @@
 #include "mqtt_client.h"
 
 /* 引脚定义 */
-#define PWM_GPIO_PIN    GPIO_NUM_23  /* LED连接的GPIO端口 */
+#define PWM_GPIO_PIN    GPIO_NUM_13  /* LED连接的GPIO端口 */
 
 #define PWMPCLOSE  0.1
 #define PWMPEN 0.075

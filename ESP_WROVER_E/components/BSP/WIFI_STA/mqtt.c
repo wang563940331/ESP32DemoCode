@@ -209,13 +209,7 @@ void mqtt_start(void)
     //启动mqtt连接
     esp_mqtt_client_start(s_mqtt_client);
 }
-// void send_ctrlacl(const char *data)
-// {
-//     char mqtt_pub_buff[64]={0};
-//     snprintf(mqtt_pub_buff,64,"{%s:\"%s\"}","ctrlacl",data);
-//     esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-//     mqtt_pub_buff, strlen(mqtt_pub_buff),1, 0);
-// }
+
 
 void send_ctrlacl(const char *data) {
     time_t now;
@@ -225,23 +219,35 @@ void send_ctrlacl(const char *data) {
     
     char time_str[32];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    
-    char mqtt_pub_buff[128] = {0};
-    snprintf(mqtt_pub_buff, sizeof(mqtt_pub_buff), 
-             "{\"ctrlacl\":\"%s\", \"time\":\"%s\"}", 
-             data, time_str);
-    
+
+    cJSON *root = cJSON_CreateObject();  // 创建根对象
+    cJSON_AddItemToObject(root, "device", cJSON_CreateString("ESP32-E-V3"));
+    // 添加字段：headid
+    cJSON_AddItemToObject(root, "ctrlacl", cJSON_CreateString(data));
+    // 添加字段：time
+    cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
+    // 转为 JSON 字符串（压缩格式，适合MQTT发送）
+    char *mqtt_pub_buff = cJSON_PrintUnformatted(root);
+
     esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                            mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
+    cJSON_Delete(root);
+    free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存
+    mqtt_pub_buff = NULL;
 }
 
+/**
+ * @brief 发送包含设备信息和时间戳的JSON数据到MQTT服务器
+ * @param data 要发送的headid数据指针
+ */
 void send_head(const char *data) {
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
+    time_t now;                    // 存储当前时间的变量
+    struct tm timeinfo;            // 存储格式化后的时间信息
+    time(&now);                    // 获取当前时间
+    localtime_r(&now, &timeinfo); // 将时间转换为本地时间，线程安全版本
     
     char time_str[32];
+    // 将时间格式化为"YYYY-MM-DD HH:MM:SS"格式
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
     cJSON *root = cJSON_CreateObject();  // 创建根对象
