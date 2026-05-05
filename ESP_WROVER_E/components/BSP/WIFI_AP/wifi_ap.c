@@ -523,23 +523,8 @@ esp_err_t wifi_ap_init(void)
 // 反初始化WiFi AP模式
 esp_err_t wifi_ap_deinit(void)
 {
-   // 停止web服务器
+    // 停止web服务器
     stop_webserver(server);
-    
-     // 停止WiFi
-    ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_wifi_deinit());
-    
-    // 注销事件处理程序
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, NULL));
-    
-     // 清理事件循环和netif
-    ESP_ERROR_CHECK(esp_event_loop_delete_default());
-    esp_netif_deinit();
-    
-    // 擦除NVS
-    ESP_ERROR_CHECK(nvs_flash_erase());
-    ESP_ERROR_CHECK(nvs_flash_deinit());
     
     ESP_LOGI(TAG, "WiFi AP 模式已关闭");
     

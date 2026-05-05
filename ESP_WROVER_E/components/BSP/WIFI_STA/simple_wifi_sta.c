@@ -29,6 +29,7 @@
 #include "esp_chip_info.h"
 #include "simple_wifi_sta.h"
 #include "parameterSet.h"
+#include "wifi_ap.h"
 //需要把这两个修改成你家WIFI，测试是否连接成功
 #define DEFAULT_WIFI_SSID           "TTS"
 #define DEFAULT_WIFI_PASSWORD       "88888888"
@@ -52,7 +53,7 @@ static const int ESPTOUCH_DONE_BIT = BIT1;
 
 //用一个标志来表示是否处于smartconfig中
 static bool s_is_smartconfig = false;
-
+static bool  s_ap_mode_enabled = false;
 static bool  ones_smartconfig= false;
 //事件通知回调函数
 static wifi_event_cb    wifi_cb = NULL;
@@ -531,7 +532,28 @@ static void simple_task(void *pvParameters)
         {
             case BOOT_PRES:     /* BOOT被按下 */
             {
-                set_ones_smartconfig(true);
+                if (s_ap_mode_enabled == false) {
+                    // 打开AP模式
+                    ESP_LOGI(TAG, "BOOT按键按下，启动AP模式");
+                    // 设置WiFi模式为APSTA
+                    esp_wifi_set_mode(WIFI_MODE_APSTA);
+                    // 启动AP模式
+                    wifi_ap_init();
+                    // 重启WiFi以应用配置
+                    esp_wifi_start();
+                    s_ap_mode_enabled = true;
+                    set_ones_smartconfig(true);
+                } else {
+                    // 关闭AP模式
+                    ESP_LOGI(TAG, "BOOT按键按下，关闭AP模式");
+                    // 停止HTTP服务器和AP
+                    wifi_ap_deinit();
+                    // 设置回STA模式
+                    esp_wifi_set_mode(WIFI_MODE_STA);
+                    // 重启WiFi
+                    // esp_wifi_start();
+                    s_ap_mode_enabled = false;
+                }
                 break;
             }
             default:
@@ -542,7 +564,7 @@ static void simple_task(void *pvParameters)
         if(get_ones_smartconfig() == true)
         {
             set_ones_smartconfig(false);
-            smartconfig_start();
+            // smartconfig_start();
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }

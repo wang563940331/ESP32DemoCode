@@ -80,27 +80,22 @@ void init_netWork(void)
         return;
     }
     
-    ESP_LOGI(TAG, "设置WiFi模式为APSTA...");
-    // 设置WiFi模式为APSTA
-    ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    ESP_LOGI(TAG, "设置WiFi模式为STA...");
+    // 设置WiFi模式为STA（AP模式将在BOOT按键按下时启动）
+    ret = esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "设置WiFi模式为APSTA失败: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "设置WiFi模式为STA失败: %s", esp_err_to_name(ret));
         return;
     }
     
-    // 先初始化AP模式（用于配置）
-    ESP_LOGI(TAG, "始化AP模式...");
-    ret = wifi_ap_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "始化AP模式失败");
-    }
-    
-    // 再初始化STA模式（用于连接网络）
+    // 初始化STA模式（用于连接网络）
     ESP_LOGI(TAG, "初始化STA模式...");
     ret = wifi_sta_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "初始化STA模式失败");
     }
+    
+    // AP模式将在BOOT按键按下时启动
     
     // 启动WiFi
     ESP_LOGI(TAG, "启动WiFi...");

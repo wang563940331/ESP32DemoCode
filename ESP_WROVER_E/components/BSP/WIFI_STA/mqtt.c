@@ -115,25 +115,25 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
 
      (void)client;
     // your_context_t *context = event->context;
-    switch ((esp_mqtt_event_id_t)event_id) 
+    switch ((esp_mqtt_event_id_t)event_id)
     {
-        case MQTT_EVENT_CONNECTED:  //连接成功
+        case MQTT_EVENT_CONNECTED://连接成功
             initialize_sntp();
             ESP_LOGI(TAG, "MQTT 连接成功");
             s_is_mqtt_connected = true;
             //连接成功后，订阅测试主题
             esp_mqtt_client_subscribe_single(s_mqtt_client,MQTT_SUBSCRIBE_TOPIC,1);
             break;
-        case MQTT_EVENT_DISCONNECTED:   //连接断开
+        case MQTT_EVENT_DISCONNECTED://连接断开
             ESP_LOGI(TAG, "MQTT 连接断开");
             s_is_mqtt_connected = false;
             break;
-        case MQTT_EVENT_SUBSCRIBED:     //收到订阅消息ACK
+        case MQTT_EVENT_SUBSCRIBED://收到订阅消息ACK
             ESP_LOGI(TAG, "MQTT 订阅确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_UNSUBSCRIBED:   //收到解订阅消息ACK
             break;
-        case MQTT_EVENT_PUBLISHED:      //收到发布消息ACK
+        case MQTT_EVENT_PUBLISHED://收到发布消息ACK
             ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_DATA:
@@ -323,7 +323,7 @@ void my_task(void *pvParameters)
                 login_status= true;
                 send_ctrlacl("设备上线");
             }
-            if(tickOut(&tims,30*1000))
+            if(tickOut(&tims,15*1000))
             {
                 tickOut(&tims,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
