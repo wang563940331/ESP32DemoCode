@@ -23,9 +23,10 @@
 #include "parameterSet.h"
 #include <esp_heap_caps.h>
 #include "shell.h"
+#include "uart_bsp.h"
+
 // 定义日志标签
 static const char*TAG = "main";
-
 
 void system_info_timercb(void *timer)
 {
@@ -167,9 +168,39 @@ void app_main(void)
 
     init_mqtt();
     mdf_mem_print_heap();
+
+    uart1_init();
+    uart2_init();
     //vTaskDelete(NULL);
+    uint16_t len = 0;
+    char data[10] = {0};
+
+
+
+
     while(1)
     {
+    //     uart_write_bytes(UART_NUM_1, "UART1 TEST", sizeof("UART1 TEST"));
+        uart_get_buffered_data_len(UART_NUM_1, (size_t*) &len);
+
+        if (len > 0)
+        {
+            uart_read_bytes(UART_NUM_1, data, len, 100);
+            data[len] = '\0';
+            uart_write_bytes(UART_NUM_1, data, len);
+            printf("uart0 receive data: %s\n", data);
+            memset(data, 0, sizeof(data));
+        }
+        uart_get_buffered_data_len(UART_NUM_2, (size_t*) &len);
+        if (len > 0)
+        {
+            uart_read_bytes(UART_NUM_2, data, len, 100);
+            data[len] = '\0';
+            uart_write_bytes(UART_NUM_2, data, len);
+            printf("uart2 receive data: %s\n", data);
+            memset(data, 0, sizeof(data));
+        }
+
         if(gets_is_smartconfig() == true)
         {
              led_blink();   /* LED状态翻转 */
@@ -183,6 +214,6 @@ void app_main(void)
             led_breath();
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
