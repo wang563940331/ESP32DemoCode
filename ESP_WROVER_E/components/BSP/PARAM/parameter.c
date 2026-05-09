@@ -7,6 +7,25 @@ stNvsCache_t stNvsCache;
 
 
 
+// 参数配置数组 - 添加新参数只需在这里加一行！
+const stParamConfig_t g_stParamConfig[] = {
+    // ====== 网关参数组 ======
+    {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName},
+    {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName},
+    
+    // ====== AP参数组 ======
+    {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName},
+    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "WiFiName",       cStorageApNvsName},
+    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "admin123",       cStorageApNvsName},
+    {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "192.168.4.1",    cStorageApNvsName},
+    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "1883",           cStorageApNvsName},
+    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "sub",            cStorageApNvsName},
+    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "client",         cStorageApNvsName},
+    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "tuser",          cStorageApNvsName},
+    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "passwd",         cStorageApNvsName},
+};
+const int g_iParamCount = sizeof(g_stParamConfig) / sizeof(g_stParamConfig[0]);
+
 
 
 /***************************************************************************************************
@@ -35,6 +54,58 @@ bool sNvsParamUnlock(void)
 
 
     
+/**
+ * @brief 根据参数配置数组生成默认JSON字符串
+ * @return 生成的JSON字符串（需要手动free）
+ */
+char* generateDefaultJsonString(void)
+{
+    cJSON *pRoot = cJSON_CreateObject();
+    cJSON *pGwObj = cJSON_CreateObject();
+    cJSON *pApObj = cJSON_CreateObject();
+    
+    // 将参数按分组添加到对应的JSON对象
+    for(int i = 0; i < g_iParamCount; i++)
+    {
+        const stParamConfig_t *pParam = &g_stParamConfig[i];
+        
+        if(strcmp(pParam->pGroupName, cStorageGwNvsName) == 0)
+        {
+            // 网关参数
+            if(pParam->eType == PARAM_TYPE_STRING)
+            {
+                cJSON_AddStringToObject(pGwObj, pParam->pParamName, pParam->pDefaultValue);
+            }
+            else
+            {
+                cJSON_AddNumberToObject(pGwObj, pParam->pParamName, atoi(pParam->pDefaultValue));
+            }
+        }
+        else if(strcmp(pParam->pGroupName, cStorageApNvsName) == 0)
+        {
+            // AP参数
+            if(pParam->eType == PARAM_TYPE_STRING)
+            {
+                cJSON_AddStringToObject(pApObj, pParam->pParamName, pParam->pDefaultValue);
+            }
+            else
+            {
+                cJSON_AddNumberToObject(pApObj, pParam->pParamName, atoi(pParam->pDefaultValue));
+            }
+        }
+    }
+    
+    cJSON_AddItemToObject(pRoot, cStorageGwNvsName, pGwObj);
+    cJSON_AddItemToObject(pRoot, cStorageApNvsName, pApObj);
+    
+    // 将JSON对象转换为字符串
+    char *pJsonStr = cJSON_Print(pRoot);
+    cJSON_Delete(pRoot);
+    
+    return pJsonStr;
+}
+
+
 /***************************************************************************************************
 * Description                           :     将JSON参数保存到参数区
 * Author                                :     Hall
@@ -104,7 +175,9 @@ cJSON *sNvsParamGet(void)
     if(nvs_get_str(handle, cNvsKeyParam, NULL, (size_t *)&i32FileSize) != ESP_OK)//先传 NULL → 拿到真实长度
     {
         //NVS句柄下没有对应的 key---首次读取,需要初始化
+        char *pNvsKeyParamDefault = generateDefaultJsonString();
         nvs_set_str(handle, cNvsKeyParam, pNvsKeyParamDefault);
+        free(pNvsKeyParamDefault);  // 使用完后释放内存
         nvs_commit(handle);
         ESP_LOGI(TAG, "读取NVS参数区:%s@%s,首次读取并初始化!\r\n", cNvsKeyParam, cNvsName);
         nvs_get_str(handle, cNvsKeyParam, NULL, (size_t *)&i32FileSize);//先传 NULL → 拿到真实长度
@@ -137,9 +210,10 @@ cJSON *sNvsParamGet(void)
         ESP_LOGD(TAG, "读取NVS参数区:%s@%s 失败, 使用默认参数", cNvsKeyParam, cNvsName);
     }
 
-
+    char *pNvsKeyParamDefault = generateDefaultJsonString();
     //4:生成JSON对象
     pObj = (pBuf != NULL) ? cJSON_Parse(pBuf) : cJSON_Parse(pNvsKeyParamDefault);
+    free(pNvsKeyParamDefault);  // 使用完后释放内存
     if(pObj == NULL)
     {
         ESP_LOGE(TAG, "读取NVS参数区:%s@%s 失败:cJSON_Parse 出错", cNvsKeyParam, cNvsName);
@@ -236,7 +310,9 @@ bool sNvsParamCheck(void)
     
     if(stNvsCache.pJsonParam != NULL)
     {
+        char *pNvsKeyParamDefault = generateDefaultJsonString();
         pDefObj = cJSON_Parse(pNvsKeyParamDefault);
+        free(pNvsKeyParamDefault);  // 使用完后释放内存
         if(pDefObj != NULL)
         {
             i32Rst |= sNvsParamCheckObj(pDefObj, stNvsCache.pJsonParam,3);

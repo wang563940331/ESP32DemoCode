@@ -79,51 +79,27 @@
 #define cStorageNetAppNvsPath           "path"                                 //路径
 #define cStorageNetAppNvsInfo           "info"  
 
-//网关NVS配置JSON文件默认内容格式
-//1.标准原始数据
-//2.ATE中用到数据(因为过ATE时会清除恢复默认数据)
-static const char *pNvsKeyParamDefault = 
-"{"
-    // "\"" cStorageGwNvsName "\" :"
-    // "{"
-    //     "\"" cStorageGwNvsSn "\" : \"SN00000000000000\","
-    //     "\"" cStorageGwNvsDeviceType "\" : 94,"
-    //     "\"" cStorageGwNvsFormatCnt "\" : 0,"
-    //     "\"" cStorageGwNvsDebug "\" : 0,"
-    //     "\"" cStorageGwNvsGwWorkMode "\" : 0,"
-    //     "\"" cStorageGwNvsGwChargeMode1 "\" : 1,"
-    //     "\"" cStorageGwNvsGwChargeMode2 "\" : 1"
-    // "},"
-    "\"" cStorageApNvsName "\" :"
-    "{"
-        "\"" cStorageApNvsFlg "\" : 0,"
-        "\"" cStorageApNvsSsid "\" : \"SN00000000000000\","
-        "\"" cStorageApNvsPassword "\" : \"admin123\","
-        "\"" cStorageApNvsmqttIp "\" : \"192.168.4.1\","
-        "\"" cStorageApNvsmqttport "\" : 1883,"
-        "\"" cStorageApNvsmqttsub "\" : \"sub\","
-        "\"" cStorageApNvsmqttclient "\" : \"client\","
-        "\"" cStorageApNvsmqttuser "\" : \"tuser\","
-        "\"" cStorageApNvsmqttpasswd "\" : \"passwd\""
-    "}"
-    // "\"netApp\" :"
-    // "{"
-    //     "\"" cStorageNetAppNvsConnHost "\" : \"host1\"," 
-    //     "\"" cStorageNetAppNvsHost1 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
-    //     "\"" cStorageNetAppNvsHost2 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
-    //     "\"" cStorageNetAppNvsWhtdEn "\" : 0,"
-    //     "\"" cStorageNetAppNvsWhtdHost "\" : { \"" cStorageNetAppNvsIp "\" : \"dev.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 18841 }"
-    // "}"
-"}";
 
+
+// 参数类型枚举
+typedef enum {
+    PARAM_TYPE_STRING,    // 字符串类型
+    PARAM_TYPE_INT,       // 整数类型
+    PARAM_TYPE_UINT32,    // 无符号32位整数
+    PARAM_TYPE_UINT16,    // 无符号16位整数
+    PARAM_TYPE_UINT8      // 无符号8位整数
+} eParamType_t;
 
  
 
 typedef enum 
 {
-    eStorageApCmdFlg                    = 0,                                    //使能标志
-    eStorageApCmdSsid,                                                          //热点名称
-    eStorageApCmdPassword,                                                      //热点密码
+    
+    cStorageApCmdGwNvsSn,                                                      //网关SN
+    cStorageApCmdGwNvsDeviceType,                                                  //网关设备类型
+    cStorageApCmdFlg,                                                       //使能标志
+    cStorageApCmdSsid,                                                          //热点名称
+    cStorageApCmdPassword,                                                      //热点密码
     cStorageApCmdNvsmqttIp,                                                            //IP地址
     cStorageApCmdNvsmqttport,                                                       //默认网关地址
     cStorageApCmdNvsmqttsub,                                                          //连接固定子码掩码
@@ -148,6 +124,46 @@ typedef enum
 }__attribute__((packed)) eStorageApRst_t;
 
 
+//网关NVS配置JSON文件默认内容格式 弃用
+//1.标准原始数据
+//2.ATE中用到数据(因为过ATE时会清除恢复默认数据)
+
+// static const char *pNvsKeyParamDefault = 
+// "{"
+//     "\"" cStorageGwNvsName "\" :"
+//     "{"
+//         "\"" cStorageGwNvsSn "\" : \"12345678900001,"
+//         "\"" cStorageGwNvsDeviceType "\" : 0"
+//         // "\"" cStorageGwNvsFormatCnt "\" : 0,"
+//         // "\"" cStorageGwNvsDebug "\" : 0,"
+//         // "\"" cStorageGwNvsGwWorkMode "\" : 0,"
+//         // "\"" cStorageGwNvsGwChargeMode1 "\" : 1,"
+//         // "\"" cStorageGwNvsGwChargeMode2 "\" : 1"
+//     "},"
+//     "\"" cStorageApNvsName "\" :"
+//     "{"
+//         "\"" cStorageApNvsFlg "\" : 0,"
+//         "\"" cStorageApNvsSsid "\" : \"WiFiName\","
+//         "\"" cStorageApNvsPassword "\" : \"admin123\","
+//         "\"" cStorageApNvsmqttIp "\" : \"192.168.4.1\","
+//         "\"" cStorageApNvsmqttport "\" : 1883,"
+//         "\"" cStorageApNvsmqttsub "\" : \"sub\","
+//         "\"" cStorageApNvsmqttclient "\" : \"client\","
+//         "\"" cStorageApNvsmqttuser "\" : \"tuser\","
+//         "\"" cStorageApNvsmqttpasswd "\" : \"passwd\""
+//     "}"
+//     // "\"netApp\" :"
+//     // "{"
+//     //     "\"" cStorageNetAppNvsConnHost "\" : \"host1\"," 
+//     //     "\"" cStorageNetAppNvsHost1 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+//     //     "\"" cStorageNetAppNvsHost2 "\" : { \"" cStorageNetAppNvsProtocol "\" : \"tcp\", \"" cStorageNetAppNvsIp "\" : \"sp.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 17746, \"" cStorageNetAppNvsPath "\" : \"null\", \"" cStorageNetAppNvsInfo "\" : {} },"
+//     //     "\"" cStorageNetAppNvsWhtdEn "\" : 0,"
+//     //     "\"" cStorageNetAppNvsWhtdHost "\" : { \"" cStorageNetAppNvsIp "\" : \"dev.en-plus.cn\", \"" cStorageNetAppNvsPort "\" : 18841 }"
+//     // "}"
+// "}";
+
+
+
 
 //nvs 参数组件 缓存结构
 typedef struct
@@ -158,10 +174,30 @@ typedef struct
 
 
 
+// 参数配置结构体
+typedef struct {
+    eStorageApCmd_t  eCmd;           // 命令枚举值
+    const char*      pParamName;     // NVS中的参数名
+    eParamType_t     eType;          // 参数类型
+    const char*      pDefaultValue;  // 默认值（字符串形式）
+    const char*      pGroupName;     // 所属分组（"gate" 或 "ap"）
+} stParamConfig_t;
+
+
+
+
+// 声明参数配置数组
+extern const stParamConfig_t g_stParamConfig[];
+extern const int g_iParamCount;
+
+
+
+
 
 bool NVS_init(void);
 bool sNvsParamUnlock(void);
 bool sNvsParamLock(void);
 bool sNvsParamSet(void);
 cJSON *sNvsParamGet(void);
+char* generateDefaultJsonString(void);
 #endif

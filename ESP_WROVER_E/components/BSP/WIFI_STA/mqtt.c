@@ -216,12 +216,14 @@ void send_ctrlacl(const char *data) {
     struct tm timeinfo;
     time(&now);
     localtime_r(&now, &timeinfo);
-    
+    char sn[20] = {0};
+    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
+
     char time_str[32];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
     cJSON *root = cJSON_CreateObject();  // 创建根对象
-    cJSON_AddItemToObject(root, "device", cJSON_CreateString("ESP32-E-V3"));
+    cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     // 添加字段：headid
     cJSON_AddItemToObject(root, "ctrlacl", cJSON_CreateString(data));
     // 添加字段：time
@@ -245,13 +247,14 @@ void send_head(const char *data) {
     struct tm timeinfo;            // 存储格式化后的时间信息
     time(&now);                    // 获取当前时间
     localtime_r(&now, &timeinfo); // 将时间转换为本地时间，线程安全版本
-    
+    char sn[20] = {0};
+    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
     char time_str[32];
     // 将时间格式化为"YYYY-MM-DD HH:MM:SS"格式
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
     cJSON *root = cJSON_CreateObject();  // 创建根对象
-    cJSON_AddItemToObject(root, "device", cJSON_CreateString("ESP32-E-V3"));
+    cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
     // 添加字段：time

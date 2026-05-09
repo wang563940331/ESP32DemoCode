@@ -125,17 +125,20 @@ CJSON_PUBLIC(cJSON_bool)   cJSON_GetStringEx(const cJSON *root, const char* key,
     
     if(!root || !key || !value)
     {
+        EN_SLOGE(TAG, "key root value 为空");
         return false;
     }
     
     item = cJSON_GetObjectItem(root, key);
     if(!item)
     {
+        EN_SLOGE(TAG, "key");
         return false;
     }
     
     if (!cJSON_IsString(item))
     {
+        EN_SLOGE(TAG, "key is not string");
         return false;
     }
     
@@ -214,13 +217,19 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
             eRst    = eStorageApRstFail;
             switch(eCmd)
             {
-                case eStorageApCmdFlg:
+                case cStorageApCmdGwNvsSn:
+                    bRst = cJSON_SetStringEx(pObj , cStorageGwNvsSn, (const char *)pData);
+                    break;
+                case cStorageApCmdGwNvsDeviceType:
+                    bRst = cJSON_SetIntEx(pObj , cStorageGwNvsDeviceType, (*pData));
+                    break;
+                case cStorageApCmdFlg:
                     bRst = cJSON_SetIntEx(pObj, cStorageApNvsFlg, (*pData));
                     break;
-                case eStorageApCmdSsid:
+                case cStorageApCmdSsid:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsSsid, (const char *)pData);
                     break;
-                case eStorageApCmdPassword:
+                case cStorageApCmdPassword:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsPassword, (const char *)pData);
                     break;
                 case cStorageApCmdNvsmqttIp:
@@ -265,6 +274,68 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
 
 
 
+/**********************************************************************************************
+* Description       :     AP层-存储设置
+* Author            :     XRG
+* modified Date     :     2024-01-24
+* param[in]         :     eCmd      支持设置的列表
+* param[in]         :     pData         设置的内容
+* return            :     eStorageApRst_t
+* notice            :     
+***********************************************************************************************/
+eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
+{
+    bool                   bRst;
+    eStorageApRst_t        eRst;
+    cJSON                 *pObj    = NULL;
+    u32                    u32Value;
+    
+    if((pData == NULL) || (eCmd >= eStorageApCmdMax))
+    {
+        EN_SLOGE(TAG, "输入参数为异常");
+        return(false);
+    }
+    
+    
+    eRst = eStorageApRstObjNull;
+    sNvsParamLock();
+    pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageGwNvsName);
+    if(pObj != NULL)
+    {
+        do
+        {
+            bRst    = true;
+            eRst    = eStorageApRstFail;
+            switch(eCmd)
+            {
+                case cStorageApCmdGwNvsSn:
+                    bRst = cJSON_SetStringEx(pObj , cStorageGwNvsSn, (const char *)pData);
+                    break;
+                case cStorageApCmdGwNvsDeviceType:
+                    bRst = cJSON_SetIntEx(pObj , cStorageGwNvsDeviceType, (*pData));
+                    break;
+             
+                default:
+                    bRst    = false;
+                    EN_SLOGE(TAG, "地址%d异常", eCmd);
+                    break;
+            }
+            
+            
+            if(bRst)
+            {
+                bRst   &= sNvsParamSet();
+                eRst    = (bRst)?eStorageApRstSuccess:eStorageApRstFail;
+                break;
+            }
+        }while (0);
+    }
+    sNvsParamUnlock();
+    
+    
+    return eRst;
+}
+
 
 /**********************************************************************************************
 * Description       :     AP层-存储设置
@@ -299,7 +370,7 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
             eRst = eStorageApRstSuccess;
             switch(eCmd)
             {
-                case eStorageApCmdFlg:
+                case cStorageApCmdFlg:
                     if(!cJSON_GetIntEx(pObj, cStorageApNvsFlg, &i32Value))
                     {
                         EN_SLOGE(TAG, "Flg 对象不存在");
@@ -313,7 +384,7 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                     }
                     (*pData) = (u8)i32Value;
                     break;
-                case eStorageApCmdSsid:
+                case cStorageApCmdSsid:
                     if(!cJSON_GetStringEx(pObj, cStorageApNvsSsid, (char *)pData, u16MaxLen))
                     {
                         EN_SLOGE(TAG, "Ssid 对象不存在");
@@ -321,7 +392,7 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     break;
-                case eStorageApCmdPassword:
+                case cStorageApCmdPassword:
                     if(!cJSON_GetStringEx(pObj, cStorageApNvsPassword, (char *)pData, u16MaxLen))
                     {
                         EN_SLOGE(TAG, "Password 对象不存在");
@@ -388,6 +459,76 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
 
 
 /**********************************************************************************************
+* Description       :     AP层-存储设置
+* Author            :     XRG
+* modified Date     :     2024-01-24
+* param[in]         :     eCmd      支持设置的列表
+* param[in]         :     pData         设置的内容
+* return            :     eStorageApRst_t
+* notice            :     
+***********************************************************************************************/
+eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
+{
+    eStorageApRst_t        eRst;
+    cJSON                 *pObj     = NULL;
+    double                 d64Value  = 0.0;
+    i32                    i32Value;
+    
+    
+    if((pData == NULL) || (eCmd >= eStorageApCmdMax))
+    {
+        EN_SLOGE(TAG, "输入参数为异常");
+        return(false);
+    }
+    
+    eRst = eStorageApRstObjNull;
+    sNvsParamLock();
+    pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageGwNvsName);
+    if(pObj != NULL)
+    {
+        do
+        {
+            eRst = eStorageApRstSuccess;
+            switch(eCmd)
+            {
+                case cStorageApCmdGwNvsSn:
+                    if(!cJSON_GetStringEx(pObj, cStorageGwNvsSn, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Sn 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdGwNvsDeviceType:
+                    if(!cJSON_GetIntEx(pObj, cStorageGwNvsDeviceType, &i32Value))
+                    {
+                        EN_SLOGE(TAG, "DeviceType 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    if(i32Value < 0)
+                    {
+                        eRst = eStorageApRstFail;
+                        break;
+                    }
+                    (*pData) = (u8)i32Value;
+                    break;
+                default:
+                    eRst = eStorageApRstParamErr;
+                    EN_SLOGE(TAG, "地址%d异常", eCmd);
+                    break;
+            }
+            
+            break;
+        }while (0);
+    }
+    sNvsParamUnlock();
+    
+    
+    return eRst;
+}
+
+/**********************************************************************************************
 * Description       :     AP存储-设置使能标志
 * Author            :     XRG
 * modified Date     :     2024-04-22
@@ -397,7 +538,7 @@ bool sStorageApSetFlg(bool eFlg)
 {
     // if((pStorageApCache != NULL))
     {
-        if(sStorageApSet(eStorageApCmdFlg, (const u8 *)&eFlg) == eStorageApRstSuccess)
+        if(sStorageApSet(cStorageApCmdFlg, (const u8 *)&eFlg) == eStorageApRstSuccess)
         {
             // pStorageApCache->eFlg = eFlg;
             return(true);
@@ -415,7 +556,7 @@ bool sStorageApSetssid(char *data)
 {
     // if((pStorageApCache != NULL))
     {
-        if(sStorageApSet(eStorageApCmdSsid, (const u8 *)data) == eStorageApRstSuccess)
+        if(sStorageApSet(cStorageApCmdSsid, (const u8 *)data) == eStorageApRstSuccess)
         {
            
             return(true);
@@ -430,7 +571,7 @@ bool sStorageApSetPassword(char *data)
 {
     // if((pStorageApCache != NULL))
     {
-        if(sStorageApSet(eStorageApCmdPassword, (const u8 *)data) == eStorageApRstSuccess)
+        if(sStorageApSet(cStorageApCmdPassword, (const u8 *)data) == eStorageApRstSuccess)
         {
            
             return(true);

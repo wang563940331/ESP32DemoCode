@@ -30,6 +30,7 @@
 #include "simple_wifi_sta.h"
 #include "parameterSet.h"
 #include "wifi_ap.h"
+#include "shell.h"
 //需要把这两个修改成你家WIFI，测试是否连接成功
 #define DEFAULT_WIFI_SSID           "TTS"
 #define DEFAULT_WIFI_PASSWORD       "88888888"
@@ -60,33 +61,206 @@ static wifi_event_cb    wifi_cb = NULL;
 
 static EventGroupHandle_t   s_wifi_ev = NULL;
 
-EventGroupHandle_t get_s_wifi_ev(void)
+
+bool ShellsetWifi(const stShellPkt_t *pkg);
+bool ShellsetMQTT(const stShellPkt_t *pkg);
+bool ShellsetMQTTUser(const stShellPkt_t *pkg);
+bool ShellsetMQTTUser(const stShellPkt_t *pkg);
+bool ShellsetMQTTclient(const stShellPkt_t *pkg);
+
+
+stShellCmd_t setWifi = 
 {
-    return s_wifi_ev;
+    .pCmd       = "setWifi",
+    .pFormat    = "格式:setWifi <ssid> <password>",
+    .pFunction  = "功能:设置AP SSID和密码",
+    .pRemarks   = "备注:setWifi TTS 88888888",
+    .pFunc      = ShellsetWifi,
+};
+
+
+stShellCmd_t setMQTT = 
+{
+    .pCmd       = "setMQTT",
+    .pFormat    = "格式:setMQTT <domain> <port>",
+    .pFunction  = "功能:设置MQTT服务器地址和端口",
+    .pRemarks   = "备注:setMQTT mqtt://47.107.58.46 6004",
+    .pFunc      = ShellsetMQTT,
+};
+
+stShellCmd_t setMQTTUser = 
+{
+    .pCmd       = "setMQTTUser",
+    .pFormat    = "格式:setMQTTUser <user> <passwd>",
+    .pFunction  = "功能:设置MQTT用户名和密码",
+    .pRemarks   = "备注:setMQTTUser admin 520110",
+    .pFunc      = ShellsetMQTTUser,
+};
+
+stShellCmd_t setMQTTclient = 
+{
+    .pCmd       = "setMQTTclient",
+    .pFormat    = "格式:setMQTTclient <client>",
+    .pFunction  = "功能:设置MQTT客户端 ID",
+    .pRemarks   = "备注:无",
+    .pFunc      = ShellsetMQTTclient,
+};
+
+
+/**********************************************************************************************
+* Description       :     文件系统-格式化文件系统
+* Author            :     XRG
+* modified Date     :     2024-05-13
+* notice            :     
+***********************************************************************************************/
+bool ShellsetWifi(const stShellPkt_t *pkg)
+{
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  Value;
+    char*                  Value2;
+
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    if(u8Num != 2)
+    {
+        EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求2个参数,请参考指令%s", u8Num, setWifi.pFormat);
+        return(false);
+    }
+    Value = pkg->para[0];
+    Value2 = pkg->para[1];
+    if(Value == NULL || Value2 == NULL)
+    {
+        EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求2个参数,请参考指令%s", setWifi.pFormat);
+        return(false);
+    }
+    if(strlen(Value) > 32 || strlen(Value2) > 32)
+    {
+        EN_SLOGE(TAG, "执行出错,参数长度%d %d 错误,本指令要求参数长度小于等于32,请参考指令%s", strlen(Value), strlen(Value2), setWifi.pFormat);
+        return(false);
+    }
+
+    sStorageApSetssid(Value);
+    sStorageApSetPassword(Value2);
+    upwificonfig();
+    EN_SLOGI(TAG, "设置AP SSID为:%s", Value);
+    EN_SLOGI(TAG, "设置AP密码为:%s", Value2);
+
+    return(bRst);
 }
 
-bool gets_is_smartconfig(void)
+bool ShellsetMQTT(const stShellPkt_t *pkg)
 {
-    return s_is_smartconfig;
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  Value;
+    char*                  Value2;
+
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    if(u8Num != 2)
+    {
+        EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求2个参数,请参考指令%s", u8Num, setMQTT.pFormat);
+        return(false);
+    }
+    Value = pkg->para[0];
+    Value2 = pkg->para[1];
+    if(Value == NULL || Value2 == NULL)
+    {
+        EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求2个参数,请参考指令%s", setMQTT.pFormat);
+        return(false);
+    }
+    if(strlen(Value) > 32 || strlen(Value2) > 32)
+    {
+        EN_SLOGE(TAG, "执行出错,参数长度%d %d 错误,本指令要求参数长度小于等于32,请参考指令%s", strlen(Value), strlen(Value2), setMQTT.pFormat);
+        return(false);
+    }
+
+    sStorageApSetNvsmqttIp(Value);
+    sStorageApSetNvsmqttport(atoi(Value2));
+
+    upwificonfig();
+    EN_SLOGI(TAG, "设置MQTT服务器地址为:%s", Value);
+    EN_SLOGI(TAG, "设置MQTT端口为:%d", atoi(Value2));
+
+    return(bRst);
 }
 
-void set_ones_smartconfig(uint8_t data)
+
+bool ShellsetMQTTUser(const stShellPkt_t *pkg)
 {
-    ones_smartconfig = data;
-}
-bool get_ones_smartconfig(void)
-{
-    return ones_smartconfig;
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  Value;
+    char*                  Value2;
+
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    if(u8Num != 2)
+    {
+        EN_SLOGE(TAG, "执行出错,参数个数:%d错误,本指令要求2个参数,请参考指令%s", u8Num, setMQTTUser.pFormat);
+        return(false);
+    }
+    Value = pkg->para[0];
+    Value2 = pkg->para[1];
+    if(Value == NULL || Value2 == NULL)
+    {
+        EN_SLOGE(TAG, "执行出错,参数1为空,本指令要求2个参数,请参考指令%s", setMQTTUser.pFormat);
+        return(false);
+    }
+    if(strlen(Value) > 32 || strlen(Value2) > 32)
+    {
+        EN_SLOGE(TAG, "执行出错,参数长度%d %d 错误,本指令要求参数长度小于等于32,请参考指令%s", strlen(Value), strlen(Value2), setMQTTUser.pFormat);
+        return(false);
+    }
+
+    sStorageApSetNvsmqttuser(Value);
+    sStorageApSetNvsmqttpasswd(Value2);
+
+    upwificonfig();
+    EN_SLOGI(TAG, "设置MQTT用户名为:%s", Value);
+    EN_SLOGI(TAG, "设置MQTT密码为:%s", Value2);
+
+    return(bRst);
 }
 
-void setg_mac(char* mac)
+bool ShellsetMQTTclient(const stShellPkt_t *pkg)
 {
-    memcpy(g_sysParam.MAC,mac,6);
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  Value;
+  
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    if(u8Num != 1)
+    {
+        EN_SLOGE(TAG, "执行出错,参数个数错误");
+        return(false);
+    }
+    Value = pkg->para[0];
+
+    if(Value == NULL)
+    {
+        EN_SLOGE(TAG, "执行出错,参数为空");
+        return(false);
+    }
+    if(strlen(Value) > 32 )
+    {
+        EN_SLOGE(TAG, "执行出错,参数长度错误");
+        return(false);
+    }
+
+    sStorageApSetNvsmqttclient(Value);
+
+    upwificonfig();
+    EN_SLOGI(TAG, "设置MQTT客户端ID为:%s", Value);
+
+    return(bRst);
 }
-char* getg_mac(void)
-{
-    return g_sysParam.MAC;
-}
+
+
+
+
 /** wifi事件通知
  * @param 无
  * @return 无
@@ -119,6 +293,34 @@ void print_device_info(void) {
     
     // 将MAC地址存储到全局结构体
     setg_mac((char*)mac);
+}
+
+EventGroupHandle_t get_s_wifi_ev(void)
+{
+    return s_wifi_ev;
+}
+
+bool gets_is_smartconfig(void)
+{
+    return s_is_smartconfig;
+}
+
+void set_ones_smartconfig(uint8_t data)
+{
+    ones_smartconfig = data;
+}
+bool get_ones_smartconfig(void)
+{
+    return ones_smartconfig;
+}
+
+void setg_mac(char* mac)
+{
+    memcpy(g_sysParam.MAC,mac,6);
+}
+char* getg_mac(void)
+{
+    return g_sysParam.MAC;
 }
 
 
@@ -415,10 +617,10 @@ bool upwificonfig(void)
     //缓存一份password
     char password[65] = {0};
     
-    sStorageApGet(eStorageApCmdSsid,sizeof(ssid),(u8 *)ssid);
+    sStorageApGet(cStorageApCmdSsid,sizeof(ssid),(u8 *)ssid);
     ESP_LOGI(TAG,"获取ssid:%s",ssid);
     //从NVS中读取PASSWORD
-    sStorageApGet(eStorageApCmdPassword,sizeof(password),(u8 *)password);
+    sStorageApGet(cStorageApCmdPassword,sizeof(password),(u8 *)password);
     ESP_LOGI(TAG,"获取password:%s",password);
 
     if(ssid[0] != 0)    //通过SSID第一个字节是否是0，判断是否读取成功，然后设置wifi_config_t
@@ -578,6 +780,13 @@ static void simple_task(void *pvParameters)
  */
 int simple_init(void)
 {
+    bool bRst = true;
+    bRst = bRst & sShellCmdRegister(&setWifi);
+    bRst = bRst & sShellCmdRegister(&setMQTT);
+    bRst = bRst & sShellCmdRegister(&setMQTTUser);
+    bRst = bRst & sShellCmdRegister(&setMQTTclient);
+    ESP_LOGI(TAG, "simple_init AT CMD bRst: %d", bRst);
+
     TaskHandle_t TaskHandle = NULL;
     xTaskCreatePinnedToCore(simple_task,"MyTask",4096,NULL,5,&TaskHandle,0);
     if(!TaskHandle)

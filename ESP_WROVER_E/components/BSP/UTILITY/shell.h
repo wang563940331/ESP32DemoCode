@@ -29,6 +29,13 @@
 #include "utility.h"
 #include "driver/uart.h"
 
+
+// #define  cSdkShellComTxPin              (UART_NUM_1)
+// #define cShellComTxPin                  (GPIO_NUM_18)  // 根据硬件连接设置
+// #define cShellComRxPin                  (GPIO_NUM_19)  // 根据硬件连接设置
+
+
+
 //shell界面串口定义
 #ifndef cSdkShellComUartNum
 #define cShellComUartNum                (UART_NUM_0)
