@@ -173,11 +173,7 @@ void app_main(void)
     uart2_init();
     //vTaskDelete(NULL);
     uint16_t len = 0;
-    char data[10] = {0};
-
-
-
-
+    char data[1024] = {0};
     while(1)
     {
     //     uart_write_bytes(UART_NUM_1, "UART1 TEST", sizeof("UART1 TEST"));

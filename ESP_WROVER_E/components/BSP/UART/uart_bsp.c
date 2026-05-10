@@ -5,7 +5,7 @@
 #include "driver/ledc.h"
 #include "mqtt.h"
 #include "utility.h"
-
+#include "driver/uart.h"
 
 static const char*TAG = "uart";
 
@@ -30,7 +30,7 @@ typedef struct {
 // 预设的串口配置（产品模板）
 static const uart_config_info_t uart_config_templates[] = {
     {UART_NUM_1, GPIO_NUM_18, GPIO_NUM_19, 115200,UART_DATA_8_BITS,UART_STOP_BITS_1,UART_PARITY_DISABLE,UART_HW_FLOWCTRL_DISABLE,1024, 1024, 20},
-    {UART_NUM_2, GPIO_NUM_4,  GPIO_NUM_5,  115200,UART_DATA_8_BITS,UART_STOP_BITS_1,UART_PARITY_DISABLE,UART_HW_FLOWCTRL_DISABLE,1024, 1024, 20}
+    {UART_NUM_2, GPIO_NUM_22,  GPIO_NUM_23,  115200,UART_DATA_8_BITS,UART_STOP_BITS_1,UART_PARITY_DISABLE,UART_HW_FLOWCTRL_DISABLE,1024, 1024, 20}
 };
 
 static const int uart_config_count = sizeof(uart_config_templates) / sizeof(uart_config_templates[0]);
