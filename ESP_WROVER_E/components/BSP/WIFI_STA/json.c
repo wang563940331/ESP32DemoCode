@@ -10,9 +10,22 @@
 #include "json.h"
 #include "cJSON.h"
 #include "mqtt.h"
-
+#include "parameterSet.h"
 static const char*TAG = "json";
-
+/*
+{   
+    "id":"2404671219",   
+    "version":"1.0",   
+    "params":   
+    {     
+        "level":     
+        {       
+            "value":0.05,       
+            "cmd":"open"     
+        }   
+    } 
+}
+    */
 void parse_json(const char *json_string,void *Start_once) 
 {
     int int_value = 0;
@@ -43,7 +56,9 @@ void parse_json(const char *json_string,void *Start_once)
         {
             const char *deviceid_value = deviceid->valuestring;
             ESP_LOGI(TAG, "deviceid: %s", deviceid_value);
-            if (strcmp(deviceid_value, "2404671219") != 0) 
+            char sn[20] = {0};
+            sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
+            if (strcmp(deviceid_value, sn) != 0) 
             {
                 ESP_LOGI(TAG, "deviceid err: %s", deviceid_value);
             } 
