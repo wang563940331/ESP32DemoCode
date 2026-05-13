@@ -23,6 +23,25 @@
 #include "esp_smartconfig.h"
 #include "mqtt_client.h"
 #include "driver/uart.h"
+
+// 串口类型枚举
+typedef enum {
+    UART_TYPE_RS485 = 0,
+    UART_TYPE_TTL,
+    UART_TYPE_MAX
+} uart_type_t;
+
+// 串口设备结构体（策略模式接口）
+typedef struct {
+    // uart_type_t eType;                              // 串口类型
+    esp_err_t (*Init)(uart_port_t uart_num);        // 初始化方法
+    int (*Printf)(uart_port_t uart_num, const char* format, ...);  // 格式化输出
+    int (*Read)(uart_port_t uart_num, char* buffer, size_t len, TickType_t timeout);  // 接收方法
+    int (*Write)(uart_port_t uart_num, const char* data, size_t len);  // 发送方法
+    size_t (*GetBufferedDataLen)(uart_port_t uart_num);  // 获取缓冲区数据长度方法
+    esp_err_t (*Deinit)(uart_port_t uart_num);      // 反初始化方法
+} uart_device_t;
+
 /**
  * @brief 串口工厂初始化函数（工厂方法）
  * @param uart_num 串口号（UART_NUM_1 或 UART_NUM_2）
@@ -40,4 +59,11 @@ void uart1_init();
  * @param baudrate 波特率（0表示使用默认波特率115200）
  */
 void uart2_init();
+
+/**
+ * @brief 根据串口号获取串口设备接口（工厂方法）
+ * @param uart_num 串口号（UART_NUM_1 或 UART_NUM_2）
+ * @return uart_device_t* 串口设备接口指针
+ */
+const uart_device_t* uart_factory_get_device(uart_port_t uart_num);
 #endif

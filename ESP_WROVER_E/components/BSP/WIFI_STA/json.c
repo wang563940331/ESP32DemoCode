@@ -47,7 +47,7 @@ void parse_json(const char *json_string,void *Start_once)
             ESP_LOGE("JSON", "解析错误位置: %s", error_ptr);
         }
         return;
-    }
+}
 
     cJSON *deviceid = cJSON_GetObjectItemCaseSensitive(root, "id");//然后从 level 中获取 "value" 键
     if(deviceid != NULL)

@@ -169,30 +169,47 @@ void app_main(void)
     init_mqtt();
     mdf_mem_print_heap();
 
-    uart1_init();
-    uart2_init();
+    // uart1_init();
+    // uart2_init();
     //vTaskDelete(NULL);
+    const  uart_device_t* uart1 = uart_factory_get_device(UART_NUM_1);
+    if(uart1 == NULL)
+    {
+        ESP_LOGE(TAG, "UART1实例化失败");
+        return;
+    }
+    uart1->Init(UART_NUM_1);
+    const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
+    if(uart2 == NULL)
+    {
+        ESP_LOGE(TAG, "UART2实例化失败");
+        return;
+    }
+    uart2->Init(UART_NUM_2);
     uint16_t len = 0;
     char data[1024] = {0};
     while(1)
     {
-    //     uart_write_bytes(UART_NUM_1, "UART1 TEST", sizeof("UART1 TEST"));
-        uart_get_buffered_data_len(UART_NUM_1, (size_t*) &len);
 
+        len = uart1->GetBufferedDataLen(UART_NUM_1);
         if (len > 0)
         {
-            uart_read_bytes(UART_NUM_1, data, len, 100);
+            uart1->Read(UART_NUM_1, data, len, 100);    
+            // uart_read_bytes(UART_NUM_1, data, len, 100);
             data[len] = '\0';
-            uart_write_bytes(UART_NUM_1, data, len);
+            // uart_write_bytes(UART_NUM_1, data, len);
+            uart1->Write(UART_NUM_1, data, len);
+
             printf("uart0 receive data: %s\n", data);
             memset(data, 0, sizeof(data));
         }
-        uart_get_buffered_data_len(UART_NUM_2, (size_t*) &len);
+
+        len = uart2->GetBufferedDataLen(UART_NUM_2);
         if (len > 0)
         {
-            uart_read_bytes(UART_NUM_2, data, len, 100);
+            uart2->Read(UART_NUM_2, data, len, 100);
             data[len] = '\0';
-            uart_write_bytes(UART_NUM_2, data, len);
+             uart2->Write(UART_NUM_2, data, len);
             printf("uart2 receive data: %s\n", data);
             memset(data, 0, sizeof(data));
         }
