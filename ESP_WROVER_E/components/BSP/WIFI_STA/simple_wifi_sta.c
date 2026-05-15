@@ -730,7 +730,7 @@ static void simple_task(void *pvParameters)
 {
     uint8_t key =0;
     simple_gpio_config();
-     s_ap_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;  // 记录AP启动时间
+     s_ap_start_time = xTaskGetTickCount();  // 记录AP启动时间
     while(1) 
     {
 
@@ -750,7 +750,7 @@ static void simple_task(void *pvParameters)
                     // 重启WiFi以应用配置
                     esp_wifi_start();
                     s_ap_mode_enabled = true;
-                    s_ap_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;  // 记录AP启动时间
+                    s_ap_start_time = xTaskGetTickCount();  // 记录AP启动时间（使用tick数）
                     ESP_LOGI(TAG, "AP超时计时器启动，%d分钟后自动关闭", AP_TIMEOUT_MINUTES);
                     set_ones_smartconfig(true);
                 } else {
@@ -774,17 +774,21 @@ static void simple_task(void *pvParameters)
         
         // AP超时检测：15分钟内没有设备连接则关闭AP模式
         if (s_ap_mode_enabled) {
-            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            uint32_t elapsed_ms = current_time - s_ap_start_time;
+            // 使用 tick 数进行比较，避免乘法溢出
+            TickType_t current_ticks = xTaskGetTickCount();
+            TickType_t elapsed_ticks = current_ticks - s_ap_start_time;
             
             // 获取当前连接的客户端数量
             wifi_sta_list_t sta_list;
             esp_err_t ret = esp_wifi_ap_get_sta_list(&sta_list);
             
-            if (ret == ESP_OK && sta_list.num == 0 && elapsed_ms >= AP_TIMEOUT_MS) {
+            // 检查是否超时（使用 pdMS_TO_TICKS 转换毫秒为tick）
+            if (ret == ESP_OK && sta_list.num == 0 && elapsed_ticks >= pdMS_TO_TICKS(AP_TIMEOUT_MS)) {
                 ESP_LOGI(TAG, "AP模式超时(%d分钟), 没有设备连接, 自动关闭AP模式", AP_TIMEOUT_MINUTES);
                 // 停止HTTP服务器和AP
                 wifi_ap_deinit();
+                // 短暂延迟后再设置WiFi模式，避免与网络操作冲突
+                vTaskDelay(pdMS_TO_TICKS(100));
                 // 设置回STA模式
                 esp_wifi_set_mode(WIFI_MODE_STA);
                 s_ap_mode_enabled = false;
