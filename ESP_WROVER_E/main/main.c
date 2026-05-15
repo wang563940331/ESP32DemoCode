@@ -83,7 +83,7 @@ void init_netWork(void)
     
     ESP_LOGI(TAG, "设置WiFi模式为STA...");
     // 设置WiFi模式为STA（AP模式将在BOOT按键按下时启动）
-    ret = esp_wifi_set_mode(WIFI_MODE_STA);
+    ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "设置WiFi模式为STA失败: %s", esp_err_to_name(ret));
         return;
@@ -96,8 +96,8 @@ void init_netWork(void)
         ESP_LOGE(TAG, "初始化STA模式失败");
     }
     
-    // AP模式将在BOOT按键按下时启动
-    
+    // AP模式
+    wifi_ap_init();
     // 启动WiFi
     ESP_LOGI(TAG, "启动WiFi...");
     ret = esp_wifi_start();

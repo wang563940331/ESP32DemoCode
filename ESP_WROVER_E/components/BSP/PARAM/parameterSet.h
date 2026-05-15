@@ -23,4 +23,5 @@ bool sStorageApSetNvsmqttclient(char *data);
 bool sStorageApSetNvsmqttuser(char *data);
 bool sStorageApSetNvsmqttpasswd(char *data);
 eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData);
+eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData);
 #endif
