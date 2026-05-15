@@ -54,8 +54,13 @@ static const int ESPTOUCH_DONE_BIT = BIT1;
 
 //用一个标志来表示是否处于smartconfig中
 static bool s_is_smartconfig = false;
-static bool  s_ap_mode_enabled = false;
+static bool  s_ap_mode_enabled = true;
 static bool  ones_smartconfig= false;
+
+// AP超时关闭功能
+#define AP_TIMEOUT_MINUTES 30          // 超时时间（分钟）
+#define AP_TIMEOUT_MS (AP_TIMEOUT_MINUTES * 60 * 1000)  // 转换为毫秒
+static uint32_t s_ap_start_time = 0;   // AP启动时间戳（毫秒）
 //事件通知回调函数
 static wifi_event_cb    wifi_cb = NULL;
 
@@ -725,6 +730,7 @@ static void simple_task(void *pvParameters)
 {
     uint8_t key =0;
     simple_gpio_config();
+     s_ap_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;  // 记录AP启动时间
     while(1) 
     {
 
@@ -744,6 +750,8 @@ static void simple_task(void *pvParameters)
                     // 重启WiFi以应用配置
                     esp_wifi_start();
                     s_ap_mode_enabled = true;
+                    s_ap_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;  // 记录AP启动时间
+                    ESP_LOGI(TAG, "AP超时计时器启动，%d分钟后自动关闭", AP_TIMEOUT_MINUTES);
                     set_ones_smartconfig(true);
                 } else {
                     // 关闭AP模式
@@ -763,6 +771,26 @@ static void simple_task(void *pvParameters)
                 break;
             }
         }
+        
+        // AP超时检测：15分钟内没有设备连接则关闭AP模式
+        if (s_ap_mode_enabled) {
+            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            uint32_t elapsed_ms = current_time - s_ap_start_time;
+            
+            // 获取当前连接的客户端数量
+            wifi_sta_list_t sta_list;
+            esp_err_t ret = esp_wifi_ap_get_sta_list(&sta_list);
+            
+            if (ret == ESP_OK && sta_list.num == 0 && elapsed_ms >= AP_TIMEOUT_MS) {
+                ESP_LOGI(TAG, "AP模式超时(%d分钟), 没有设备连接, 自动关闭AP模式", AP_TIMEOUT_MINUTES);
+                // 停止HTTP服务器和AP
+                wifi_ap_deinit();
+                // 设置回STA模式
+                esp_wifi_set_mode(WIFI_MODE_STA);
+                s_ap_mode_enabled = false;
+            }
+        }
+        
         if(get_ones_smartconfig() == true)
         {
             set_ones_smartconfig(false);
