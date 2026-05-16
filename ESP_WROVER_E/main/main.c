@@ -187,20 +187,22 @@ void app_main(void)
     }
     uart2->Init(UART_NUM_2);
     uint16_t len = 0;
-    char data[1024] = {0};
+    char data[1024] = {"hello world"};
     while(1)
     {
+        //  uart1->Write(UART_NUM_1, data, len);
 
         len = uart1->GetBufferedDataLen(UART_NUM_1);
         if (len > 0)
         {
             uart1->Read(UART_NUM_1, data, len, 100);    
             // uart_read_bytes(UART_NUM_1, data, len, 100);
-            data[len] = '\0';
+          
             // uart_write_bytes(UART_NUM_1, data, len);
-            uart1->Write(UART_NUM_1, data, len);
+            uart1->Write(UART_NUM_1,"hello world\n", strlen("hello world\n"));
 
-            printf("uart0 receive data: %s\n", data);
+            printf("uart0 size: %d receive data: %s\n", len, data);
+            uart1->Write(UART_NUM_1,data, len);
             memset(data, 0, sizeof(data));
         }
 

@@ -55,9 +55,9 @@ static const uart_full_device_t uart_device_map[] = {
         .config=
         {
             .uart_num=UART_NUM_1, 
-            .tx_pin=GPIO_NUM_18, 
-            .rx_pin=GPIO_NUM_19, 
-            .en_pin=GPIO_NUM_NC,
+            .tx_pin=GPIO_NUM_19, 
+            .rx_pin=GPIO_NUM_18, 
+            .en_pin=GPIO_NUM_21,
             .baudrate=115200,
             .data_bits=UART_DATA_8_BITS,
             .stop_bits=UART_STOP_BITS_1,
@@ -204,8 +204,10 @@ static int uart_common_send(uart_port_t uart_num, const char* data, size_t len) 
 
     // RS485 模式：拉低 EN 引脚回到接收模式
     if (config && config->en_pin != GPIO_NUM_NC) {
-        // 等待数据发送完成（简单延时，可根据波特率和数据长度计算）
-        vTaskDelay(pdMS_TO_TICKS(1 + len * 10 / (config->baudrate / 1000)));
+      // 等待硬件发送完成（使用UART硬件API，比软件延时更准确）
+        uart_wait_tx_done(uart_num, pdMS_TO_TICKS(100));
+        // 额外延时确保RS485收发器完全切换（根据实际电路调整）
+        vTaskDelay(pdMS_TO_TICKS(1));
         gpio_set_level(config->en_pin, 0);
     }
 
