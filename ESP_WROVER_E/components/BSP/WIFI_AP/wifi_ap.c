@@ -174,6 +174,7 @@ static esp_err_t root_handler(httpd_req_t *req)
         "        label { display: block; margin: 10px 0 5px; }"
         "        input[type='text'], input[type='number'] { width: 300px; padding: 5px; }"
         "        input[type='submit'] { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }"
+        "        input[type='button'] { padding: 10px 20px; background-color: #f44336; color: white; border: none; cursor: pointer; margin-left: 10px; }"
         "        .config { background-color: #f0f0f0; padding: 15px; margin-top: 20px; }"
         "    </style>"
         "</head>"
@@ -188,7 +189,18 @@ static esp_err_t root_handler(httpd_req_t *req)
     // 添加提交按钮和当前配置显示
     strlcat(response,
         "        <br><input type='submit' value='保存'>"
+        "        <input type='button' value='重启设备' onclick=\"restartDevice()\">"
         "    </form>"
+        "    <script>"
+        "        function restartDevice() {"
+        "            if(confirm('确定要重启设备吗？')) {"
+        "                var xhr = new XMLHttpRequest();"
+        "                xhr.open('GET', '/restart', true);"
+        "                xhr.send();"
+        "                alert('设备即将重启，请重新连接'); "
+        "            }"
+        "        }"
+        "    </script>"
         "    <div class='config'>"
         "        <h3>Current:</h3>\n",
         sizeof(response));
@@ -372,6 +384,17 @@ static esp_err_t save_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// 重启处理程序
+static esp_err_t restart_handler(httpd_req_t *req)
+{
+    httpd_resp_send(req, "OK", 2);
+    
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+    
+    return ESP_OK;
+}
+
 // 启动HTTP服务器
 static httpd_handle_t start_webserver(void)
 {
@@ -400,6 +423,14 @@ static httpd_handle_t start_webserver(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &save_uri);
+    
+    httpd_uri_t restart_uri = {
+        .uri      = "/restart",
+        .method   = HTTP_GET,
+        .handler  = restart_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &restart_uri);
     
     return server;
 }

@@ -353,15 +353,15 @@ bool sNvsParamPrint(void)
         return(false);
     }
     
-    //打印JSON文本---这里打印不带任何格式 便于存储
-    pJsonTxt = cJSON_PrintUnformatted(stNvsCache.pJsonParam);
+    //打印JSON文本---格式化输出便于阅读
+    pJsonTxt = cJSON_Print(stNvsCache.pJsonParam);
     if(pJsonTxt == NULL)
     {
-        EN_SLOGI(TAG, "NVS参数区:%s@%s, 打印失败, cJSON_PrintUnformatted 出错!!!", cNvsKeyParam, cNvsName);
+        EN_SLOGI(TAG, "NVS参数区:%s@%s, 打印失败, cJSON_Print 出错!!!", cNvsKeyParam, cNvsName);
         return(false);
     }
     
-    EN_SLOGI(TAG, "NVS参数区:%s@%s, 参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
+    EN_SLOGI(TAG, "NVS参数区:%s@%s, 参数内容:\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
     
     
     free(pJsonTxt);
