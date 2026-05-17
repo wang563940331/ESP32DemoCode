@@ -28,7 +28,7 @@
 // 定义日志标签
 static const char*TAG = "main";
 
-void system_info_timercb(void *timer)
+void system_info_timercb(TimerHandle_t timer)
 {
 // char *bnus = heap_caps_malloc(1024*10, MALLOC_CAP_SPIRAM);
 // if (bnus == NULL) {
@@ -218,15 +218,19 @@ void app_main(void)
 
         if(gets_is_smartconfig() == true)
         {
-             led_blink();   /* LED状态翻转 */
+            led_blink();   /* SmartConfig模式 */
+        }
+        else if(get_ap_connected_status() == 1)
+        {
+            led_fast_blink();   /* AP模式有客户端连接，优先显示快闪 */
         }
         else if(gets_is_mqtt_connected() == false)
         {
-            led_heartbeat();   /* LED状态翻转 */
+            led_heartbeat();   /* MQTT未连接 */
         }
         else
         {
-            led_breath();
+            led_breath_heart();   /* MQTT已连接 */
         }
 
         vTaskDelay(pdMS_TO_TICKS(10));

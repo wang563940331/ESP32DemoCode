@@ -29,6 +29,17 @@
 #include "led.h"
 #include "esp_timer.h"
 #include "driver/ledc.h"
+#include "gpio_output_bsp.h"
+
+// LED模式枚举
+typedef enum {
+    LED_MODE_NONE,
+    LED_MODE_GPIO,      // 普通GPIO模式
+    LED_MODE_LEDC       // LEDC/PWM模式
+} led_mode_t;
+
+// 当前LED模式
+static volatile led_mode_t current_mode = LED_MODE_NONE;
 
 /**
  * @brief       初始化LED
@@ -37,16 +48,37 @@
  */
 void led_init(void)
 {
-    gpio_config_t gpio_init_struct = {0};
+    gpio_output_factory_init(LED_GPIO_PIN);
+    current_mode = LED_MODE_GPIO;
+}
 
-    gpio_init_struct.intr_type = GPIO_INTR_DISABLE;         /* 失能引脚中断 */
-    gpio_init_struct.mode = GPIO_MODE_INPUT_OUTPUT;         /* 输入输出模式 */
-    gpio_init_struct.pull_up_en = GPIO_PULLUP_ENABLE;       /* 使能上拉 */
-    gpio_init_struct.pull_down_en = GPIO_PULLDOWN_DISABLE;  /* 失能下拉 */
-    gpio_init_struct.pin_bit_mask = 1ull << LED_GPIO_PIN;   /* 设置的引脚的位掩码 */
-    gpio_config(&gpio_init_struct);                         /* 配置GPIO */
+void led_reset(void)
+{
+    current_mode = LED_MODE_NONE;
+}
 
-    LED(0);                                                 /* 关闭LED */
+void led_on(void)
+{
+    const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+    if (dev) {
+        dev->On(LED_GPIO_PIN);
+    }
+}
+
+void led_off(void)
+{
+    const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+    if (dev) {
+        dev->Off(LED_GPIO_PIN);
+    }
+}
+
+void led_toggle(void)
+{
+    const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+    if (dev) {
+        dev->Toggle(LED_GPIO_PIN);
+    }
 }
 
 /* ===================== 内部毫秒计时（非阻塞） ===================== */
@@ -65,7 +97,7 @@ void led_heartbeat(void)
     switch (state)
     {
         case 0:
-            LED(1);
+            LED_ON();
             if (now - last_t >= 70) {
                 state = 1;
                 last_t = now;
@@ -73,7 +105,7 @@ void led_heartbeat(void)
             break;
 
         case 1:
-            LED(0);
+            LED_OFF();
             if (now - last_t >= 70) {
                 state = 2;
                 last_t = now;
@@ -81,7 +113,7 @@ void led_heartbeat(void)
             break;
 
         case 2:
-            LED(1);
+            LED_ON();
             if (now - last_t >= 70) {
                 state = 3;
                 last_t = now;
@@ -89,7 +121,7 @@ void led_heartbeat(void)
             break;
 
         case 3:
-            LED(0);
+            LED_OFF();
             if (now - last_t >= 650) {
                 state = 0;
                 last_t = now;
@@ -108,7 +140,10 @@ void led_blink(void)
     if (now - last_t >= 500)
     {
         sta = !sta;
-        LED(sta);
+        const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+        if (dev) {
+            dev->SetLevel(LED_GPIO_PIN, sta);
+        }
         last_t = now;
     }
 }
@@ -116,14 +151,15 @@ void led_blink(void)
 /* ===================== 非阻塞 呼吸灯 ===================== */
 void led_breath(void)
 {
-    static uint8_t init_ok = 0;
     static int dir = 1;
     static int duty = 0;
     static uint32_t last_t = 0;
     uint32_t now = led_get_ms();
 
-    if (!init_ok)
+    if (current_mode != LED_MODE_LEDC)
     {
+        gpio_reset_pin(LED_GPIO_PIN);
+        
         ledc_timer_config_t tmr = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = LEDC_TIMER_10_BIT,
@@ -140,7 +176,9 @@ void led_breath(void)
             .duty = 0,
         };
         ledc_channel_config(&ch);
-        init_ok = 1;
+        current_mode = LED_MODE_LEDC;
+        dir = 1;
+        duty = 0;
     }
 
     if (now - last_t >= 4)
@@ -165,19 +203,19 @@ void led_double_blink(void)
     switch (state)
     {
         case 0:
-            LED(1);
+            LED_ON();
             if (now - last_t >= 60) { state = 1; last_t = now; }
             break;
         case 1:
-            LED(0);
+            LED_OFF();
             if (now - last_t >= 60) { state = 2; last_t = now; }
             break;
         case 2:
-            LED(1);
+            LED_ON();
             if (now - last_t >= 60) { state = 3; last_t = now; }
             break;
         case 3:
-            LED(0);
+            LED_OFF();
             if (now - last_t >= 600) { state = 0; last_t = now; }
             break;
     }
@@ -194,7 +232,10 @@ void led_blink_fast(void)
     if (now - last_t >= cnt)
     {
         sta = !sta;
-        LED(sta);
+        const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+        if (dev) {
+            dev->SetLevel(LED_GPIO_PIN, sta);
+        }
         last_t = now;
         cnt = (cnt > 100) ? (cnt - 20) : 100;
     }
@@ -211,7 +252,10 @@ void led_blink_slow(void)
     if (now - last_t >= cnt)
     {
         sta = !sta;
-        LED(sta);
+        const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+        if (dev) {
+            dev->SetLevel(LED_GPIO_PIN, sta);
+        }
         last_t = now;
         cnt = (cnt < 1000) ? (cnt + 20) : 1000;
     }
@@ -228,7 +272,7 @@ void led_short_tick(void)
     {
         if (now - last_t >= 1000)
         {
-            LED(1);
+            LED_ON();
             sta = 1;
             last_t = now;
         }
@@ -237,7 +281,7 @@ void led_short_tick(void)
     {
         if (now - last_t >= 50)
         {
-            LED(0);
+            LED_OFF();
             sta = 0;
             last_t = now;
         }
@@ -253,13 +297,13 @@ void led_on_2s(void)
 
     if (sta == 0)
     {
-        LED(1);
+        LED_ON();
         sta = 1;
         last_t = now;
     }
     else if (sta == 1 && now - last_t >= 2000)
     {
-        LED(0);
+        LED_OFF();
         sta = 2;
     }
 }
@@ -267,13 +311,14 @@ void led_on_2s(void)
 /* ===================== 非阻塞 均匀呼吸（更自然） ===================== */
 void led_breath_smooth(void)
 {
-    static uint8_t init_ok = 0;
     static int duty = 0;
     static uint32_t last_t = 0;
     uint32_t now = led_get_ms();
 
-    if (!init_ok)
+    if (current_mode != LED_MODE_LEDC)
     {
+        gpio_reset_pin(LED_GPIO_PIN);
+        
         ledc_timer_config_t tmr = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = LEDC_TIMER_10_BIT,
@@ -289,7 +334,8 @@ void led_breath_smooth(void)
             .timer_sel = LEDC_TIMER_0,
         };
         ledc_channel_config(&ch);
-        init_ok = 1;
+        current_mode = LED_MODE_LEDC;
+        duty = 0;
     }
 
     if (now - last_t >= 8)
@@ -308,10 +354,20 @@ void led_fast_blink(void)
     static uint8_t sta = 0;
     uint32_t now = led_get_ms();
 
+    if (current_mode != LED_MODE_GPIO)
+    {
+        gpio_reset_pin(LED_GPIO_PIN);
+        gpio_output_factory_init(LED_GPIO_PIN);
+        current_mode = LED_MODE_GPIO;
+    }
+
     if (now - last_t >= 40)
     {
         sta = !sta;
-        LED(sta);
+        const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+        if (dev) {
+            dev->SetLevel(LED_GPIO_PIN, sta);
+        }
         last_t = now;
     }
 }
@@ -325,12 +381,12 @@ void led_triple_blink(void)
 
     switch (state)
     {
-        case 0: LED(1); if(now-last_t>=60){state=1; last_t=now;} break;
-        case 1: LED(0); if(now-last_t>=60){state=2; last_t=now;} break;
-        case 2: LED(1); if(now-last_t>=60){state=3; last_t=now;} break;
-        case 3: LED(0); if(now-last_t>=60){state=4; last_t=now;} break;
-        case 4: LED(1); if(now-last_t>=60){state=5; last_t=now;} break;
-        case 5: LED(0); if(now-last_t>=800){state=0; last_t=now;} break;
+        case 0: LED_ON(); if(now-last_t>=60){state=1; last_t=now;} break;
+        case 1: LED_OFF(); if(now-last_t>=60){state=2; last_t=now;} break;
+        case 2: LED_ON(); if(now-last_t>=60){state=3; last_t=now;} break;
+        case 3: LED_OFF(); if(now-last_t>=60){state=4; last_t=now;} break;
+        case 4: LED_ON(); if(now-last_t>=60){state=5; last_t=now;} break;
+        case 5: LED_OFF(); if(now-last_t>=800){state=0; last_t=now;} break;
     }
 }
 
@@ -343,7 +399,7 @@ void led_fade_in(void)
 
     if (sta == 0)
     {
-        LED(1);
+        LED_ON();
         sta = 1;
     }
 }
@@ -357,7 +413,7 @@ void led_fade_out(void)
 
     if (sta == 0)
     {
-        LED(0);
+        LED_OFF();
         sta = 1;
     }
 }
@@ -371,13 +427,13 @@ void led_hold_1s(void)
 
     if (sta == 0)
     {
-        LED(1);
+        LED_ON();
         sta = 1;
         last_t = now;
     }
     else if (sta == 1 && now - last_t >= 1000)
     {
-        LED(0);
+        LED_OFF();
         sta = 2;
     }
 }
@@ -410,7 +466,10 @@ void led_weak_blink(void)
     if (now - last_t >= 1000)
     {
         s = !s;
-        LED(s);
+        const gpio_output_device_t* dev = gpio_output_factory_get_device(LED_GPIO_PIN);
+        if (dev) {
+            dev->SetLevel(LED_GPIO_PIN, s);
+        }
         last_t = now;
     }
 }
@@ -424,12 +483,12 @@ void led_rhythm(void)
 
     switch(state)
     {
-        case 0: LED(1); if(now-last_t>=200){state=1; last_t=now;} break;
-        case 1: LED(0); if(now-last_t>=150){state=2; last_t=now;} break;
-        case 2: LED(1); if(now-last_t>=80){state=3; last_t=now;} break;
-        case 3: LED(0); if(now-last_t>=80){state=4; last_t=now;} break;
-        case 4: LED(1); if(now-last_t>=80){state=5; last_t=now;} break;
-        case 5: LED(0); if(now-last_t>=1000){state=0; last_t=now;} break;
+        case 0: LED_ON(); if(now-last_t>=200){state=1; last_t=now;} break;
+        case 1: LED_OFF(); if(now-last_t>=150){state=2; last_t=now;} break;
+        case 2: LED_ON(); if(now-last_t>=80){state=3; last_t=now;} break;
+        case 3: LED_OFF(); if(now-last_t>=80){state=4; last_t=now;} break;
+        case 4: LED_ON(); if(now-last_t>=80){state=5; last_t=now;} break;
+        case 5: LED_OFF(); if(now-last_t>=1000){state=0; last_t=now;} break;
     }
 }
 
@@ -442,13 +501,13 @@ void led_single_pulse(void)
 
     if (sta == 0)
     {
-        LED(1);
+        LED_ON();
         sta = 1;
         last_t = now;
     }
     else if (sta == 1 && now - last_t >= 100)
     {
-        LED(0);
+        LED_OFF();
         sta = 2;
     }
 }
@@ -456,13 +515,14 @@ void led_single_pulse(void)
 /* ===================== 10. 智能呼吸（亮度平滑，无抖动） ===================== */
 void led_breath_ultra_smooth(void)
 {
-    static uint8_t init_ok = 0;
     static uint16_t duty = 0;
     static uint32_t last_t = 0;
     uint32_t now = led_get_ms();
 
-    if (!init_ok)
+    if (current_mode != LED_MODE_LEDC)
     {
+        gpio_reset_pin(LED_GPIO_PIN);
+        
         ledc_timer_config_t timer = {
             .speed_mode = LEDC_LOW_SPEED_MODE,
             .duty_resolution = LEDC_TIMER_10_BIT,
@@ -478,7 +538,8 @@ void led_breath_ultra_smooth(void)
             .timer_sel = LEDC_TIMER_0,
         };
         ledc_channel_config(&ch);
-        init_ok = 1;
+        current_mode = LED_MODE_LEDC;
+        duty = 0;
     }
 
     if (now - last_t >= 6)

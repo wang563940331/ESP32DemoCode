@@ -7,6 +7,7 @@ set(src_dirs
         UTILITY
         PARAM
         UART
+        GPIO_OUTPUT
         )
 
 set(include_dirs
@@ -18,6 +19,7 @@ set(include_dirs
         UTILITY
         PARAM
         UART
+        GPIO_OUTPUT
         )
 
 set(requires

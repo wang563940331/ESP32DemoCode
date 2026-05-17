@@ -75,6 +75,9 @@ static const char *TAG = "WIFI_AP";
 // HTTP server handle
 static httpd_handle_t server = NULL;
 
+// AP连接状态（0=无客户端连接，1=有客户端连接）
+volatile uint8_t g_ap_connected = 0;
+
 // HTTP服务器句柄
 // #define AP_SSID      "ESP32_AP"
 #define AP_PASS      ""//开放模式
@@ -88,9 +91,13 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
         ESP_LOGI(TAG, "客户端连接, AID=%d", event->aid);
+        g_ap_connected = 1;
+        ESP_LOGI(TAG, "AP连接状态已更新: g_ap_connected=%d", g_ap_connected);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
         ESP_LOGI(TAG, "客户端断开, AID=%d", event->aid);
+        g_ap_connected = 0;
+        ESP_LOGI(TAG, "AP连接状态已更新: g_ap_connected=%d", g_ap_connected);
     }
 }
 
@@ -503,4 +510,10 @@ esp_err_t wifi_ap_deinit(void)
     ESP_LOGI(TAG, "WiFi AP 模式已关闭");
     
     return ESP_OK;
+}
+
+// 获取AP连接状态
+uint8_t get_ap_connected_status(void)
+{
+    return g_ap_connected;
 }

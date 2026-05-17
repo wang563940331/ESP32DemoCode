@@ -58,7 +58,7 @@ static bool  s_ap_mode_enabled = true;
 static bool  ones_smartconfig= false;
 
 // AP超时关闭功能
-#define AP_TIMEOUT_MINUTES 30          // 超时时间（分钟）
+#define AP_TIMEOUT_MINUTES 15          // 超时时间（分钟）
 #define AP_TIMEOUT_MS (AP_TIMEOUT_MINUTES * 60 * 1000)  // 转换为毫秒
 static uint32_t s_ap_start_time = 0;   // AP启动时间戳（毫秒）
 //事件通知回调函数
