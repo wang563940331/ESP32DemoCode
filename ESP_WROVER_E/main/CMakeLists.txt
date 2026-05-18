@@ -1,1 +1,1 @@
-idf_component_register(SRCS "main.c" INCLUDE_DIRS "." REQUIRES BSP)
+idf_component_register(SRCS "main.c" "version.c" INCLUDE_DIRS "." REQUIRES BSP)

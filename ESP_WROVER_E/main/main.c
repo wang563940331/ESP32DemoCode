@@ -18,7 +18,7 @@
 #include <esp_log.h>
 #include <esp_heap_caps.h>
 #include "wifi_ap.h"
-// 使用自定义的日志头文件代替原始的esp_log.h
+#include "version.h"
 #include "my_log.h"
 #include "parameterSet.h"
 #include <esp_heap_caps.h>
@@ -143,6 +143,8 @@ void app_main(void)
 {
 
     ESP_LOGI(TAG, "ESP32 Running...");
+
+    app_print_version_info();
 
     en_log_set();
     mdf_mem_print_heap();
