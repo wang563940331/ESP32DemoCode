@@ -15,6 +15,7 @@
 #include "parameterSet.h"
 #include "simple_wifi_sta.h"
 #include "parameter.h"
+#include "version.h"
 // Forward declaration
 esp_err_t mqtt_reinit(void);
 #define  HTTPServerSize 1024*8
@@ -54,7 +55,7 @@ typedef struct {
 // 全局配置变量
 char g_domain[128] = "default.domain.com";
 uint16_t g_port = 8080;
-char g_string_var[256] = "default_string";
+char g_string_var[256] = APP_VERSION_FULL;
 char g_wifi_name[24] = "";
 char g_wifi_passwd[24] = "";
 char g_sn[20] = "";  // 序列号（只读）
@@ -65,7 +66,7 @@ char g_mqtt_passwd[64] = ""; // MQTT密码
 config_param_t config_params[] = {
     {"domain", "Domain", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_domain), g_domain, 0, "default.domain.com", cStorageApCmdNvsmqttIp, WRITEABLE},
     {"port", "Port", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_port), &g_port, 8080, NULL, cStorageApCmdNvsmqttport, WRITEABLE},
-    {"string", "String", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_string_var), g_string_var, 0, "default_string", -1, WRITEABLE},
+    {"Version", "Version", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_string_var), g_string_var, 0, APP_VERSION_FULL, -1, READONLY},
     {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE},
     {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE},
     {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE},
