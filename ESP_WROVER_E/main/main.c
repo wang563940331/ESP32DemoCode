@@ -24,7 +24,7 @@
 #include <esp_heap_caps.h>
 #include "shell.h"
 #include "uart_bsp.h"
-
+#include "json.h"
 
 // 定义日志标签
 static const char*TAG = "main";

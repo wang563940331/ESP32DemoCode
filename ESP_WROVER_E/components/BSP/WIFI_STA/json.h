@@ -29,5 +29,6 @@
 #include "mqtt_client.h"
 #include "cJSON.h"
 
-void parse_json(const char *json_string,void *Start_once) ;
+void parse_json(const char *json_string,void *Start_once);
+void cjson_init_spiram(void);
 #endif

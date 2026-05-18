@@ -11,7 +11,17 @@
 #include "cJSON.h"
 #include "mqtt.h"
 #include "parameterSet.h"
+#include "esp_heap_caps.h"
 static const char*TAG = "json";
+
+void cjson_init_spiram(void) {
+    cJSON_Hooks hooks = {
+        .malloc_fn = heap_caps_malloc,
+        .free_fn = heap_caps_free
+    };
+    cJSON_InitHooks(&hooks);
+    ESP_LOGI(TAG, "cJSON configured to use SPIRAM");
+}
 /*
 {   
     "id":"2404671219",   

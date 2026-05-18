@@ -16,6 +16,7 @@
 #include "utility.h"
 #include "parameterSet.h"
 #include "one_wire_bsp.h"
+#include "esp_heap_caps.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -235,7 +236,7 @@ void send_ctrlacl(const char *data) {
     esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                            mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
     cJSON_Delete(root);
-    free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存
+    heap_caps_free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
     mqtt_pub_buff = NULL;
 }
 
@@ -255,6 +256,11 @@ void send_head(const char *data,float temperature, float humidity) {
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
     cJSON *root = cJSON_CreateObject();  // 创建根对象
+    if (root == NULL) {
+        ESP_LOGE(TAG, "cJSON_CreateObject failed");
+        return;
+    }
+    
     cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
@@ -266,14 +272,35 @@ void send_head(const char *data,float temperature, float humidity) {
     }
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
-    // 转为 JSON 字符串（压缩格式，适合MQTT发送）
-    char *mqtt_pub_buff = cJSON_PrintUnformatted(root);
-
-    esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-                           mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
+    
+    // 使用外部RAM存储JSON字符串
+    char *json_str = cJSON_PrintUnformatted(root);
+    if (json_str == NULL) {
+        ESP_LOGE(TAG, "cJSON_PrintUnformatted failed");
+        cJSON_Delete(root);
+        return;
+    }
+    
+    size_t json_len = strlen(json_str);
+    
+    // 使用外部RAM分配MQTT发布缓冲区
+    char *mqtt_pub_buff = heap_caps_malloc(json_len + 1, MALLOC_CAP_SPIRAM);
+    if (mqtt_pub_buff != NULL) {
+        memcpy(mqtt_pub_buff, json_str, json_len + 1);
+        
+        esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
+                               mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
+        
+        heap_caps_free(mqtt_pub_buff);
+    } else {
+        // 如果外部RAM分配失败，使用默认分配
+        ESP_LOGW(TAG, "SPIRAM allocation failed, using internal RAM");
+        esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
+                               json_str, strlen(json_str), 1, 0);
+    }
+    
     cJSON_Delete(root);
-    free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存
-    mqtt_pub_buff = NULL;
+    heap_caps_free(json_str); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
 }
 
 /**
@@ -316,15 +343,14 @@ void my_task(void *pvParameters)
     const one_wire_device_t* sensor = one_wire_factory_get_device(GPIO_NUM_27);
     
     if (sensor == NULL) {
-        ESP_LOGE(TAG, "单总线传感器设备获取失败");
-        return;
-    }
-    
-    // 初始化
-    esp_err_t ret = sensor->Init(GPIO_NUM_27);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "单总线传感器初始化失败");
-        return;
+        ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
+    } else {
+        // 初始化
+        esp_err_t ret = sensor->Init(GPIO_NUM_27);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
+            sensor = NULL;
+        }
     }
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
@@ -348,20 +374,28 @@ void my_task(void *pvParameters)
             }
             if(tickOut(&tims,15*1000))
             {
-                float temp = sensor->GetTemperature(GPIO_NUM_27);
-                float humi = sensor->GetHumidity(GPIO_NUM_27);
-                if (temp != -1000.0f) {
-                    if (humi >= 0) {
-                        ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
+                float temp = -200.0f;
+                float humi = -1.0f;
+                
+                if (sensor != NULL) {
+                    temp = sensor->GetTemperature(GPIO_NUM_27);
+                    humi = sensor->GetHumidity(GPIO_NUM_27);
+                    if (temp != -1000.0f) {
+                        if (humi >= 0) {
+                            ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
+                        } else {
+                            ESP_LOGI(TAG, "温度: %.2f°C", temp);
+                        }
                     } else {
-                        ESP_LOGI(TAG, "温度: %.2f°C", temp);
+                        ESP_LOGE(TAG, "读取传感器数据失败");
+                        temp = -200.0f;
+                        humi = -1.0f;
                     }
-                } else {
-                    ESP_LOGE(TAG, "读取传感器数据失败");
                 }
+                
                 tickOut(&tims,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
-                send_head(mqtt_pub_buff,temp,humi);
+                send_head(mqtt_pub_buff, temp, humi);
             }
         }
         else

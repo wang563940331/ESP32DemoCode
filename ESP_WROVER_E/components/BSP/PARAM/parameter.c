@@ -1,6 +1,7 @@
 
 #include "parameter.h"
 #include "utility.h"
+#include "esp_heap_caps.h"
 static const char *TAG = "parameter";
 
 stNvsCache_t stNvsCache;
@@ -135,7 +136,7 @@ bool sNvsParamSet(void)
         ESP_LOGD(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
         //调用 nvs_set_str 将 JSON 字符串写入 NVS，键名为 cNvsKeyParam
         nvs_set_str(handle, cNvsKeyParam, pJsonTxt);
-        free(pJsonTxt);
+        heap_caps_free(pJsonTxt);
         pJsonTxt = NULL;
     }
     
@@ -364,7 +365,7 @@ bool sNvsParamPrint(void)
     EN_SLOGI(TAG, "NVS参数区:%s@%s, 参数内容:\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
     
     
-    free(pJsonTxt);
+    heap_caps_free(pJsonTxt);
     pJsonTxt = NULL;
     
     return(true);
@@ -452,7 +453,7 @@ bool sNvsParamRestoreDefaults(void)
             
             // 解析新的默认JSON
             stNvsCache.pJsonParam = cJSON_Parse(pDefaultJson);
-            free(pDefaultJson);
+            heap_caps_free(pDefaultJson);
             
             if (stNvsCache.pJsonParam != NULL)
             {
