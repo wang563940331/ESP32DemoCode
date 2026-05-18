@@ -15,14 +15,14 @@ const stParamConfig_t g_stParamConfig[] = {
     
     // ====== AP参数组 ======
     {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName},
-    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "WiFiName",       cStorageApNvsName},
-    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "admin123",       cStorageApNvsName},
-    {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "192.168.4.1",    cStorageApNvsName},
-    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "1883",           cStorageApNvsName},
-    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "sub",            cStorageApNvsName},
-    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "client",         cStorageApNvsName},
-    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "tuser",          cStorageApNvsName},
-    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "passwd",         cStorageApNvsName},
+    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",       cStorageApNvsName},
+    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",       cStorageApNvsName},
+    {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "mqtt://47.107.58.46",    cStorageApNvsName},
+    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "6004",           cStorageApNvsName},
+    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "SubTopic",            cStorageApNvsName},
+    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",         cStorageApNvsName},
+    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",          cStorageApNvsName},
+    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",         cStorageApNvsName},
 };
 const int g_iParamCount = sizeof(g_stParamConfig) / sizeof(g_stParamConfig[0]);
 

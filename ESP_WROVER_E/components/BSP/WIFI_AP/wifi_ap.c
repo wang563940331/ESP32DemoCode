@@ -16,7 +16,7 @@
 #include "simple_wifi_sta.h"
 // Forward declaration
 esp_err_t mqtt_reinit(void);
-
+#define  HTTPServerSize 1024*8
 // 参数类型枚举（使用前缀避免与parameter.h冲突）
 typedef enum {
     WIFIAP_PARAM_STRING,
@@ -57,6 +57,8 @@ char g_string_var[256] = "default_string";
 char g_wifi_name[24] = "";
 char g_wifi_passwd[24] = "";
 char g_sn[20] = "";  // 序列号（只读）
+char g_mqtt_user[64] = "";   // MQTT用户名
+char g_mqtt_passwd[64] = ""; // MQTT密码
 
 // 参数描述数组 - 集中管理所有参数
 config_param_t config_params[] = {
@@ -66,6 +68,8 @@ config_param_t config_params[] = {
     {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE},
     {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE},
     {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE},
+    {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE},
+    {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))
 
@@ -158,7 +162,12 @@ static void generate_current_params(char *buffer, size_t buffer_len)
 // 根处理程序 - 提供配置页面
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    char response[2048] = "";
+    char *response = heap_caps_malloc(HTTPServerSize, MALLOC_CAP_SPIRAM);
+    if (response == NULL) {
+        httpd_resp_send(req, "Memory allocation failed", 25);
+        return ESP_OK;
+    }
+    memset(response, 0, HTTPServerSize);
     
     // 从NVS加载所有参数
     load_params_from_nvs();
@@ -188,10 +197,10 @@ static esp_err_t root_handler(httpd_req_t *req)
         "<body>"
         "    <h1>ESP32 Configuration</h1>"
         "    <form action='/save' method='POST' enctype='application/x-www-form-urlencoded'>\n",
-        sizeof(response));
+        HTTPServerSize);
     
     // 动态生成表单字段
-    generate_form_fields(response, sizeof(response));
+    generate_form_fields(response, HTTPServerSize);
     
     // 添加提交按钮和当前配置显示
     strlcat(response,
@@ -210,19 +219,20 @@ static esp_err_t root_handler(httpd_req_t *req)
         "    </script>"
         "    <div class='config'>"
         "        <h3>Current:</h3>\n",
-        sizeof(response));
+        HTTPServerSize);
     
     // 动态生成当前参数
-    generate_current_params(response, sizeof(response));
+    generate_current_params(response, HTTPServerSize);
     
     // 添加页面尾部
     strlcat(response,
         "    </div>"
         "</body>"
         "</html>",
-        sizeof(response));
+        HTTPServerSize);
     
     httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+    heap_caps_free(response);
     return ESP_OK;
 }
 
@@ -327,6 +337,12 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
                 break;
             case cStorageApCmdGwNvsSn:
                 sStorageGwSet(cStorageApCmdGwNvsSn, (u8 *)param->value);
+                break;
+            case cStorageApCmdNvsmqttuser:
+                sStorageApSetNvsmqttuser((char *)param->value);
+                break;
+            case cStorageApCmdNvsmqttpasswd:
+                sStorageApSetNvsmqttpasswd((char *)param->value);
                 break;
             default:
                 break;
