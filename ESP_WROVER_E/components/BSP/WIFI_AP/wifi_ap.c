@@ -372,28 +372,35 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
 // 保存处理程序 - 处理配置表单提交
 static esp_err_t save_handler(httpd_req_t *req)
 {
-    char buf[1024];
+    // 使用外部RAM分配缓冲区
+    char *buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
+    if (buf == NULL) {
+        httpd_resp_send(req, "Memory allocation failed", 25);
+        return ESP_OK;
+    }
+    
     int ret, remaining = req->content_len;
     int received = 0;
     
     // 清空缓冲区
-    memset(buf, 0, sizeof(buf));
+    memset(buf, 0, 1024);
     
     // 读取表单数据
     while (remaining > 0) {
-        int chunk_size = (remaining < sizeof(buf) - 1) ? remaining : (sizeof(buf) - 1);
+        int chunk_size = (remaining < 1023) ? remaining : 1023;
         ret = httpd_req_recv(req, buf + received, chunk_size);
         if (ret <= 0) {
             if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
                 httpd_resp_send_408(req);
             }
+            heap_caps_free(buf);
             return ESP_FAIL;
         }
         received += ret;
         remaining -= ret;
         
         // 防止缓冲区溢出
-        if (received >= sizeof(buf) - 1) {
+        if (received >= 1023) {
             break;
         }
     }
@@ -423,6 +430,7 @@ static esp_err_t save_handler(httpd_req_t *req)
         g_string_var,
         g_sn);
     
+    heap_caps_free(buf);
     return ESP_OK;
 }
 
