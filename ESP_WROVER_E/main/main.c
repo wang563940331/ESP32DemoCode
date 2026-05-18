@@ -50,6 +50,7 @@ void system_info_timercb(TimerHandle_t timer)
 
 void init_netWork(void)
 {
+    char sn[20] = {0};
     esp_err_t ret;
     ESP_LOGI(TAG, "初始化网络配置");
     // 初始化网络栈
@@ -69,8 +70,11 @@ void init_netWork(void)
     
     ESP_LOGI(TAG, "创建WiFi STA和AP接口...");
     // 创建WiFi STA和AP接口
-    esp_netif_create_default_wifi_sta();
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
     esp_netif_create_default_wifi_ap();
+    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
+    // 设置STA接口的主机名（路由器上显示的设备名称）
+    esp_netif_set_hostname(sta_netif, sn);
     
     ESP_LOGI(TAG, "初始化WiFi...");
     // 初始化WiFi
