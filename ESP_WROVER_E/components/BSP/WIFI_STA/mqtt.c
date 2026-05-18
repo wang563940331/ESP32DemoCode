@@ -15,6 +15,7 @@
 #include <sys/time.h>  // 用于gettimeofday函数
 #include "utility.h"
 #include "parameterSet.h"
+#include "one_wire_bsp.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -242,7 +243,7 @@ void send_ctrlacl(const char *data) {
  * @brief 发送包含设备信息和时间戳的JSON数据到MQTT服务器
  * @param data 要发送的headid数据指针
  */
-void send_head(const char *data) {
+void send_head(const char *data,float temperature, float humidity) {
     time_t now;                    // 存储当前时间的变量
     struct tm timeinfo;            // 存储格式化后的时间信息
     time(&now);                    // 获取当前时间
@@ -257,6 +258,12 @@ void send_head(const char *data) {
     cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
+    // 添加字段：temperature
+    cJSON_AddItemToObject(root, "temperature", cJSON_CreateNumber(temperature));
+    // 添加字段：humidity（仅在有效时添加）
+    if (humidity >= 0) {
+        cJSON_AddItemToObject(root, "humidity", cJSON_CreateNumber(humidity));
+    }
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
     // 转为 JSON 字符串（压缩格式，适合MQTT发送）
@@ -306,6 +313,19 @@ void my_task(void *pvParameters)
     char mqtt_pub_buff[64]={0};
     // 事件位变量，用于存储WiFi事件
     EventBits_t ev = 0;
+    const one_wire_device_t* sensor = one_wire_factory_get_device(GPIO_NUM_27);
+    
+    if (sensor == NULL) {
+        ESP_LOGE(TAG, "单总线传感器设备获取失败");
+        return;
+    }
+    
+    // 初始化
+    esp_err_t ret = sensor->Init(GPIO_NUM_27);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "单总线传感器初始化失败");
+        return;
+    }
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
     // 获取WiFi事件句柄
@@ -328,9 +348,20 @@ void my_task(void *pvParameters)
             }
             if(tickOut(&tims,15*1000))
             {
+                float temp = sensor->GetTemperature(GPIO_NUM_27);
+                float humi = sensor->GetHumidity(GPIO_NUM_27);
+                if (temp != -1000.0f) {
+                    if (humi >= 0) {
+                        ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
+                    } else {
+                        ESP_LOGI(TAG, "温度: %.2f°C", temp);
+                    }
+                } else {
+                    ESP_LOGE(TAG, "读取传感器数据失败");
+                }
                 tickOut(&tims,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
-                send_head(mqtt_pub_buff);
+                send_head(mqtt_pub_buff,temp,humi);
             }
         }
         else

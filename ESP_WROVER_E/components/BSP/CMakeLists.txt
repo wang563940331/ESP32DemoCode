@@ -8,7 +8,7 @@ set(src_dirs
         PARAM
         UART
         GPIO_OUTPUT
-        DS18B20
+        ONE_WIRE
         )
 
 set(include_dirs
@@ -21,7 +21,7 @@ set(include_dirs
         PARAM
         UART
         GPIO_OUTPUT
-        DS18B20
+        ONE_WIRE
         )
 
 set(requires
