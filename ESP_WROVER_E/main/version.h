@@ -8,7 +8,7 @@ extern "C" {
 #define APP_VERSION_GIT_HASH      GIT_COMMIT_HASH
 #define APP_VERSION_TAG           GIT_TAG_VERSION
 #define APP_VERSION_DATE          GIT_COMMIT_DATE
-#define APP_VERSION_FULL          "v" APP_VERSION_TAG "-" APP_VERSION_GIT_HASH
+#define APP_VERSION_FULL          APP_VERSION_TAG "-" APP_VERSION_GIT_HASH
 
 const char *app_get_version_hash(void);
 const char *app_get_version_tag(void);
