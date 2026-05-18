@@ -24,6 +24,7 @@
 #include <esp_heap_caps.h>
 #include "shell.h"
 #include "uart_bsp.h"
+#include "ds18b20_bsp.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -192,11 +193,31 @@ void app_main(void)
         return;
     }
     uart2->Init(UART_NUM_2);
+
+    const ds18b20_device_t* ds18b20 = ds18b20_factory_get_device(GPIO_NUM_27);
+    
+    if (ds18b20 == NULL) {
+        ESP_LOGE(TAG, "DS18B20设备获取失败");
+        return;
+    }
+    
+    // 初始化
+    esp_err_t ret = ds18b20->Init(GPIO_NUM_27);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "DS18B20初始化失败");
+        return;
+    }
+
     uint16_t len = 0;
     char data[1024] = {"hello world"};
     while(1)
     {
-        //  uart1->Write(UART_NUM_1, data, len);
+        float temp = ds18b20->GetTemperature(GPIO_NUM_27);
+        if (temp != -1000.0f) {
+            ESP_LOGI(TAG, "温度: %.2f°C", temp);
+        } else {
+            ESP_LOGE(TAG, "读取温度失败");
+        }
 
         len = uart1->GetBufferedDataLen(UART_NUM_1);
         if (len > 0)
