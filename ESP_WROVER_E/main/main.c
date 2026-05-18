@@ -25,6 +25,7 @@
 #include "shell.h"
 #include "uart_bsp.h"
 #include "json.h"
+#include "sd_fat_bsp.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -194,6 +195,8 @@ void app_main(void)
     }
     uart2->Init(UART_NUM_2);
 
+
+     sdcardinit();
 
 
     uint16_t len = 0;

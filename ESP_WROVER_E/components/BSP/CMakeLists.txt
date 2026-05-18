@@ -9,6 +9,7 @@ set(src_dirs
         UART
         GPIO_OUTPUT
         ONE_WIRE
+        SD_FAT
         )
 
 set(include_dirs
@@ -22,6 +23,7 @@ set(include_dirs
         UART
         GPIO_OUTPUT
         ONE_WIRE
+        SD_FAT
         )
 
 set(requires
@@ -34,6 +36,8 @@ set(requires
         mqtt
         json
         main
+        fatfs
+        sdmmc
         )
 
 idf_component_register(SRC_DIRS ${src_dirs} INCLUDE_DIRS ${include_dirs} REQUIRES ${requires})
