@@ -14,6 +14,7 @@
 #include "utility.h"
 #include "parameterSet.h"
 #include "simple_wifi_sta.h"
+#include "parameter.h"
 // Forward declaration
 esp_err_t mqtt_reinit(void);
 #define  HTTPServerSize 1024*8
@@ -191,6 +192,7 @@ static esp_err_t root_handler(httpd_req_t *req)
         "        input[type='text'], input[type='number'] { width: 300px; padding: 5px; }"
         "        input[type='submit'] { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }"
         "        input[type='button'] { padding: 10px 20px; background-color: #f44336; color: white; border: none; cursor: pointer; margin-left: 10px; }"
+        "        input[type='button'].restore-btn { padding: 10px 20px; background-color: #ff9800; color: white; border: none; cursor: pointer; margin-left: 10px; }"
         "        .config { background-color: #f0f0f0; padding: 15px; margin-top: 20px; }"
         "    </style>"
         "</head>"
@@ -206,6 +208,7 @@ static esp_err_t root_handler(httpd_req_t *req)
     strlcat(response,
         "        <br><input type='submit' value='保存'>"
         "        <input type='button' value='重启设备' onclick=\"restartDevice()\">"
+        "        <input type='button' class='restore-btn' value='复位参数' onclick=\"restoreDefaults()\">"
         "    </form>"
         "    <script>"
         "        function restartDevice() {"
@@ -214,6 +217,21 @@ static esp_err_t root_handler(httpd_req_t *req)
         "                xhr.open('GET', '/restart', true);"
         "                xhr.send();"
         "                alert('设备即将重启，请重新连接'); "
+        "            }"
+        "        }"
+        "        function restoreDefaults() {"
+        "            if(confirm('确定要复位所有参数到默认值吗？此操作不可恢复！')) {"
+        "                var xhr = new XMLHttpRequest();"
+        "                xhr.open('GET', '/restore_defaults', true);"
+        "                xhr.onload = function() {"
+        "                    if(xhr.responseText === 'OK') {"
+        "                        alert('参数复位成功，页面将刷新');"
+        "                        location.reload();"
+        "                    } else {"
+        "                        alert('参数复位失败');"
+        "                    }"
+        "                };"
+        "                xhr.send();"
         "            }"
         "        }"
         "    </script>"
@@ -418,6 +436,26 @@ static esp_err_t restart_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// 复位参数处理程序
+static esp_err_t restore_defaults_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "开始复位参数...");
+    
+    bool result = sNvsParamRestoreDefaults();
+    
+    if (result) {
+        ESP_LOGI(TAG, "参数复位成功");
+        httpd_resp_send(req, "OK", 2);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_restart();
+    } else {
+        ESP_LOGE(TAG, "参数复位失败");
+        httpd_resp_send(req, "FAIL", 4);
+    }
+    
+    return ESP_OK;
+}
+
 // 启动HTTP服务器
 static httpd_handle_t start_webserver(void)
 {
@@ -454,6 +492,14 @@ static httpd_handle_t start_webserver(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &restart_uri);
+    
+    httpd_uri_t restore_defaults_uri = {
+        .uri      = "/restore_defaults",
+        .method   = HTTP_GET,
+        .handler  = restore_defaults_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &restore_defaults_uri);
     
     return server;
 }

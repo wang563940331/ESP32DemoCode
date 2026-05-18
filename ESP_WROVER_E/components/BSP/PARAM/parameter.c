@@ -423,3 +423,67 @@ bool NVS_init(void)
 
     return bRst;
 }
+
+/***************************************************************************************************
+* Description                           :     恢复默认参数
+* Author                                :     AutoGen
+* Creat Date                            :     2026-05-17
+* notice                                :     将NVS参数恢复为g_stParamConfig中定义的默认值
+****************************************************************************************************/
+bool sNvsParamRestoreDefaults(void)
+{
+    ESP_LOGI(TAG, "Restoring default parameters...");
+    
+    bool bRst = false;
+    
+    // 获取锁
+    if (sNvsParamLock())
+    {
+        // 生成默认JSON配置
+        char *pDefaultJson = generateDefaultJsonString();
+        if (pDefaultJson != NULL)
+        {
+            // 删除旧的JSON对象
+            if (stNvsCache.pJsonParam != NULL)
+            {
+                cJSON_Delete(stNvsCache.pJsonParam);
+                stNvsCache.pJsonParam = NULL;
+            }
+            
+            // 解析新的默认JSON
+            stNvsCache.pJsonParam = cJSON_Parse(pDefaultJson);
+            free(pDefaultJson);
+            
+            if (stNvsCache.pJsonParam != NULL)
+            {
+                // 保存到NVS
+                bRst = sNvsParamSet();
+                if (bRst)
+                {
+                    ESP_LOGI(TAG, "Default parameters restored successfully");
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "Failed to save default parameters");
+                }
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to parse default JSON");
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Failed to generate default JSON");
+        }
+        
+        // 释放锁
+        sNvsParamUnlock();
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to acquire NVS lock");
+    }
+    
+    return bRst;
+}

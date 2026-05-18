@@ -200,4 +200,5 @@ bool sNvsParamLock(void);
 bool sNvsParamSet(void);
 cJSON *sNvsParamGet(void);
 char* generateDefaultJsonString(void);
+bool sNvsParamRestoreDefaults(void);
 #endif
