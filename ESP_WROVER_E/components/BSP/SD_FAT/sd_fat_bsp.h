@@ -29,18 +29,18 @@ typedef struct {
 } sd_fat_config_t;
 
 typedef struct {
-    esp_err_t (*Init)(int gpio_num);
-    esp_err_t (*Mount)(int gpio_num);
-    esp_err_t (*Unmount)(int gpio_num);
-    esp_err_t (*ReadFile)(int gpio_num, const char* path, char* buffer, size_t* len);
-    esp_err_t (*WriteFile)(int gpio_num, const char* path, const char* data, size_t len);
-    esp_err_t (*ListDir)(int gpio_num, const char* path);
-    bool (*IsCardPresent)(int gpio_num);
-    esp_err_t (*GetCardHandle)(int gpio_num, sdmmc_card_t** card);
+    esp_err_t (*Init)(const char* name);
+    esp_err_t (*Mount)(const char* name);
+    esp_err_t (*Unmount)(const char* name);
+    esp_err_t (*ReadFile)(const char* name, const char* path, char* buffer, size_t* len);
+    esp_err_t (*WriteFile)(const char* name, const char* path, const char* data, size_t len);
+    esp_err_t (*ListDir)(const char* name, const char* path);
+    bool (*IsCardPresent)(const char* name);
+    esp_err_t (*GetCardHandle)(const char* name, sdmmc_card_t** card);
 } sd_fat_device_t;
 
-esp_err_t sd_fat_factory_init(int gpio_num);
-const sd_fat_device_t* sd_fat_factory_get_device(int gpio_num);
+esp_err_t sd_fat_factory_init(const char* name);
+const sd_fat_device_t* sd_fat_factory_get_device(const char* name);
 void sdcardinit(void);
 
 #endif

@@ -1,6 +1,7 @@
 #include "sd_fat_bsp.h"
 #include "esp_log.h"
 #include "dirent.h"
+#include "string.h"
 
 static const char* TAG = "sd_fat_bsp";
 
@@ -33,19 +34,17 @@ static sd_fat_full_device_t sd_fat_devices[] = {
 
 static const int sd_fat_count = sizeof(sd_fat_devices) / sizeof(sd_fat_devices[0]);
 
-static sd_fat_full_device_t* get_sd_fat_device(int gpio_num) {
+static sd_fat_full_device_t* get_sd_fat_device(const char* name) {
     for (int i = 0; i < sd_fat_count; i++) {
-        if (sd_fat_devices[i].config.gpio_cmd == gpio_num || 
-            sd_fat_devices[i].config.gpio_clk == gpio_num ||
-            sd_fat_devices[i].config.gpio_d0 == gpio_num) {
+        if (strcmp(sd_fat_devices[i].config.name, name) == 0) {
             return &sd_fat_devices[i];
         }
     }
     return NULL;
 }
 
-static esp_err_t sdmmc_init(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_init(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
 
     const sd_fat_config_t* config = &dev->config;
@@ -64,8 +63,8 @@ static esp_err_t sdmmc_init(int gpio_num) {
     return ESP_OK;
 }
 
-static esp_err_t sdmmc_mount(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_mount(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
 
     if (dev->mounted) return ESP_OK;
@@ -109,8 +108,8 @@ static esp_err_t sdmmc_mount(int gpio_num) {
     return ret;
 }
 
-static esp_err_t sdmmc_unmount(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_unmount(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
 
     if (!dev->mounted) return ESP_OK;
@@ -124,8 +123,8 @@ static esp_err_t sdmmc_unmount(int gpio_num) {
     return ret;
 }
 
-static esp_err_t sdmmc_read_file(int gpio_num, const char* path, char* buffer, size_t* len) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_read_file(const char* name, const char* path, char* buffer, size_t* len) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
 
     char full_path[256];
@@ -142,8 +141,8 @@ static esp_err_t sdmmc_read_file(int gpio_num, const char* path, char* buffer, s
     return ESP_OK;
 }
 
-static esp_err_t sdmmc_write_file(int gpio_num, const char* path, const char* data, size_t len) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_write_file(const char* name, const char* path, const char* data, size_t len) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
 
     char full_path[256];
@@ -160,8 +159,8 @@ static esp_err_t sdmmc_write_file(int gpio_num, const char* path, const char* da
     return ESP_OK;
 }
 
-static esp_err_t sdmmc_list_dir(int gpio_num, const char* path) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
 
     char full_path[256];
@@ -183,15 +182,15 @@ static esp_err_t sdmmc_list_dir(int gpio_num, const char* path) {
     return ESP_OK;
 }
 
-static bool sdmmc_is_card_present(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static bool sdmmc_is_card_present(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return false;
     if (dev->config.gpio_cd == GPIO_NUM_NC) return true;
     return gpio_get_level(dev->config.gpio_cd) == 0;
 }
 
-static esp_err_t sdmmc_get_card_handle(int gpio_num, sdmmc_card_t** card) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+static esp_err_t sdmmc_get_card_handle(const char* name, sdmmc_card_t** card) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted || !dev->card) return ESP_ERR_INVALID_STATE;
     *card = dev->card;
     return ESP_OK;
@@ -208,34 +207,39 @@ static const sd_fat_device_t sdmmc_device = {
     .GetCardHandle = sdmmc_get_card_handle
 };
 
-esp_err_t sd_fat_factory_init(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+esp_err_t sd_fat_factory_init(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
-    return sdmmc_init(gpio_num);
+    return sdmmc_init(name);
 }
 
-const sd_fat_device_t* sd_fat_factory_get_device(int gpio_num) {
-    sd_fat_full_device_t* dev = get_sd_fat_device(gpio_num);
+/**
+ * 获取SD FAT设备
+ * @param gpio_num GPIO引脚号
+ * @return 返回指向SD FAT设备的指针，如果设备不存在则返回NULL
+ */
+const sd_fat_device_t* sd_fat_factory_get_device(const char *name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return NULL;
     return &sdmmc_device;
 }
 
 void sdcardinit(void)
 {
-    const sd_fat_device_t* sd_card = sd_fat_factory_get_device(GPIO_NUM_15);
+    const sd_fat_device_t* sd_card = sd_fat_factory_get_device("SD_CARD");
     if (sd_card != NULL) {
-        esp_err_t ret = sd_card->Init(GPIO_NUM_15);
+        esp_err_t ret = sd_card->Init("SD_CARD");
         if (ret == ESP_OK) {
             ESP_LOGI(TAG, "SD卡初始化成功");
-            ret = sd_card->Mount(GPIO_NUM_15);
+            ret = sd_card->Mount("SD_CARD");
             if (ret == ESP_OK) {
                 ESP_LOGI(TAG, "SD卡挂载成功");
                 
                 ESP_LOGI(TAG, "列出SD卡根目录文件:");
-                sd_card->ListDir(GPIO_NUM_15, "");
+                sd_card->ListDir("SD_CARD", "");
                 
                 sdmmc_card_t* card = NULL;
-                ret = sd_card->GetCardHandle(GPIO_NUM_15, &card);
+                ret = sd_card->GetCardHandle("SD_CARD", &card);
                 if (ret == ESP_OK && card != NULL) {
                     ESP_LOGI(TAG, "SD卡信息:");
                     ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * 512 / 1024 / 1024);
