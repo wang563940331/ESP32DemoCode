@@ -62,13 +62,13 @@ static void pwmCrl(float data)
 {
     float angles = PWMPCLOSE;
     angles = data;
-    if(angles > 0.1)//2ms  20*0.1    90°
+    if(angles > PWMPMAX)//2ms  20*0.1    90°
     {
-        angles = 0.1;//1ms  20*0.05   0°
+        angles = PWMPMAX;//1ms  20*0.05   0°
     }
-    else if (angles <0.05)
+    else if (angles < PWMMIN)
     {
-        angles = 0.05;
+        angles = PWMMIN;
     }
 
     pwmSet(50,4095* angles);//1ms  20*0.05   0°

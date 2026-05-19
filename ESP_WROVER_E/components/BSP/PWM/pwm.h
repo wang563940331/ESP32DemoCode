@@ -52,9 +52,20 @@
 /* 引脚定义 */
 #define PWM_GPIO_PIN    GPIO_NUM_26  /* LED连接的GPIO端口 */
 
+#define steeringengine 180
+#if steeringengine == 90
 #define PWMPCLOSE  0.1
 #define PWMPEN 0.075
 
+#define PWMPMAX 0.1
+#define PWMMIN 0.05
+#elif steeringengine == 180
+#define PWMPCLOSE  0.075
+#define PWMPEN 0.052
+
+#define PWMPMAX 0.1
+#define PWMMIN 0.05
+#endif
 /* 函数声明*/
 int pwm_init(void);    /* 初始化LED */
 void pwmSet(uint32_t new_freq,uint32_t  duty);
