@@ -2,14 +2,17 @@
 #include "esp_log.h"
 #include "dirent.h"
 #include "string.h"
-
+#include "my_log.h"
 static const char* TAG = "sd_fat_bsp";
 
+/**
+ * @brief SD FAT完整设备结构体
+ */
 typedef struct {
-    sd_fat_config_t config;//SD FAT配置
-    sd_fat_device_t device;//SD FAT设备
-    sdmmc_card_t* card;//SD卡句柄
-    bool mounted;//是否挂载
+    sd_fat_config_t config;    /* SD FAT配置 */
+    sd_fat_device_t device;    /* SD FAT设备操作接口 */
+    sdmmc_card_t* card;        /* SD卡句柄 */
+    bool mounted;              /* 是否已挂载 */
 } sd_fat_full_device_t;
 
 static sd_fat_full_device_t sd_fat_devices[] = {
@@ -34,6 +37,12 @@ static sd_fat_full_device_t sd_fat_devices[] = {
 
 static const int sd_fat_count = sizeof(sd_fat_devices) / sizeof(sd_fat_devices[0]);
 
+/**
+ * @brief 根据设备名称获取SD FAT设备
+ * 
+ * @param name 设备名称
+ * @return sd_fat_full_device_t* 返回指向设备的指针，未找到返回NULL
+ */
 static sd_fat_full_device_t* get_sd_fat_device(const char* name) {
     for (int i = 0; i < sd_fat_count; i++) {
         if (strcmp(sd_fat_devices[i].config.name, name) == 0) {
@@ -43,6 +52,14 @@ static sd_fat_full_device_t* get_sd_fat_device(const char* name) {
     return NULL;
 }
 
+/**
+ * @brief 初始化SD卡硬件
+ * 
+ * 配置卡检测引脚为输入模式（如果配置了的话）
+ * 
+ * @param name 设备名称
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_init(const char* name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
@@ -63,6 +80,14 @@ static esp_err_t sdmmc_init(const char* name) {
     return ESP_OK;
 }
 
+/**
+ * @brief 挂载SD卡文件系统
+ * 
+ * 初始化SPI总线并挂载FAT文件系统到指定挂载点
+ * 
+ * @param name 设备名称
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_mount(const char* name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
@@ -75,7 +100,7 @@ static esp_err_t sdmmc_mount(const char* name) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    sdmmc_host_t host = SDSPI_HOST_DEFAULT();//默认SPI主机
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     host.max_freq_khz = config->max_freq_khz;
 
     esp_err_t ret = spi_bus_initialize(host.slot, &(spi_bus_config_t){
@@ -90,13 +115,13 @@ static esp_err_t sdmmc_mount(const char* name) {
     }
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
-    slot_config.gpio_cs = config->gpio_d3;//片选引脚
-    slot_config.host_id = host.slot;//主机ID
+    slot_config.gpio_cs = config->gpio_d3;
+    slot_config.host_id = host.slot;
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,//是否格式化失败的挂载点
-        .max_files = 5,//最大文件数
-        .allocation_unit_size = 16 * 1024//分配单元大小
+        .format_if_mount_failed = false,
+        .max_files = 5,
+        .allocation_unit_size = 16 * 1024
     };
 
     ret = esp_vfs_fat_sdspi_mount(config->mount_point, &host, &slot_config, &mount_config, &dev->card);
@@ -108,6 +133,12 @@ static esp_err_t sdmmc_mount(const char* name) {
     return ret;
 }
 
+/**
+ * @brief 卸载SD卡文件系统
+ * 
+ * @param name 设备名称
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_unmount(const char* name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
@@ -123,6 +154,15 @@ static esp_err_t sdmmc_unmount(const char* name) {
     return ret;
 }
 
+/**
+ * @brief 从SD卡读取文件
+ * 
+ * @param name 设备名称
+ * @param path 文件相对路径
+ * @param buffer 数据缓冲区
+ * @param len [in]缓冲区大小，[out]实际读取的字节数
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_read_file(const char* name, const char* path, char* buffer, size_t* len) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
@@ -141,6 +181,15 @@ static esp_err_t sdmmc_read_file(const char* name, const char* path, char* buffe
     return ESP_OK;
 }
 
+/**
+ * @brief 向SD卡写入文件
+ * 
+ * @param name 设备名称
+ * @param path 文件相对路径
+ * @param data 要写入的数据
+ * @param len 数据长度
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_write_file(const char* name, const char* path, const char* data, size_t len) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
@@ -159,6 +208,13 @@ static esp_err_t sdmmc_write_file(const char* name, const char* path, const char
     return ESP_OK;
 }
 
+/**
+ * @brief 列出指定目录下的文件和文件夹
+ * 
+ * @param name 设备名称
+ * @param path 目录相对路径（NULL或空表示根目录）
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted) return ESP_ERR_INVALID_STATE;
@@ -182,6 +238,14 @@ static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
     return ESP_OK;
 }
 
+/**
+ * @brief 检查SD卡是否存在
+ * 
+ * 如果配置了卡检测引脚，则读取引脚状态；否则默认认为卡存在
+ * 
+ * @param name 设备名称
+ * @return bool true表示卡存在，false表示卡不存在或设备无效
+ */
 static bool sdmmc_is_card_present(const char* name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return false;
@@ -189,6 +253,13 @@ static bool sdmmc_is_card_present(const char* name) {
     return gpio_get_level(dev->config.gpio_cd) == 0;
 }
 
+/**
+ * @brief 获取SD卡句柄
+ * 
+ * @param name 设备名称
+ * @param card [out]SD卡句柄指针
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 static esp_err_t sdmmc_get_card_handle(const char* name, sdmmc_card_t** card) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev || !dev->mounted || !dev->card) return ESP_ERR_INVALID_STATE;
@@ -207,6 +278,12 @@ static const sd_fat_device_t sdmmc_device = {
     .GetCardHandle = sdmmc_get_card_handle
 };
 
+/**
+ * @brief 初始化指定的SD FAT设备
+ * 
+ * @param name 设备名称
+ * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ */
 esp_err_t sd_fat_factory_init(const char* name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
     if (!dev) return ESP_ERR_NOT_FOUND;
@@ -214,9 +291,10 @@ esp_err_t sd_fat_factory_init(const char* name) {
 }
 
 /**
- * 获取SD FAT设备
- * @param gpio_num GPIO引脚号
- * @return 返回指向SD FAT设备的指针，如果设备不存在则返回NULL
+ * @brief 获取SD FAT设备操作接口
+ * 
+ * @param name 设备名称
+ * @return const sd_fat_device_t* 返回指向SD FAT设备的指针，如果设备不存在则返回NULL
  */
 const sd_fat_device_t* sd_fat_factory_get_device(const char *name) {
     sd_fat_full_device_t* dev = get_sd_fat_device(name);
@@ -224,34 +302,46 @@ const sd_fat_device_t* sd_fat_factory_get_device(const char *name) {
     return &sdmmc_device;
 }
 
-void sdcardinit(void)
-{
-    const sd_fat_device_t* sd_card = sd_fat_factory_get_device("SD_CARD");
-    if (sd_card != NULL) {
-        esp_err_t ret = sd_card->Init("SD_CARD");
-        if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "SD卡初始化成功");
-            ret = sd_card->Mount("SD_CARD");
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "SD卡挂载成功");
-                
-                ESP_LOGI(TAG, "列出SD卡根目录文件:");
-                sd_card->ListDir("SD_CARD", "");
-                
-                sdmmc_card_t* card = NULL;
-                ret = sd_card->GetCardHandle("SD_CARD", &card);
-                if (ret == ESP_OK && card != NULL) {
-                    ESP_LOGI(TAG, "SD卡信息:");
-                    ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * 512 / 1024 / 1024);
-                    ESP_LOGI(TAG, "  块大小: %d bytes", card->csd.sector_size);
-                }
-            } else {
-                ESP_LOGE(TAG, "SD卡挂载失败: %s", esp_err_to_name(ret));
-            }
-        } else {
-            ESP_LOGE(TAG, "SD卡初始化失败: %s", esp_err_to_name(ret));
-        }
-    } else {
-        ESP_LOGE(TAG, "SD卡实例化失败");
-    }
+/**
+ * @brief 获取SD卡挂载点路径
+ * 
+ * @param name 设备名称
+ * @return const char* 返回挂载点路径，如果设备不存在则返回NULL
+ */
+const char* sd_fat_get_mount_point(const char* name) {
+    sd_fat_full_device_t* dev = get_sd_fat_device(name);
+    if (!dev) return NULL;
+    return dev->config.mount_point;
 }
+
+// void sdcardinit(void)
+// {
+//     const sd_fat_device_t* sd_card = sd_fat_factory_get_device("SD_CARD");
+//     if (sd_card != NULL) {
+//         esp_err_t ret = sd_card->Init("SD_CARD");
+//         if (ret == ESP_OK) {
+//             ESP_LOGI(TAG, "SD卡初始化成功");
+//             ret = sd_card->Mount("SD_CARD");
+//             if (ret == ESP_OK) {
+//                 ESP_LOGI(TAG, "SD卡挂载成功");
+                
+//                 ESP_LOGI(TAG, "列出SD卡根目录文件:");
+//                 sd_card->ListDir("SD_CARD", "");
+                
+//                 sdmmc_card_t* card = NULL;
+//                 ret = sd_card->GetCardHandle("SD_CARD", &card);
+//                 if (ret == ESP_OK && card != NULL) {
+//                     ESP_LOGI(TAG, "SD卡信息:");
+//                     ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * 512 / 1024 / 1024);
+//                     ESP_LOGI(TAG, "  块大小: %d bytes", card->csd.sector_size);
+//                 }
+//             } else {
+//                 ESP_LOGE(TAG, "SD卡挂载失败: %s", esp_err_to_name(ret));
+//             }
+//         } else {
+//             ESP_LOGE(TAG, "SD卡初始化失败: %s", esp_err_to_name(ret));
+//         }
+//     } else {
+//         ESP_LOGE(TAG, "SD卡实例化失败");
+//     }
+// }

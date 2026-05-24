@@ -26,6 +26,7 @@
 #include "uart_bsp.h"
 #include "json.h"
 #include "sd_fat_bsp.h"
+#include "sd_fat_ops.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -113,6 +114,29 @@ void init_netWork(void)
     }
 }
 
+void example() {
+    // 初始化SD卡
+    sd_fat_ops_init("SD_CARD");
+    
+    // 写入文件
+    sd_fat_ops_write_file("SD_CARD", "test.txt", "Hello SD Card!", 14);
+    
+    // 读取文件
+    char buffer[256];
+    size_t len = sizeof(buffer);
+    sd_fat_ops_read_file("SD_CARD", "test.txt", buffer, &len);
+    
+    // 列出目录
+    sd_fat_ops_list_dir("SD_CARD", "");
+    
+    // 获取SD卡信息
+    sd_card_info_t info;
+    sd_fat_ops_get_card_info("SD_CARD", &info);
+    
+    // 反初始化
+    sd_fat_ops_deinit("SD_CARD");
+}
+
 void en_log_set(void)
 {
     log_mutex = xSemaphoreCreateMutex();
@@ -196,7 +220,8 @@ void app_main(void)
     uart2->Init(UART_NUM_2);
 
 
-     sdcardinit();
+    //  sdcardinit();
+    example();
 
 
     uint16_t len = 0;
