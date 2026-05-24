@@ -6,10 +6,10 @@
 static const char* TAG = "sd_fat_bsp";
 
 typedef struct {
-    sd_fat_config_t config;
-    sd_fat_device_t device;
-    sdmmc_card_t* card;
-    bool mounted;
+    sd_fat_config_t config;//SD FAT配置
+    sd_fat_device_t device;//SD FAT设备
+    sdmmc_card_t* card;//SD卡句柄
+    bool mounted;//是否挂载
 } sd_fat_full_device_t;
 
 static sd_fat_full_device_t sd_fat_devices[] = {
@@ -19,13 +19,13 @@ static sd_fat_full_device_t sd_fat_devices[] = {
             .gpio_cmd = GPIO_NUM_15,
             .gpio_d0 = GPIO_NUM_2,
             .gpio_d1 = GPIO_NUM_4,
-            .gpio_d2 = GPIO_NUM_12,
-            .gpio_d3 = GPIO_NUM_13,
-            .gpio_cd = GPIO_NUM_35,
+            .gpio_d2 = GPIO_NUM_NC,
+            .gpio_d3 = GPIO_NUM_NC,
+            .gpio_cd = GPIO_NUM_NC,
             .type = SD_FAT_TYPE_SPI,
             .name = "SD_CARD",
             .mount_point = "/sdcard",
-            .max_freq_khz = 4000
+            .max_freq_khz = 8000
         },
         .card = NULL,
         .mounted = false
@@ -75,7 +75,7 @@ static esp_err_t sdmmc_mount(const char* name) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();//默认SPI主机
     host.max_freq_khz = config->max_freq_khz;
 
     esp_err_t ret = spi_bus_initialize(host.slot, &(spi_bus_config_t){
@@ -90,13 +90,13 @@ static esp_err_t sdmmc_mount(const char* name) {
     }
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
-    slot_config.gpio_cs = config->gpio_d3;
-    slot_config.host_id = host.slot;
+    slot_config.gpio_cs = config->gpio_d3;//片选引脚
+    slot_config.host_id = host.slot;//主机ID
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,
-        .max_files = 5,
-        .allocation_unit_size = 16 * 1024
+        .format_if_mount_failed = false,//是否格式化失败的挂载点
+        .max_files = 5,//最大文件数
+        .allocation_unit_size = 16 * 1024//分配单元大小
     };
 
     ret = esp_vfs_fat_sdspi_mount(config->mount_point, &host, &slot_config, &mount_config, &dev->card);

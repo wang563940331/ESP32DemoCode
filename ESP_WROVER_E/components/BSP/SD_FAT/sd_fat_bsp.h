@@ -15,17 +15,17 @@ typedef enum {
 } sd_fat_type_t;
 
 typedef struct {
-    int gpio_clk;
-    int gpio_cmd;
-    int gpio_d0;
-    int gpio_d1;
-    int gpio_d2;
-    int gpio_d3;
-    int gpio_cd;
-    sd_fat_type_t type;
-    const char* name;
-    const char* mount_point;
-    uint32_t max_freq_khz;
+    int gpio_clk;//时钟引脚
+    int gpio_cmd;//命令引脚
+    int gpio_d0;//数据引脚0
+    int gpio_d1;//数据引脚1
+    int gpio_d2;//数据引脚2
+    int gpio_d3;//数据引脚3
+    int gpio_cd;//卡检测引脚
+    sd_fat_type_t type;//SD FAT类型
+    const char* name;//设备名称
+    const char* mount_point;//挂载点
+    uint32_t max_freq_khz;//最大频率（KHz）
 } sd_fat_config_t;
 
 typedef struct {
