@@ -139,7 +139,7 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
             ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_DATA:
-            EN_SLOGI(TAG,"topic=%.*s\r\n", event->topic_len, event->topic);       //收到Pub消息直接打印出来
+            EN_SLOGI(TAG,"topic=%.*s", event->topic_len, event->topic);       //收到Pub消息直接打印出来
             EN_SLOGI(TAG,"data=%.*s\r\n", event->data_len, event->data);
             parse_json(event->data,&Start_once);
             break;

@@ -21,19 +21,36 @@
 
 static const char* TAG = "sd_fat_log_task";
 
+/* 批量写入SD卡的日志条数 */
 #define BATCH_SIZE 8
+/* 互斥锁超时时间（毫秒），0表示不等待 */
 #define MUTEX_TIMEOUT_MS 0
+/* Unix纪元年份（1970年），用于判断系统时间是否已同步 */
 #define EPOCH_YEAR 1970
+/* SD卡挂载路径 */
 #define SD_MOUNT_POINT "/sdcard"
 
+/* 日志缓冲区读写互斥锁 */
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;
+/* SD卡日志缓冲区初始化标志 */
 static bool sdCardbuffer_init = false;
+/* 日志配置参数指针 */
 static const sd_fat_log_config_t* s_log_config = NULL;
+/* SD卡操作接口指针 */
 static const sd_fat_ops_t* s_sd_fat_ops = NULL;
+/* SD卡日志缓冲区结构体指针 */
 static sdCardLog_t* sdCardbuffer = NULL;
+/* 丢弃的日志计数（原子操作） */
 static volatile uint32_t dropped_log_count = 0;
+/* 系统时间是否为纪元时间标志 */
 static bool is_epoch_time = false;
 
+/**
+ * @brief 释放日志缓冲区读写互斥锁
+ * 
+ * 释放 WriteLogBuffMutex 互斥锁，允许其他任务访问共享的日志缓冲区。
+ * 与 en_log_write_read_mutex_lock() 配对使用，确保线程安全的缓冲区访问。
+ */
 void en_log_write_read_mutex_unlock(void)
 {
     if (WriteLogBuffMutex) {
@@ -49,6 +66,14 @@ bool en_log_write_read_mutex_lock(void)
     return xSemaphoreTake(WriteLogBuffMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE;
 }
 
+/**
+ * @brief 初始化SD卡日志缓冲区
+ * 
+ * 为日志缓冲区结构体分配内存空间，并初始化为0。
+ * 该函数采用惰性初始化策略，只有在缓冲区为空时才进行初始化。
+ * 
+ * @return 初始化成功返回 true，失败或已初始化返回 false
+ */
 bool sdCardBuffInit(void)
 {
     if (!sdCardbuffer) {
@@ -66,16 +91,38 @@ sdCardLog_t* getLogBuff(void)
     return sdCardbuffer;
 }
 
+/**
+ * @brief 获取丢弃的日志数量（原子操作）
+ * 
+ * 使用原子加载操作读取全局变量 dropped_log_count 的值，
+ * 确保在多线程环境下的线程安全访问。
+ * 
+ * @return 返回丢弃的日志总数
+ */
 uint32_t sd_fat_log_get_dropped_count(void)
 {
     return __atomic_load_n(&dropped_log_count, __ATOMIC_RELAXED);
 }
 
+/**
+ * @brief 重置丢弃日志计数（原子操作）
+ * 
+ * 使用原子存储操作将全局变量 dropped_log_count 重置为 0，
+ * 确保在多线程环境下的线程安全访问。
+ */
 void sd_fat_log_reset_dropped_count(void)
 {
     __atomic_store_n(&dropped_log_count, 0, __ATOMIC_RELAXED);
 }
 
+/**
+ * @brief 解析日志文件名，提取日期信息
+ * @param filename 日志文件名（格式：YYYY-MM-DD.log）
+ * @param year 解析出的年份
+ * @param mon 解析出的月份
+ * @param day 解析出的日期
+ * @return 解析成功返回true，失败返回false
+ */
 static bool parse_log_filename(const char* filename, uint16_t* year, uint8_t* mon, uint8_t* day)
 {
     if (!filename) {
@@ -90,6 +137,12 @@ static bool parse_log_filename(const char* filename, uint16_t* year, uint8_t* mo
     return sscanf(filename, "%hu-%hhu-%hhu.log", year, mon, day) == 3;
 }
 
+/**
+ * @brief 在SD卡上查找最新的日志文件
+ * @param path 输出参数，存储找到的最新日志文件名
+ * @param path_size path缓冲区大小
+ * @return 找到文件返回true，未找到返回false
+ */
 static bool find_latest_log_file(char* path, size_t path_size)
 {
     char latest_file[64] = {0};
@@ -137,6 +190,11 @@ static bool find_latest_log_file(char* path, size_t path_size)
     return false;
 }
 
+/**
+ * @brief 格式化时间戳字符串
+ * @param buffer 输出缓冲区
+ * @param size 缓冲区大小
+ */
 static inline void format_timestamp(char* buffer, size_t size)
 {
     time_t now = time(NULL);
@@ -150,6 +208,13 @@ static inline void format_timestamp(char* buffer, size_t size)
              tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
 }
 
+/**
+ * @brief 将日志写入SD卡缓冲区（线程安全）
+ * @param level 日志级别
+ * @param tag 日志标签
+ * @param format 格式化字符串
+ * @param ... 可变参数
+ */
 void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...)
 {
     if (!sdCardbuffer_init || !sdCardbuffer) {
@@ -194,22 +259,32 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     en_log_write_read_mutex_unlock();
 }
 
+/**
+ * @brief SD卡日志任务主循环
+ * @param arg 任务参数（未使用）
+ * 
+ * 该任务负责：
+ * 1. 管理日志文件按日期命名和切换
+ * 2. 处理系统时间未同步（epoch时间）的情况
+ * 3. 批量从缓冲区读取日志并写入SD卡
+ * 4. 定期监控丢弃的日志数量
+ */
 static void sdCardLogTask(void* arg)
 {
     ESP_LOGI(TAG, "SD card log task started");
 
-    static char path[64] = "2020-01-01.log";
-    static uint8_t last_day = 0, last_mon = 0;
-    static uint16_t last_year = 0;
-    static char last_path[64] = {0};
-    static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};
+    static char path[64] = "2020-01-01.log";      /* 当前日志文件路径 */
+    static uint8_t last_day = 0, last_mon = 0;    /* 上次写入的日期 */
+    static uint16_t last_year = 0;                /* 上次写入的年份 */
+    static char last_path[64] = {0};              /* 上次日志文件路径（用于删除） */
+    static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};  /* 批量写入缓冲区 */
 
-    uint32_t last_dropped_count = 0;
-    uint32_t monitor_interval_ms = 60000;
-    uint32_t last_monitor_time = esp_timer_get_time() / 1000;
+    uint32_t last_dropped_count = 0;              /* 上次监控时的丢弃计数 */
+    uint32_t monitor_interval_ms = 60000;         /* 监控间隔（毫秒） */
+    uint32_t last_monitor_time = esp_timer_get_time() / 1000;  /* 上次监控时间 */
 
-    bool first_run = true;
-    bool time_sync_completed = false;
+    bool first_run = true;                        /* 首次运行标志 */
+    bool time_sync_completed = false;             /* 时间同步完成标志（未使用） */
 
     while (1) {
         sdCardLog_t* getlogbuff = getLogBuff();
@@ -218,6 +293,7 @@ static void sdCardLogTask(void* arg)
             continue;
         }
 
+        /* 获取当前时间 */
         time_t now = time(NULL);
         struct tm tm_now;
         memset(&tm_now, 0, sizeof(struct tm));
@@ -229,10 +305,12 @@ static void sdCardLogTask(void* arg)
         uint16_t year = tm_now.tm_year + 1900;
         uint8_t mon = tm_now.tm_mon + 1;
 
+        /* 首次运行初始化 */
         if (first_run) {
             first_run = false;
             
             if (year == EPOCH_YEAR) {
+                /* 系统时间未同步，使用epoch时间 */
                 is_epoch_time = true;
                 ESP_LOGW(TAG, "System time is epoch (1970), searching for latest log file");
                 
@@ -249,6 +327,7 @@ static void sdCardLogTask(void* arg)
                     last_year = year;
                 }
             } else {
+                /* 系统时间已同步 */
                 is_epoch_time = false;
                 snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
                 last_day = tm_now.tm_mday;
@@ -257,6 +336,7 @@ static void sdCardLogTask(void* arg)
             }
         }
 
+        /* 时间同步完成后切换到正常时间命名 */
         if (is_epoch_time && year != EPOCH_YEAR) {
             ESP_LOGI(TAG, "Time sync completed, switching from epoch time to normal time: %u-%02u-%02d",
                      year, mon, tm_now.tm_mday);
@@ -267,6 +347,7 @@ static void sdCardLogTask(void* arg)
             last_mon = mon;
             last_year = year;
         } else if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
+            /* 日期变更，切换日志文件并删除旧文件 */
             if (last_day != 0) {
                 struct tm last_tm = {0};
                 last_tm.tm_year = last_year - 1900;
@@ -288,6 +369,7 @@ static void sdCardLogTask(void* arg)
                 }
             }
 
+            /* 创建新日期的日志文件 */
             snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
 
             last_day = tm_now.tm_mday;
@@ -295,6 +377,7 @@ static void sdCardLogTask(void* arg)
             last_year = year;
         }
 
+        /* 批量读取日志缓冲区 */
         int batch_count = 0;
         size_t total_len = 0;
 
@@ -322,6 +405,7 @@ static void sdCardLogTask(void* arg)
 
         en_log_write_read_mutex_unlock();
 
+        /* 批量写入SD卡 */
         if (batch_count > 0 && total_len > 0) {
             esp_err_t ret = s_sd_fat_ops->append_file("SD_CARD", path, batch_buffer, total_len);
             if (ret != ESP_OK) {
@@ -329,6 +413,7 @@ static void sdCardLogTask(void* arg)
             }
         }
 
+        /* 定期监控丢弃日志情况 */
         uint32_t current_time = esp_timer_get_time() / 1000;
         if (current_time - last_monitor_time >= monitor_interval_ms) {
             uint32_t dropped_count = sd_fat_log_get_dropped_count();
@@ -346,6 +431,19 @@ static void sdCardLogTask(void* arg)
     }
 }
 
+/**
+ * @brief 初始化SD卡日志任务
+ * @param config 日志任务配置参数
+ * @param ops SD卡操作接口
+ * @return ESP_OK表示成功，其他值表示失败
+ * 
+ * 初始化流程：
+ * 1. 参数有效性检查
+ * 2. 创建互斥锁
+ * 3. 保存配置和操作接口
+ * 4. 初始化日志缓冲区
+ * 5. 创建SD卡日志任务
+ */
 esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_ops_t* ops)
 {
     if (!config || !ops) {
@@ -353,21 +451,25 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* 创建日志缓冲区读写互斥锁 */
     WriteLogBuffMutex = xSemaphoreCreateMutex();
     if (!WriteLogBuffMutex) {
         ESP_LOGE(TAG, "Failed to create mutex");
         return ESP_FAIL;
     }
 
+    /* 保存配置和操作接口 */
     s_log_config = config;
     s_sd_fat_ops = ops;
 
+    /* 初始化SD卡日志缓冲区 */
     if (!sdCardBuffInit()) {
         ESP_LOGE(TAG, "Failed to initialize SD card buffer");
         vSemaphoreDelete(WriteLogBuffMutex);
         return ESP_FAIL;
     }
 
+    /* 创建SD卡日志任务 */
     if (xTaskCreate(sdCardLogTask, "sdCardLogTask", config->task_stack_size, NULL,
                     config->task_priority, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create sdCardLogTask");
@@ -376,6 +478,7 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
         return ESP_FAIL;
     }
 
+    /* 标记初始化完成 */
     sdCardbuffer_init = true;
     return ESP_OK;
 }
