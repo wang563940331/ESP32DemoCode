@@ -4,10 +4,33 @@
 #include "string.h"
 #include "sys/stat.h"
 #include "unistd.h"
+#include "errno.h"
+#include "dirent.h"
 #include "my_log.h"
+#include "sd_fat_log_task.h"
+#include "ff.h"
 static const char* TAG = "sd_fat_ops";
 
 static const sd_fat_device_t* s_sd_device = NULL;
+
+static const sd_fat_ops_t s_sd_fat_ops = {
+    .init = sd_fat_ops_init,
+    .deinit = sd_fat_ops_deinit,
+    .write_file = sd_fat_ops_write_file,
+    .read_file = sd_fat_ops_read_file,
+    .list_dir = sd_fat_ops_list_dir,
+    .create_dir = sd_fat_ops_create_dir,
+    .delete_file = sd_fat_ops_delete_file,
+    .delete_dir = sd_fat_ops_delete_dir,
+    .append_file = sd_fat_ops_append_file,
+    .is_file_exist = sd_fat_ops_is_file_exist,
+    .is_dir_exist = sd_fat_ops_is_dir_exist,
+    .get_card_info = sd_fat_ops_get_card_info,
+};
+
+const sd_fat_ops_t* sd_fat_get_ops(void) {
+    return &s_sd_fat_ops;
+}
 
 /**
  * @brief 初始化SD卡并挂载文件系统
@@ -123,7 +146,7 @@ esp_err_t sd_fat_ops_read_file(const char* device_name, const char* path, char* 
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Read file failed: %s, path: %s", esp_err_to_name(ret), path);
     } else {
-        ESP_LOGI(TAG, "Read file success: %s, size: %u bytes", path, (unsigned int)*len);
+        ESP_LOGI(TAG, "Read file success: %s, size: %d bytes", path, (unsigned int)*len);
     }
 
     return ret;
@@ -254,9 +277,9 @@ esp_err_t sd_fat_ops_append_file(const char* device_name, const char* path, cons
     char full_path[256];
     snprintf(full_path, sizeof(full_path), "%s/%s", mount_point, path);
 
-    FILE* f = fopen(full_path, "a");
+    FILE* f = fopen(full_path, "a");//追加模式打开文件
     if (!f) {
-        ESP_LOGE(TAG, "Open file for append failed: %s", path);
+        ESP_LOGE(TAG, "Open file for append failed: %s", full_path);
         return ESP_ERR_NO_MEM;
     }
 

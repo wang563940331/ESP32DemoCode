@@ -21,6 +21,16 @@
 
 static SemaphoreHandle_t log_mutex = NULL;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...);
+
+#ifdef __cplusplus
+}
+#endif
+
 // 自定义日志颜色
 #undef LOG_COLOR_E
 #undef LOG_COLOR_W
@@ -83,6 +93,7 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_ERROR, tag, LOG_FORMAT(E, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
+        sd_fat_log_buffer_write(3, tag, format, ##__VA_ARGS__); \
     } \
 } while(0)
 
@@ -93,6 +104,7 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_WARN, tag, LOG_FORMAT(W, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
+        sd_fat_log_buffer_write(2, tag, format, ##__VA_ARGS__); \
     } \
 } while(0)
 
@@ -103,6 +115,7 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_INFO, tag, LOG_FORMAT(I, format), \
         get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
+        sd_fat_log_buffer_write(1, tag, format, ##__VA_ARGS__); \
     } \
 } while(0)
 
@@ -113,6 +126,7 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_DEBUG, tag, LOG_FORMAT(D, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
+        sd_fat_log_buffer_write(4, tag, format, ##__VA_ARGS__); \
     } \
 } while(0)
 
@@ -123,6 +137,7 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_VERBOSE, tag, LOG_FORMAT(V, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
+        sd_fat_log_buffer_write(5, tag, format, ##__VA_ARGS__); \
     } \
 } while(0)
 

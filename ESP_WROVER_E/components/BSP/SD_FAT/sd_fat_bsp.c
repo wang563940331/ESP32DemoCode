@@ -23,12 +23,12 @@ static sd_fat_full_device_t sd_fat_devices[] = {
             .gpio_d0 = GPIO_NUM_2,
             .gpio_d1 = GPIO_NUM_4,
             .gpio_d2 = GPIO_NUM_NC,
-            .gpio_d3 = GPIO_NUM_NC,
+            .gpio_d3 = GPIO_NUM_13,
             .gpio_cd = GPIO_NUM_NC,
             .type = SD_FAT_TYPE_SPI,
             .name = "SD_CARD",
             .mount_point = "/sdcard",
-            .max_freq_khz = 8000
+            .max_freq_khz = 4000
         },
         .card = NULL,
         .mounted = false
@@ -120,7 +120,7 @@ static esp_err_t sdmmc_mount(const char* name) {
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
-        .max_files = 5,
+        .max_files = 255,
         .allocation_unit_size = 16 * 1024
     };
 

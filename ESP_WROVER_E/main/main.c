@@ -27,6 +27,7 @@
 #include "json.h"
 #include "sd_fat_bsp.h"
 #include "sd_fat_ops.h"
+#include "sd_fat_log_task.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -119,7 +120,7 @@ void example() {
     sd_fat_ops_init("SD_CARD");
     
     // 写入文件
-    sd_fat_ops_write_file("SD_CARD", "test.txt", "Hello SD Card!", 14);
+    sd_fat_ops_append_file("SD_CARD", "test.txt", "Hello SD Card!", 14);
     
     // 读取文件
     char buffer[256];
@@ -174,6 +175,17 @@ void app_main(void)
 
     ESP_LOGI(TAG, "ESP32 Running...");
 
+    NVS_init();
+    mdf_mem_print_heap();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    const sd_fat_ops_t* ops = sd_fat_get_ops();
+    if(ESP_OK == ops->init("SD_CARD"))
+    {
+        sd_fat_log_config_t log_config = SD_FAT_LOG_DEFAULT_CONFIG();
+        sd_fat_log_task_init(&log_config, ops);
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    // example();
     app_print_version_info();
 
     en_log_set();
@@ -183,8 +195,7 @@ void app_main(void)
     mdf_mem_print_heap();
 
 
-    NVS_init();
-    mdf_mem_print_heap();
+
     // 初始化基本硬件
     led_init();
     mdf_mem_print_heap();
@@ -220,10 +231,7 @@ void app_main(void)
     uart2->Init(UART_NUM_2);
 
 
-    //  sdcardinit();
-    example();
-
-
+    
     uint16_t len = 0;
     char data[1024] = {"hello world"};
     while(1)
