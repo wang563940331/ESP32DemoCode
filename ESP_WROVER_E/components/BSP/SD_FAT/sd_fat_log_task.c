@@ -1,14 +1,6 @@
 /**
  * @file sd_fat_log_task.c
  * @brief SD卡日志任务实现文件
- * 
- * 该模块实现了一个FreeRTOS任务，负责将系统日志异步写入SD卡。
- * 核心特性：
- * - 日期检测和日志文件自动切换
- * - 支持删除前一天日志文件
- * - 固件升级文件检测与处理
- * - 批量写入日志数据（队列模式）
- * - SD卡可用性检查
  */
 
 #include "sd_fat_log_task.h"
@@ -20,6 +12,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <stdio.h>
 #include "utility.h"
 #include "parameter.h"
 #include "parameterSet.h"
@@ -28,6 +23,8 @@ static const char* TAG = "sd_fat_log_task";
 
 #define BATCH_SIZE 8
 #define MUTEX_TIMEOUT_MS 0
+#define EPOCH_YEAR 1970
+#define SD_MOUNT_POINT "/sdcard"
 
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;
 static bool sdCardbuffer_init = false;
@@ -35,6 +32,7 @@ static const sd_fat_log_config_t* s_log_config = NULL;
 static const sd_fat_ops_t* s_sd_fat_ops = NULL;
 static sdCardLog_t* sdCardbuffer = NULL;
 static volatile uint32_t dropped_log_count = 0;
+static bool is_epoch_time = false;
 
 void en_log_write_read_mutex_unlock(void)
 {
@@ -76,6 +74,67 @@ uint32_t sd_fat_log_get_dropped_count(void)
 void sd_fat_log_reset_dropped_count(void)
 {
     __atomic_store_n(&dropped_log_count, 0, __ATOMIC_RELAXED);
+}
+
+static bool parse_log_filename(const char* filename, uint16_t* year, uint8_t* mon, uint8_t* day)
+{
+    if (!filename) {
+        return false;
+    }
+    
+    size_t len = strlen(filename);
+    if (len < 14 || strcmp(filename + len - 4, ".log") != 0) {
+        return false;
+    }
+    
+    return sscanf(filename, "%hu-%hhu-%hhu.log", year, mon, day) == 3;
+}
+
+static bool find_latest_log_file(char* path, size_t path_size)
+{
+    char latest_file[64] = {0};
+    uint16_t latest_year = 0, latest_mon = 0, latest_day = 0;
+    
+    DIR* dir = opendir(SD_MOUNT_POINT);
+    if (!dir) {
+        ESP_LOGW(TAG, "Failed to open SD card directory: %s", SD_MOUNT_POINT);
+        return false;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        const char* name = entry->d_name;
+        size_t len = strlen(name);
+        
+        if (len > 4 && strcmp(name + len - 4, ".log") == 0) {
+            uint16_t year = 0;
+            uint8_t mon = 0, day = 0;
+            
+            if (parse_log_filename(name, &year, &mon, &day)) {
+                ESP_LOGD(TAG, "Found log file: %s -> %u-%02u-%02u", name, year, mon, day);
+                
+                if (year > latest_year || 
+                    (year == latest_year && mon > latest_mon) ||
+                    (year == latest_year && mon == latest_mon && day > latest_day)) {
+                    latest_year = year;
+                    latest_mon = mon;
+                    latest_day = day;
+                    strlcpy(latest_file, name, sizeof(latest_file));
+                    ESP_LOGD(TAG, "Update latest: %s", latest_file);
+                }
+            }
+        }
+    }
+    closedir(dir);
+
+    if (latest_file[0] != '\0') {
+        snprintf(path, path_size, "%s", latest_file);
+        ESP_LOGI(TAG, "Found latest log file by date in name: %s", path);
+        return true;
+    }
+
+    ESP_LOGI(TAG, "No existing log file found with date in name");
+    return false;
 }
 
 static inline void format_timestamp(char* buffer, size_t size)
@@ -139,18 +198,17 @@ static void sdCardLogTask(void* arg)
 {
     ESP_LOGI(TAG, "SD card log task started");
 
-    static char path[64] = "SN00000000000000_2020-01-01.log";
-
-
+    static char path[64] = "2020-01-01.log";
     static uint8_t last_day = 0, last_mon = 0;
     static uint16_t last_year = 0;
     static char last_path[64] = {0};
-
     static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};
 
     uint32_t last_dropped_count = 0;
     uint32_t monitor_interval_ms = 60000;
     uint32_t last_monitor_time = esp_timer_get_time() / 1000;
+
+    bool first_run = true;
 
     while (1) {
         sdCardLog_t* getlogbuff = getLogBuff();
@@ -170,7 +228,35 @@ static void sdCardLogTask(void* arg)
         uint16_t year = tm_now.tm_year + 1900;
         uint8_t mon = tm_now.tm_mon + 1;
 
-        if ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year)) {
+        if (first_run) {
+            first_run = false;
+            
+            if (year == EPOCH_YEAR) {
+                is_epoch_time = true;
+                ESP_LOGW(TAG, "System time is epoch (1970), searching for latest log file");
+                
+                if (find_latest_log_file(path, sizeof(path))) {
+                    if (parse_log_filename(path, &last_year, &last_mon, &last_day)) {
+                        ESP_LOGI(TAG, "Using existing log file: %s (date: %u-%02u-%02u)", 
+                                 path, last_year, last_mon, last_day);
+                    }
+                } else {
+                    ESP_LOGI(TAG, "No existing log file found, creating new file with epoch date");
+                    snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
+                    last_day = tm_now.tm_mday;
+                    last_mon = mon;
+                    last_year = year;
+                }
+            } else {
+                is_epoch_time = false;
+                snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
+                last_day = tm_now.tm_mday;
+                last_mon = mon;
+                last_year = year;
+            }
+        }
+
+        if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
             if (last_day != 0) {
                 struct tm last_tm = {0};
                 last_tm.tm_year = last_year - 1900;
@@ -233,19 +319,20 @@ static void sdCardLogTask(void* arg)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(batch_count > 0 ? 10 : 100));
-    uint32_t current_time = esp_timer_get_time() / 1000;
-    if (current_time - last_monitor_time >= monitor_interval_ms) {
-        uint32_t dropped_count = sd_fat_log_get_dropped_count();
-        uint32_t dropped_since_last = dropped_count - last_dropped_count;
-        if (dropped_since_last > 0) {
-            ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
-        } else {
-            ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+        uint32_t current_time = esp_timer_get_time() / 1000;
+        if (current_time - last_monitor_time >= monitor_interval_ms) {
+            uint32_t dropped_count = sd_fat_log_get_dropped_count();
+            uint32_t dropped_since_last = dropped_count - last_dropped_count;
+            if (dropped_since_last > 0) {
+                ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+            } else {
+                ESP_LOGD(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+            }
+            last_dropped_count = dropped_count;
+            last_monitor_time = current_time;
         }
-        last_dropped_count = dropped_count;
-        last_monitor_time = current_time;
-    }
+
+        vTaskDelay(pdMS_TO_TICKS(batch_count > 0 ? 10 : 100));
     }
 }
 
