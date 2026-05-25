@@ -45,6 +45,144 @@ static volatile uint32_t dropped_log_count = 0;
 /* 系统时间是否为纪元时间标志 */
 static bool is_epoch_time = false;
 
+bool Shellreadsd(const stShellPkt_t *pkg);
+
+stShellCmd_t readsd = 
+{
+    .pCmd       = "readsd",
+    .pFormat    = "格式:readsd <filename>",
+    .pFunction  = "功能:读取SD卡上指定文件的内容",
+    .pRemarks   = "备注:readsd 2024-01-01.log",
+    .pFunc      = Shellreadsd,
+};
+
+
+
+/**********************************************************************************************
+* Description       :     读取SD卡上指定文件的内容并打印
+* Author            :     XRG
+* modified Date     :     2024-05-13
+* notice            :     
+***********************************************************************************************/
+bool Shellreadsd(const stShellPkt_t *pkg)
+{
+    bool                   bRst;
+    u8                     u8Num;
+    char*                  filename;
+    char*                  buffer = NULL;
+    size_t                 len;
+    esp_err_t              ret;
+
+    bRst  = true;
+    u8Num = pkg->paraNum;
+    
+    // 强制输出到串口，不使用日志宏
+    printf("readsd command executed, param count: %d\r\n", u8Num);
+    
+    if(u8Num != 1)
+    {
+        printf("用法: readsd <filename>\r\n");
+        printf("示例: readsd 2026-05-25.log\r\n");
+        printf("SD卡上的文件列表:\r\n");
+        
+        DIR* dir = opendir("/sdcard");
+        if (dir) {
+            struct dirent* entry;
+            int file_count = 0;
+            while ((entry = readdir(dir)) != NULL) {
+                // 跳过 . 和 .. 目录
+                if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                    continue;
+                }
+                
+                // 获取文件大小
+                char filepath[128];
+                snprintf(filepath, sizeof(filepath), "/sdcard/%s", entry->d_name);
+                FILE* fp = fopen(filepath, "rb");
+                size_t file_size = 0;
+                if (fp) {
+                    fseek(fp, 0, SEEK_END);
+                    file_size = ftell(fp);
+                    fclose(fp);
+                    // 以 KB 格式显示文件大小
+                    if (file_size < 1024) {
+                        printf("  - %s (%u 字节)\r\n", entry->d_name, (unsigned int)file_size);
+                    } else {
+                        printf("  - %s (%.2f KB)\r\n", entry->d_name, (float)file_size / 1024);
+                    }
+                    file_count++;
+                } else {
+                    // 如果无法打开，可能是目录
+                    printf("  - %s (目录)\r\n", entry->d_name);
+                    file_count++;
+                }
+            }
+            closedir(dir);
+            if (file_count == 0) {
+                printf("  (SD卡上没有文件)\r\n");
+            }
+        } else {
+            printf("无法打开SD卡目录\r\n");
+        }
+        return(false);
+    }
+    
+    filename = pkg->para[0];
+    if(filename == NULL)
+    {
+        ESP_LOGE(TAG, "参数为空，请输入文件名，如: readsd 2026-05-25.log");
+        return(false);
+    }
+    
+    if(strlen(filename) > 64)
+    {
+        ESP_LOGE(TAG, "参数长度错误，最大支持64个字符");
+        return(false);
+    }
+
+    ESP_LOGI(TAG, "准备读取SD卡文件: %s", filename);
+
+    if (!sd_fat_ops_is_file_exist("SD_CARD", filename)) {
+        ESP_LOGE(TAG, "文件不存在: %s", filename);
+        return(false);
+    }
+
+    // 使用动态内存分配避免栈溢出
+    buffer = (char*)malloc(512);
+    if (!buffer) {
+        ESP_LOGE(TAG, "内存分配失败");
+        return(false);
+    }
+
+    // 构建完整的文件路径
+    char filepath[128];
+    snprintf(filepath, sizeof(filepath), "/sdcard/%s", filename);
+    
+    // 打开文件
+    FILE* fp = fopen(filepath, "r");
+    if (!fp) {
+        ESP_LOGE(TAG, "无法打开文件: %s", filepath);
+        free(buffer);
+        return(false);
+    }
+
+    ESP_LOGI(TAG, "文件内容:");
+    ESP_LOGI(TAG, "----------------------------------------");
+    
+    // 逐行读取文件内容
+    while (fgets(buffer, 512, fp) != NULL) {
+        // 移除换行符
+        buffer[strcspn(buffer, "\r\n")] = '\0';
+        printf("%s\r\n", buffer);
+    }
+    
+    ESP_LOGI(TAG, "----------------------------------------");
+
+    fclose(fp);
+    free(buffer);
+    return(bRst);
+}
+
 /**
  * @brief 释放日志缓冲区读写互斥锁
  * 
@@ -446,6 +584,7 @@ static void sdCardLogTask(void* arg)
  */
 esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_ops_t* ops)
 {
+    bool bRst= false;
     if (!config || !ops) {
         ESP_LOGE(TAG, "Invalid config or ops parameter");
         return ESP_ERR_INVALID_ARG;
@@ -480,5 +619,9 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
 
     /* 标记初始化完成 */
     sdCardbuffer_init = true;
+
+
+    bRst &= sShellCmdRegister(&readsd);
+    ESP_LOGI(TAG, " sd_fat_log_task_init AT CMD bRst: %d", bRst);
     return ESP_OK;
 }

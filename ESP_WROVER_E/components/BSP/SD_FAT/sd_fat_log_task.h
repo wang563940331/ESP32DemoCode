@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include "esp_err.h"
 #include "sd_fat_ops.h"
+#include "shell.h"
 
 #define FILE_FIRMWARE_UPDATE_PATH			"/sdcard/update"
 

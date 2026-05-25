@@ -175,6 +175,9 @@ void app_main(void)
 
     ESP_LOGI(TAG, "ESP32 Running...");
 
+    sShellInit();
+    mdf_mem_print_heap();
+    
     const sd_fat_ops_t* ops = sd_fat_get_ops();
     if(ESP_OK == ops->init("SD_CARD"))
     {
@@ -192,8 +195,7 @@ void app_main(void)
     en_log_set();
     mdf_mem_print_heap();
 
-    sShellInit();
-    mdf_mem_print_heap();
+
 
 
 

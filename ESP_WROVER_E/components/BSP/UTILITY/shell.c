@@ -202,6 +202,31 @@ shell_exec_status_t  shell_exec(u8 *data, int len)
                 break; // 找到匹配命令后退出循环
             }
         }
+        
+        // 如果命令未找到，显示所有注册的命令列表
+        if (!cmd_found) {
+            printf("错误: 未知命令 '%s'\r\n", shellPkg.cmd);
+            printf("可用命令列表:\r\n");
+            printf("----------------------------------------\r\n");
+            for(nr = 0; nr < stShellCmdMap.i32CmdNum; nr++)
+            {
+                bool is_allowed = esp_log_print_status() || (nr == 0);
+                if (is_allowed) {
+                    printf("%s\r\n", stShellCmdMap.pCmd[nr]->pCmd);
+                    if (stShellCmdMap.pCmd[nr]->pFormat) {
+                        printf("  %s\r\n", stShellCmdMap.pCmd[nr]->pFormat);
+                    }
+                    if (stShellCmdMap.pCmd[nr]->pFunction) {
+                        printf("  %s\r\n", stShellCmdMap.pCmd[nr]->pFunction);
+                    }
+                    if (stShellCmdMap.pCmd[nr]->pRemarks) {
+                        printf("  %s\r\n", stShellCmdMap.pCmd[nr]->pRemarks);
+                    }
+                    printf("\r\n");
+                }
+            }
+            printf("----------------------------------------\r\n");
+        }
     }
     // 释放信号量
     xSemaphoreGive(shell_exec_mutex);
