@@ -41,12 +41,44 @@ typedef struct {
 
 
 
+/**
+ * @brief 日志链表节点结构（buff动态分配）
+ */
+typedef struct sdCardLogNode {
+    char* buff;              /* 动态分配的日志内容缓冲区 */
+    size_t buff_size;        /* 实际使用的缓冲区大小 */
+    struct sdCardLogNode* next;
+} sdCardLogNode_t;
+
+/**
+ * @brief 日志缓冲区结构（链表头）
+ */
 typedef struct
 {
-	uint16_t	logWrite;
-	uint16_t	logRead;
-	char		buff[SD_CARD_BUFF_NUM][SD_CARD_BUFF_SIZE];
+    sdCardLogNode_t* head;    /* 链表头指针 */
+    sdCardLogNode_t* tail;    /* 链表尾指针 */
+    uint16_t count;           /* 当前节点数量 */
 }__attribute__((packed)) sdCardLog_t;
+
+/**
+ * @brief 内存池初始化
+ * @param pool_size 内存池大小（节点数量）
+ * @return 初始化成功返回 true，失败返回 false
+ */
+bool sd_fat_log_pool_init(uint16_t pool_size);
+
+/**
+ * @brief 从内存池分配节点
+ * @param data_size 需要存储的数据大小
+ * @return 返回分配的节点指针，失败返回 NULL
+ */
+sdCardLogNode_t* sd_fat_log_pool_alloc(size_t data_size);
+
+/**
+ * @brief 将节点归还到内存池
+ * @param node 要归还的节点指针
+ */
+void sd_fat_log_pool_free(sdCardLogNode_t* node);
 
 /**
  * @brief 默认日志配置

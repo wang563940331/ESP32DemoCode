@@ -45,6 +45,13 @@ static volatile uint32_t dropped_log_count = 0;
 /* 系统时间是否为纪元时间标志 */
 static bool is_epoch_time = false;
 
+/* 内存池相关 */
+static sdCardLogNode_t* pool_start = NULL;      /* 内存池起始地址 */
+static sdCardLogNode_t* pool_free_list = NULL;  /* 空闲链表头 */
+static uint16_t pool_size = 0;                  /* 内存池总大小 */
+static uint16_t pool_used = 0;                  /* 当前使用数量 */
+static SemaphoreHandle_t pool_mutex = NULL;      /* 内存池互斥锁 */
+
 bool Shellreadsd(const stShellPkt_t *pkg);
 
 stShellCmd_t readsd = 
@@ -70,8 +77,6 @@ bool Shellreadsd(const stShellPkt_t *pkg)
     u8                     u8Num;
     char*                  filename;
     char*                  buffer = NULL;
-    size_t                 len;
-    esp_err_t              ret;
 
     bRst  = true;
     u8Num = pkg->paraNum;
@@ -205,9 +210,124 @@ bool en_log_write_read_mutex_lock(void)
 }
 
 /**
+ * @brief 初始化内存池
+ * @param size 内存池大小（节点数量）
+ * @return 初始化成功返回 true，失败返回 false
+ */
+bool sd_fat_log_pool_init(uint16_t size)
+{
+    if (pool_start) {
+        ESP_LOGW(TAG, "Memory pool already initialized");
+        return true;
+    }
+
+    pool_mutex = xSemaphoreCreateMutex();
+    if (!pool_mutex) {
+        ESP_LOGE(TAG, "Failed to create pool mutex");
+        return false;
+    }
+
+    pool_start = (sdCardLogNode_t*)malloc(size * sizeof(sdCardLogNode_t));
+    if (!pool_start) {
+        ESP_LOGE(TAG, "Failed to allocate memory pool");
+        vSemaphoreDelete(pool_mutex);
+        return false;
+    }
+
+    for (uint16_t i = 0; i < size - 1; i++) {
+        pool_start[i].buff = NULL;
+        pool_start[i].buff_size = 0;
+        pool_start[i].next = &pool_start[i + 1];
+    }
+    pool_start[size - 1].buff = NULL;
+    pool_start[size - 1].buff_size = 0;
+    pool_start[size - 1].next = NULL;
+    pool_free_list = pool_start;
+    pool_size = size;
+    pool_used = 0;
+
+    ESP_LOGI(TAG, "Memory pool initialized with %u nodes", size);
+    return true;
+}
+
+/**
+ * @brief 从内存池分配节点
+ * @param data_size 需要存储的数据大小
+ * @return 返回分配的节点指针，失败返回 NULL
+ */
+sdCardLogNode_t* sd_fat_log_pool_alloc(size_t data_size)
+{
+    if (!pool_mutex || !pool_start) {
+        ESP_LOGW(TAG, "Memory pool not initialized");
+        return NULL;
+    }
+
+    if (xSemaphoreTake(pool_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        ESP_LOGW(TAG, "Failed to take pool mutex");
+        return NULL;
+    }
+
+    sdCardLogNode_t* node = pool_free_list;
+    if (node) {
+        pool_free_list = node->next;
+        pool_used++;
+        node->next = NULL;
+        
+        /* 动态分配buff */
+        if (data_size > 0) {
+            node->buff = (char*)malloc(data_size);
+            if (node->buff) {
+                memset(node->buff, 0, data_size);
+                node->buff_size = data_size;
+            } else {
+                node->buff_size = 0;
+                pool_free_list = node;
+                pool_used--;
+                node = NULL;
+            }
+        } else {
+            node->buff = NULL;
+            node->buff_size = 0;
+        }
+    }
+
+    xSemaphoreGive(pool_mutex);
+    return node;
+}
+
+/**
+ * @brief 将节点归还到内存池
+ * @param node 要归还的节点指针
+ */
+void sd_fat_log_pool_free(sdCardLogNode_t* node)
+{
+    if (!pool_mutex || !pool_start || !node) {
+        return;
+    }
+
+    if (xSemaphoreTake(pool_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        ESP_LOGW(TAG, "Failed to take pool mutex");
+        return;
+    }
+
+    /* 释放动态分配的buff */
+    if (node->buff) {
+        free(node->buff);
+        node->buff = NULL;
+    }
+    node->buff_size = 0;
+
+    node->next = pool_free_list;
+    pool_free_list = node;
+    pool_used--;
+
+    xSemaphoreGive(pool_mutex);
+}
+
+/**
  * @brief 初始化SD卡日志缓冲区
  * 
- * 为日志缓冲区结构体分配内存空间，并初始化为0。
+ * 为日志缓冲区结构体分配内存空间，并初始化为空链表。
  * 该函数采用惰性初始化策略，只有在缓冲区为空时才进行初始化。
  * 
  * @return 初始化成功返回 true，失败或已初始化返回 false
@@ -218,6 +338,9 @@ bool sdCardBuffInit(void)
         sdCardbuffer = (sdCardLog_t*)malloc(sizeof(sdCardLog_t));
         if (sdCardbuffer) {
             memset(sdCardbuffer, 0, sizeof(sdCardLog_t));
+            sdCardbuffer->head = NULL;
+            sdCardbuffer->tail = NULL;
+            sdCardbuffer->count = 0;
             return true;
         }
     }
@@ -381,18 +504,33 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     }
     va_end(args);
 
+    size_t actual_size = strlen(temp_buff) + 1;
+
     if (!en_log_write_read_mutex_lock()) {
         __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
         return;
     }
 
-    int next_write = (sdCardbuffer->logWrite + 1) % SD_CARD_BUFF_NUM;
-    if (next_write != sdCardbuffer->logRead) {
-        strcpy(sdCardbuffer->buff[sdCardbuffer->logWrite], temp_buff);
-        sdCardbuffer->logWrite = next_write;
-    } else {
+    // 从内存池分配节点，传入实际数据大小
+    sdCardLogNode_t* new_node = sd_fat_log_pool_alloc(actual_size);
+    if (!new_node) {
         __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
+        en_log_write_read_mutex_unlock();
+        return;
     }
+
+    // 复制日志内容到节点
+    memcpy(new_node->buff, temp_buff, actual_size);
+    new_node->next = NULL;
+
+    // 将新节点追加到链表尾部
+    if (sdCardbuffer->tail) {
+        sdCardbuffer->tail->next = new_node;
+    } else {
+        sdCardbuffer->head = new_node;
+    }
+    sdCardbuffer->tail = new_node;
+    sdCardbuffer->count++;
 
     en_log_write_read_mutex_unlock();
 }
@@ -422,7 +560,6 @@ static void sdCardLogTask(void* arg)
     uint32_t last_monitor_time = esp_timer_get_time() / 1000;  /* 上次监控时间 */
 
     bool first_run = true;                        /* 首次运行标志 */
-    bool time_sync_completed = false;             /* 时间同步完成标志（未使用） */
 
     while (1) {
         sdCardLog_t* getlogbuff = getLogBuff();
@@ -524,8 +661,11 @@ static void sdCardLogTask(void* arg)
             continue;
         }
 
-        while (getlogbuff->logWrite != getlogbuff->logRead && batch_count < BATCH_SIZE) {
-            const char* log_str = getlogbuff->buff[getlogbuff->logRead];
+        // 从链表头部读取日志
+        while (getlogbuff->head && batch_count < BATCH_SIZE) {
+            sdCardLogNode_t* node = getlogbuff->head;
+            const char* log_str = node->buff;
+            
             if (log_str[0] != '\0') {
                 size_t len = strlen(log_str);
                 if (total_len + len + 1 < sizeof(batch_buffer)) {
@@ -538,7 +678,13 @@ static void sdCardLogTask(void* arg)
                 }
             }
 
-            getlogbuff->logRead = (getlogbuff->logRead + 1) % SD_CARD_BUFF_NUM;
+            // 移除已读取的节点并归还到内存池
+            getlogbuff->head = node->next;
+            if (!getlogbuff->head) {
+                getlogbuff->tail = NULL;
+            }
+            sd_fat_log_pool_free(node);
+            getlogbuff->count--;
         }
 
         en_log_write_read_mutex_unlock();
@@ -600,6 +746,13 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
     /* 保存配置和操作接口 */
     s_log_config = config;
     s_sd_fat_ops = ops;
+
+    /* 初始化内存池（使用队列大小作为池大小） */
+    if (!sd_fat_log_pool_init(config->queue_size)) {
+        ESP_LOGE(TAG, "Failed to initialize memory pool");
+        vSemaphoreDelete(WriteLogBuffMutex);
+        return ESP_FAIL;
+    }
 
     /* 初始化SD卡日志缓冲区 */
     if (!sdCardBuffInit()) {
