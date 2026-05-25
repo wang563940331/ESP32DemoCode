@@ -68,7 +68,6 @@ bool sdCardBuffInit()
 		sdCardbuffer = (sdCardLog_t*)malloc(sizeof(sdCardLog_t));
 		if(sdCardbuffer)
 		{
-            sdCardbuffer_init = true;
 			memset(sdCardbuffer, 0, sizeof(sdCardLog_t));
 			return true;
 		}	
@@ -88,9 +87,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
         return;
     }
 
-    if (!en_log_write_read_mutex_lock()) {
-        return;
-    }
+
 
     va_list args;
     va_start(args, format);
@@ -132,14 +129,19 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
         if (copy_len >= SD_CARD_BUFF_SIZE) {
             copy_len = SD_CARD_BUFF_SIZE - 1;
         }
+        if (!en_log_write_read_mutex_lock()) {
+            // EN_SLOGE(TAG, "en_log_write_read_mutex_lock error!");
+            return;
+        }
         memcpy(sdCardbuffer->buff[sdCardbuffer->logWrite], log_line, copy_len);
         sdCardbuffer->buff[sdCardbuffer->logWrite][copy_len] = '\0';
         sdCardbuffer->logWrite = next_write;
+        en_log_write_read_mutex_unlock();
     }
 
-    en_log_write_read_mutex_unlock();
+
 }
-          char buffer[256];
+
 
 static void sdCardLogTask(void* arg) {
     ESP_LOGI(TAG, "SD card log task started");
@@ -192,20 +194,13 @@ static void sdCardLogTask(void* arg) {
 
         if(!en_log_write_read_mutex_lock())
         {
+            // EN_SLOGE(TAG, "en_log_write_read_mutex_lock error!");
             continue ;
         }
         while(getlogbuff->logWrite != getlogbuff->logRead)
         {
             if(strlen(getlogbuff->buff[getlogbuff->logRead]))
             {
-                // // 写入文件
-                // s_sd_fat_ops->append_file("SD_CARD", path, "Hello SD Card!", 14);
-                
-                // // 读取文件
-      
-                // size_t len = sizeof(buffer);
-                // s_sd_fat_ops->read_file("SD_CARD", path, buffer, &len);
-                
                 if(ESP_OK != s_sd_fat_ops->append_file("SD_CARD", 
                     path, 
                     getlogbuff->buff[getlogbuff->logRead], 
@@ -255,6 +250,6 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config,const sd_fat_op
         ESP_LOGE(TAG,"Create Task sdCardLogTask error!");
         return ESP_FAIL;
     }
-
+    sdCardbuffer_init = true;
     return ESP_OK;
 }
