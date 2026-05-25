@@ -200,7 +200,7 @@ static esp_err_t ds18b20_read_data(int gpio_num, one_wire_data_t* data) {
             return ESP_OK;
         }
         
-        ESP_LOGD(TAG, "DS18B20 CRC error, retry %d/%d", retry + 1, max_retries);
+        ESP_LOGE(TAG, "DS18B20 CRC error, retry %d/%d", retry + 1, max_retries);
     }
     
     ESP_LOGE(TAG, "DS18B20 CRC error");
@@ -318,7 +318,7 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
             return ESP_OK;
         }
         
-        ESP_LOGD(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+        ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
     }
     
     ESP_LOGE(TAG, "DHT11 checksum error");

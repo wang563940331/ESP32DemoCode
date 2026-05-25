@@ -23,7 +23,7 @@
 #include "utility.h"
 #include "parameter.h"
 #include "parameterSet.h"
-static const char* TAG = "SD_FAT_LOG";
+static const char* TAG = "sd_fat_log_task";
 
 
 
@@ -55,7 +55,7 @@ bool en_log_write_read_mutex_lock()
         WriteLogBuffMutex = xSemaphoreCreateBinary();
         xSemaphoreGive(WriteLogBuffMutex);
     }
-    return xSemaphoreTake(WriteLogBuffMutex, pdMS_TO_TICKS(500)) == pdTRUE;	
+    return xSemaphoreTake(WriteLogBuffMutex, pdMS_TO_TICKS(3*1000)) == pdTRUE;	
 }
 
 

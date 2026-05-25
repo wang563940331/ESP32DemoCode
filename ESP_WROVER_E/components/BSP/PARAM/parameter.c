@@ -133,7 +133,7 @@ bool sNvsParamSet(void)
     pJsonTxt = cJSON_PrintUnformatted(stNvsCache.pJsonParam);
     if(pJsonTxt != NULL)
     {
-        ESP_LOGD(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
+        ESP_LOGI(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
         //调用 nvs_set_str 将 JSON 字符串写入 NVS，键名为 cNvsKeyParam
         nvs_set_str(handle, cNvsKeyParam, pJsonTxt);
         heap_caps_free(pJsonTxt);
@@ -208,7 +208,7 @@ cJSON *sNvsParamGet(void)
     nvs_close(handle);
     if(pBuf == NULL)
     {
-        ESP_LOGD(TAG, "读取NVS参数区:%s@%s 失败, 使用默认参数", cNvsKeyParam, cNvsName);
+        ESP_LOGE(TAG, "读取NVS参数区:%s@%s 失败, 使用默认参数", cNvsKeyParam, cNvsName);
     }
 
     char *pNvsKeyParamDefault = generateDefaultJsonString();

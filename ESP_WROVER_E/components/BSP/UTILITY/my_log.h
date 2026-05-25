@@ -1,6 +1,3 @@
-
-
-
 /*
  * @Author: yu.wang
  * @Date: 2026-03-01 17:20:47
@@ -20,6 +17,27 @@
 #include <string.h>  // 添加这个头文件以支持memset函数
 
 static SemaphoreHandle_t log_mutex = NULL;
+
+// 日志保存到SD卡的控制 - 按标签过滤（黑名单模式）
+// 在下面的数组中添加不需要保存到SD卡的标签
+#define LOG_SD_BLACKLIST_ENABLE
+static const char* const log_sd_blacklist[] = {
+    "sd_fat_ops",      // SD卡操作相关日志
+    "sd_fat_bsp",      // SD卡BSP相关日志
+    "sd_fat_log_task", // SD卡日志任务相关日志
+    // 添加更多需要过滤的标签...
+};
+
+// 检查标签是否在黑名单中
+static inline bool log_tag_in_blacklist(const char* tag) {
+    if (!tag) return false;
+    for (size_t i = 0; i < sizeof(log_sd_blacklist) / sizeof(log_sd_blacklist[0]); i++) {
+        if (strcmp(tag, log_sd_blacklist[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,7 +111,9 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_ERROR, tag, LOG_FORMAT(E, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
-        sd_fat_log_buffer_write(3, tag, format, ##__VA_ARGS__); \
+        if (!log_tag_in_blacklist(tag)) { \
+            sd_fat_log_buffer_write(3, tag, format, ##__VA_ARGS__); \
+        } \
     } \
 } while(0)
 
@@ -104,18 +124,23 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_WARN, tag, LOG_FORMAT(W, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
-        sd_fat_log_buffer_write(2, tag, format, ##__VA_ARGS__); \
+        if (!log_tag_in_blacklist(tag)) { \
+            sd_fat_log_buffer_write(2, tag, format, ##__VA_ARGS__); \
+        } \
     } \
 } while(0)
 
 
-#define ESP_LOGI( tag , format , ...) do { \
+#undef ESP_LOGI
+#define ESP_LOGI(tag, format, ...) do { \
     if (LOG_LOCAL_LEVEL >= ESP_LOG_INFO) { \
         if (log_mutex) xSemaphoreTake(log_mutex, portMAX_DELAY); \
         esp_log_write(ESP_LOG_INFO, tag, LOG_FORMAT(I, format), \
-        get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
+                      get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
-        sd_fat_log_buffer_write(1, tag, format, ##__VA_ARGS__); \
+        if (!log_tag_in_blacklist(tag)) { \
+            sd_fat_log_buffer_write(1, tag, format, ##__VA_ARGS__); \
+        } \
     } \
 } while(0)
 
@@ -126,7 +151,9 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_DEBUG, tag, LOG_FORMAT(D, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
-        sd_fat_log_buffer_write(4, tag, format, ##__VA_ARGS__); \
+        if (!log_tag_in_blacklist(tag)) { \
+            sd_fat_log_buffer_write(4, tag, format, ##__VA_ARGS__); \
+        } \
     } \
 } while(0)
 
@@ -137,10 +164,11 @@ static inline const char* get_filename_only(const char* path)
         esp_log_write(ESP_LOG_VERBOSE, tag, LOG_FORMAT(V, format), \
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
-        sd_fat_log_buffer_write(5, tag, format, ##__VA_ARGS__); \
+        if (!log_tag_in_blacklist(tag)) { \
+            sd_fat_log_buffer_write(5, tag, format, ##__VA_ARGS__); \
+        } \
     } \
 } while(0)
-
 
 
 
