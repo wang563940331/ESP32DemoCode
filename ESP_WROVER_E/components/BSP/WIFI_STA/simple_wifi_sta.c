@@ -287,14 +287,14 @@ void print_device_info(void) {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
     
-    EN_SLOGI(TAG,"=== ESP32 Device Info ===\n");
-    EN_SLOGI(TAG,"MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+    EN_SLOGI(TAG,"=== ESP32 Device Info ===");
+    EN_SLOGI(TAG,"MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", 
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    EN_SLOGI(TAG,"Unique ID: %02X%02X%02X%02X%02X%02X\n", 
+    EN_SLOGI(TAG,"Unique ID: %02X%02X%02X%02X%02X%02X", 
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    EN_SLOGI(TAG,"Chip Model: ESP32\n");
-    EN_SLOGI(TAG,"Cores: %d\n", chip_info.cores);
-    EN_SLOGI(TAG,"Revision: %d\n", chip_info.revision);
+    EN_SLOGI(TAG,"Chip Model: ESP32");
+    EN_SLOGI(TAG,"Cores: %d", chip_info.cores);
+    EN_SLOGI(TAG,"Revision: %d", chip_info.revision);
     
     // 将MAC地址存储到全局结构体
     setg_mac((char*)mac);

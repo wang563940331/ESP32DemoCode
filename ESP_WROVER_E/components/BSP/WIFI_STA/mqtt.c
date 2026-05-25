@@ -169,7 +169,7 @@ void mqtt_start(void)
     char MQTT_CLIENT[32]={0};
 
     uint16_t MQTT_PORT=0;
-    ESP_LOGI(TAG,"MQTT初始化!\n");
+    ESP_LOGI(TAG,"MQTT初始化!");
 
     sStorageApGet(cStorageApCmdNvsmqttIp,sizeof(MQTT_ADDRESS),(u8 *)MQTT_ADDRESS);
     sStorageApGet(cStorageApCmdNvsmqttport,sizeof(MQTT_PORT),(u16 *)&MQTT_PORT);
@@ -180,7 +180,7 @@ void mqtt_start(void)
     
     mqtt_cfg.broker.address.uri = MQTT_ADDRESS;
     mqtt_cfg.broker.address.port = MQTT_PORT;
-    EN_SLOGI(TAG,"MQTT服务器地址:%s,端口:%d\n",mqtt_cfg.broker.address.uri,mqtt_cfg.broker.address.port);
+    EN_SLOGI(TAG,"MQTT服务器地址:%s,端口:%d",mqtt_cfg.broker.address.uri,mqtt_cfg.broker.address.port);
     //Client ID
     if(strlen(MQTT_CLIENT) == 0)
     {

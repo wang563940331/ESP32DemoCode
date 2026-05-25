@@ -209,6 +209,7 @@ static void sdCardLogTask(void* arg)
     uint32_t last_monitor_time = esp_timer_get_time() / 1000;
 
     bool first_run = true;
+    bool time_sync_completed = false;
 
     while (1) {
         sdCardLog_t* getlogbuff = getLogBuff();
@@ -256,7 +257,16 @@ static void sdCardLogTask(void* arg)
             }
         }
 
-        if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
+        if (is_epoch_time && year != EPOCH_YEAR) {
+            ESP_LOGI(TAG, "Time sync completed, switching from epoch time to normal time: %u-%02u-%02d",
+                     year, mon, tm_now.tm_mday);
+            
+            is_epoch_time = false;
+            snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
+            last_day = tm_now.tm_mday;
+            last_mon = mon;
+            last_year = year;
+        } else if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
             if (last_day != 0) {
                 struct tm last_tm = {0};
                 last_tm.tm_year = last_year - 1900;

@@ -1,7 +1,7 @@
 #include "version.h"
 #include "esp_log.h"
 #include <string.h>
-
+#include "my_log.h"
 static const char *TAG = "VERSION";
 
 const char *app_get_version_hash(void)

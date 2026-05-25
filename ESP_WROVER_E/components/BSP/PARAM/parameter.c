@@ -185,7 +185,7 @@ cJSON *sNvsParamGet(void)
     }
     else
     {
-         ESP_LOGI(TAG, "读取NVS参数区:%s@%s完成，长度=%d!\r\n", cNvsKeyParam, cNvsName,i32FileSize);
+         ESP_LOGI(TAG, "读取NVS参数区:%s@%s完成，长度=%d!", cNvsKeyParam, cNvsName,i32FileSize);
     }
 
     //3:非首次读取
@@ -397,7 +397,7 @@ bool NVS_init(void)
 
     //1.获取NVS信息
     nvs_get_stats(NULL, &nvs_stats);
-    ESP_LOGI(TAG, "命名空间已使用:%lu,可用:%lu,所有:%lu, 命名空间数量使用了:%lu\n",
+    ESP_LOGI(TAG, "命名空间已使用:%lu,可用:%lu,所有:%lu, 命名空间数量使用了:%lu",
                nvs_stats.used_entries,
                nvs_stats.free_entries,
                nvs_stats.total_entries,

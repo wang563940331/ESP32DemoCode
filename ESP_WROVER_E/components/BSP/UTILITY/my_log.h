@@ -15,7 +15,10 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <string.h>  // 添加这个头文件以支持memset函数
-
+#include <string.h>  // 添加这个头文件以支持memset函数
+#include "freertos/FreeRTOS.h"  // 添加这个头文件以支持SemaphoreHandle_t类型
+#include "freertos/semphr.h"  // 添加这个头文件以支持xSemaphoreTake/xSemaphoreGive
+ 
 static SemaphoreHandle_t log_mutex = NULL;
 
 // 日志保存到SD卡的控制 - 按标签过滤（黑名单模式）
