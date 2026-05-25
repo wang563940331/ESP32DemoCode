@@ -231,7 +231,21 @@ static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
 
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
-        ESP_LOGI(TAG, "  %s%s", entry->d_name, (entry->d_type == DT_DIR) ? "/" : "");
+        if (entry->d_type == DT_DIR) {
+            ESP_LOGI(TAG, "  %s/", entry->d_name);
+        } else {
+            char file_path[512];
+            snprintf(file_path, sizeof(file_path), "%s/%s", full_path, entry->d_name);
+            FILE* f = fopen(file_path, "r");
+            if (f != NULL) {
+                fseek(f, 0, SEEK_END);
+                long size = ftell(f);
+                fclose(f);
+                ESP_LOGI(TAG, "  %s (%ld bytes)", entry->d_name, size);
+            } else {
+                ESP_LOGI(TAG, "  %s (size unknown)", entry->d_name);
+            }
+        }
     }
 
     closedir(dir);
