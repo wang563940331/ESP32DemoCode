@@ -175,9 +175,6 @@ void app_main(void)
 
     ESP_LOGI(TAG, "ESP32 Running...");
 
-    NVS_init();
-    mdf_mem_print_heap();
-    vTaskDelay(pdMS_TO_TICKS(1000));
     const sd_fat_ops_t* ops = sd_fat_get_ops();
     if(ESP_OK == ops->init("SD_CARD"))
     {
@@ -185,8 +182,12 @@ void app_main(void)
         sd_fat_log_task_init(&log_config, ops);
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
-    // example();
     app_print_version_info();
+    NVS_init();
+    mdf_mem_print_heap();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+
 
     en_log_set();
     mdf_mem_print_heap();

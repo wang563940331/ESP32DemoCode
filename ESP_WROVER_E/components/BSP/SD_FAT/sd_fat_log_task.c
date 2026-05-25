@@ -27,12 +27,14 @@
 static const char* TAG = "sd_fat_log_task";
 
 #define BATCH_SIZE 8
+#define MUTEX_TIMEOUT_MS 0
 
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;
 static bool sdCardbuffer_init = false;
 static const sd_fat_log_config_t* s_log_config = NULL;
 static const sd_fat_ops_t* s_sd_fat_ops = NULL;
 static sdCardLog_t* sdCardbuffer = NULL;
+static volatile uint32_t dropped_log_count = 0;
 
 void en_log_write_read_mutex_unlock(void)
 {
@@ -46,7 +48,7 @@ bool en_log_write_read_mutex_lock(void)
     if (!WriteLogBuffMutex) {
         return false;
     }
-    return xSemaphoreTake(WriteLogBuffMutex, pdMS_TO_TICKS(3 * 1000)) == pdTRUE;
+    return xSemaphoreTake(WriteLogBuffMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE;
 }
 
 bool sdCardBuffInit(void)
@@ -64,6 +66,16 @@ bool sdCardBuffInit(void)
 sdCardLog_t* getLogBuff(void)
 {
     return sdCardbuffer;
+}
+
+uint32_t sd_fat_log_get_dropped_count(void)
+{
+    return __atomic_load_n(&dropped_log_count, __ATOMIC_RELAXED);
+}
+
+void sd_fat_log_reset_dropped_count(void)
+{
+    __atomic_store_n(&dropped_log_count, 0, __ATOMIC_RELAXED);
 }
 
 static inline void format_timestamp(char* buffer, size_t size)
@@ -108,6 +120,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     va_end(args);
 
     if (!en_log_write_read_mutex_lock()) {
+        __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
         return;
     }
 
@@ -116,7 +129,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
         strcpy(sdCardbuffer->buff[sdCardbuffer->logWrite], temp_buff);
         sdCardbuffer->logWrite = next_write;
     } else {
-        ESP_LOGW(TAG, "Log buffer full, dropping log message");
+        __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
     }
 
     en_log_write_read_mutex_unlock();
@@ -127,14 +140,17 @@ static void sdCardLogTask(void* arg)
     ESP_LOGI(TAG, "SD card log task started");
 
     static char path[64] = "SN00000000000000_2020-01-01.log";
-    char sn[20] = {0};
-    sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8*)sn);
+
 
     static uint8_t last_day = 0, last_mon = 0;
     static uint16_t last_year = 0;
     static char last_path[64] = {0};
 
     static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};
+
+    uint32_t last_dropped_count = 0;
+    uint32_t monitor_interval_ms = 60000;
+    uint32_t last_monitor_time = esp_timer_get_time() / 1000;
 
     while (1) {
         sdCardLog_t* getlogbuff = getLogBuff();
@@ -163,7 +179,7 @@ static void sdCardLogTask(void* arg)
                 time_t last_time = mktime(&last_tm);
                 struct tm prev_tm;
                 if (localtime_r(&last_time, &prev_tm) != NULL) {
-                    snprintf(last_path, sizeof(last_path), "%s_%04d-%02d-%02d.log", sn,
+                    snprintf(last_path, sizeof(last_path), "%04d-%02d-%02d.log",
                              prev_tm.tm_year + 1900, prev_tm.tm_mon + 1, prev_tm.tm_mday);
 
                     if (s_sd_fat_ops->is_file_exist("SD_CARD", last_path)) {
@@ -176,7 +192,7 @@ static void sdCardLogTask(void* arg)
                 }
             }
 
-            snprintf(path, sizeof(path), "%s_%04d-%02d-%02d.log", sn, year, mon, tm_now.tm_mday);
+            snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
 
             last_day = tm_now.tm_mday;
             last_mon = mon;
@@ -218,6 +234,18 @@ static void sdCardLogTask(void* arg)
         }
 
         vTaskDelay(pdMS_TO_TICKS(batch_count > 0 ? 10 : 100));
+    uint32_t current_time = esp_timer_get_time() / 1000;
+    if (current_time - last_monitor_time >= monitor_interval_ms) {
+        uint32_t dropped_count = sd_fat_log_get_dropped_count();
+        uint32_t dropped_since_last = dropped_count - last_dropped_count;
+        if (dropped_since_last > 0) {
+            ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+        } else {
+            ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+        }
+        last_dropped_count = dropped_count;
+        last_monitor_time = current_time;
+    }
     }
 }
 
