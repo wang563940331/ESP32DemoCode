@@ -29,8 +29,6 @@ static const char* TAG = "SD_FAT_LOG";
 
 
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;// 环形缓冲区
-
-static bool sdcard_exist = false;         // SD卡存在标志
 static bool sdCardbuffer_init = false;    // 缓冲区初始化标志
 
 
@@ -81,20 +79,29 @@ sdCardLog_t* getLogBuff()
 	return sdCardbuffer;
 }
 
+static inline void format_timestamp(char* buffer, size_t size) {
+    int64_t now_us = esp_timer_get_time();
+    time_t now = now_us / 1000000;
+    struct tm* tm_now = localtime(&now);
+    if (tm_now) {
+        snprintf(buffer, size, "[%04d-%02d-%02d %02d:%02d:%02d]",
+                 tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
+                 tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
+    } else {
+        snprintf(buffer, size, "[-------- --:--:--]");
+    }
+}
+
 void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...)
 {
     if (!sdCardbuffer_init || !sdCardbuffer) {
         return;
     }
 
+    char timestamp[32];
+    format_timestamp(timestamp, sizeof(timestamp));
 
-
-    va_list args;
-    va_start(args, format);
-
-    char log_line[SD_CARD_BUFF_SIZE];
     const char* level_str;
-    
     switch (level) {
         case LOG_LEVEL_DEBUG: level_str = "D"; break;
         case LOG_LEVEL_INFO:  level_str = "I"; break;
@@ -103,126 +110,152 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
         default:              level_str = "V"; break;
     }
 
-    time_t now;
-    time(&now);
-    struct tm* tm_now = localtime(&now);
-    if (tm_now == NULL) {
-        va_end(args);
-        en_log_write_read_mutex_unlock();
+    va_list args;
+    va_start(args, format);
+
+    char temp_buff[SD_CARD_BUFF_SIZE];
+    int prefix_len = snprintf(temp_buff, SD_CARD_BUFF_SIZE, "%s %s (%s): ", timestamp, level_str, tag);
+    if (prefix_len > 0 && prefix_len < SD_CARD_BUFF_SIZE) {
+        vsnprintf(temp_buff + prefix_len, SD_CARD_BUFF_SIZE - prefix_len - 1, format, args);
+    }
+    va_end(args);
+
+    if (!en_log_write_read_mutex_lock()) {
         return;
     }
 
-    int prefix_len = snprintf(log_line, sizeof(log_line), "[%04d-%02d-%02d %02d:%02d:%02d] %s (%s): ",
-                              tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
-                              tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec,
-                              level_str, tag);
-
-    if (prefix_len > 0 && prefix_len < sizeof(log_line)) {
-        vsnprintf(log_line + prefix_len, sizeof(log_line) - prefix_len, format, args);
-    }
-
-    va_end(args);
-
     int next_write = (sdCardbuffer->logWrite + 1) % SD_CARD_BUFF_NUM;
     if (next_write != sdCardbuffer->logRead) {
-        size_t copy_len = strlen(log_line);
-        if (copy_len >= SD_CARD_BUFF_SIZE) {
-            copy_len = SD_CARD_BUFF_SIZE - 1;
-        }
-        if (!en_log_write_read_mutex_lock()) {
-            // EN_SLOGE(TAG, "en_log_write_read_mutex_lock error!");
-            return;
-        }
-        memcpy(sdCardbuffer->buff[sdCardbuffer->logWrite], log_line, copy_len);
-        sdCardbuffer->buff[sdCardbuffer->logWrite][copy_len] = '\0';
+        strcpy(sdCardbuffer->buff[sdCardbuffer->logWrite], temp_buff);
         sdCardbuffer->logWrite = next_write;
-        en_log_write_read_mutex_unlock();
     }
 
-
+    en_log_write_read_mutex_unlock();
 }
-
-
+    #define BATCH_SIZE 8
+    char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};
+/**
+ * @brief SD卡日志写入任务
+ * 
+ * 该任务负责将环形缓冲区中的日志数据异步写入SD卡。
+ * 主要功能：
+ * 1. 日期检测与日志文件自动切换
+ * 2. 自动删除前一天的日志文件
+ * 3. 批量读取缓冲区数据并一次性写入SD卡（减少SD卡操作次数）
+ * 4. 动态调整轮询间隔（有数据时快速轮询，无数据时慢速轮询）
+ * 
+ * @param arg 任务参数（未使用）
+ */
 static void sdCardLogTask(void* arg) {
     ESP_LOGI(TAG, "SD card log task started");
-	 static char path[64] = "SN00000000000000_2020-01-01.log";
+    
+    // 日志文件路径，格式：SN序列号_年-月-日.log
+    static char path[64] = "SN00000000000000_2020-01-01.log";
     char sn[20] = {0};
-    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
-	time_t now;
-	static uint8_t  last_day = 0, last_mon = 0, mon;
-	static uint16_t year, last_year = 0;
-	static char last_path[64] = { 0 };
+    sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8 *)sn);  // 获取设备序列号
+    
+    // 日期相关变量，用于检测日期变更
+    static uint8_t last_day = 0, mon;
+    static uint16_t year, last_year = 0;
+    static char last_path[64] = {0};  // 前一天日志文件路径（用于删除）
+    
+    // 批量缓冲区，用于合并多条日志后一次性写入SD卡
+
+    int batch_count = 0;   // 当前批次的日志条数
+    
     while (1) {
-
-        sdCardLog_t*  getlogbuff = getLogBuff();
-        if(!getlogbuff)
-        {
-            ESP_LOGW(TAG,"getlogbuff is null!");
-            continue ;
-        }
-
-        time(&now);
-        struct tm* tm_now = localtime(&now);	
-        if (tm_now == NULL) {
+        // 获取环形缓冲区指针
+        sdCardLog_t* getlogbuff = getLogBuff();
+        if (!getlogbuff) {
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
-		year = tm_now->tm_year + 1900;
-		mon = tm_now->tm_mon + 1;
-		if((last_day!= tm_now->tm_mday)||(year -last_year > 1 ))
-		{
-			last_day = tm_now->tm_mday;
-			if(mon == 1)
-			{
-				last_mon = 12;
-				last_year = year -1;
-			}
-			else
-			{
-				last_mon = mon - 1;
-				last_year = year;
-			}
-			snprintf(last_path,sizeof(last_path), "%s_%d-%02d-%02d.log", sn, last_year, last_mon, last_day);	
-			if(s_sd_fat_ops->is_file_exist("SD_CARD", last_path))
-              {
-                  s_sd_fat_ops->delete_file("SD_CARD", last_path);
-                  EN_SLOGD(TAG, "Delete file %s", last_path);
-              }
-			memset(path, 0, sizeof(path));
-			snprintf(path,sizeof(path), "%s_%d-%02d-%02d.log",sn, year, mon, tm_now->tm_mday);	
-		}
 
-        if(!en_log_write_read_mutex_lock())
-        {
-            // EN_SLOGE(TAG, "en_log_write_read_mutex_lock error!");
-            continue ;
+        // 获取当前时间（使用localtime_r避免动态内存分配）
+        time_t now = time(NULL);
+        struct tm tm_now;
+        memset(&tm_now, 0, sizeof(struct tm));
+        if (localtime_r(&now, &tm_now) == NULL) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
         }
-        while(getlogbuff->logWrite != getlogbuff->logRead)
+
+        year = tm_now.tm_year + 1900;
+        mon = tm_now.tm_mon + 1;
+        
+        // 检测日期变更，切换日志文件
+        if ((last_day != tm_now.tm_mday) || (year - last_year > 1)) {
+            last_day = tm_now.tm_mday;
+            
+            // 计算前一天的日期（处理跨年跨月情况）
+            if (mon == 1) {
+                snprintf(last_path, sizeof(last_path), "%s_%d-%02d-%02d.log", sn, year - 1, 12, last_day);
+            } else {
+                snprintf(last_path, sizeof(last_path), "%s_%d-%02d-%02d.log", sn, year, mon - 1, last_day);
+            }
+            
+            // 删除前一天的日志文件（如果存在）
+            if (s_sd_fat_ops->is_file_exist("SD_CARD", last_path)) {
+                s_sd_fat_ops->delete_file("SD_CARD", last_path);
+                EN_SLOGD(TAG, "Delete file %s", last_path);
+            }
+            
+            // 创建新的日志文件路径
+            snprintf(path, sizeof(path), "%s_%d-%02d-%02d.log", sn, year, mon, tm_now.tm_mday);
+            last_year = year;
+        }
+
+        // 重置批次计数
+        batch_count = 0;
+        size_t total_len = 0;
+        
+        // 获取互斥锁（保护环形缓冲区访问）
+        if (!en_log_write_read_mutex_lock()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        
+        // 从环形缓冲区批量读取日志数据
+        while (getlogbuff->logWrite != getlogbuff->logRead && batch_count < BATCH_SIZE) 
         {
-            if(strlen(getlogbuff->buff[getlogbuff->logRead]))
+            const char* log_str = getlogbuff->buff[getlogbuff->logRead];
+            if (log_str[0] != '\0') 
             {
-                if(ESP_OK != s_sd_fat_ops->append_file("SD_CARD", 
-                    path, 
-                    getlogbuff->buff[getlogbuff->logRead], 
-                    strlen(getlogbuff->buff[getlogbuff->logRead])))
+                size_t len = strlen(log_str);
+                // 检查缓冲区是否足够
+                if (total_len + len + 1 < sizeof(batch_buffer)) 
                 {
-                    ESP_LOGE(TAG,"append_file error!");
-                    break;
-                }
-                if(++getlogbuff->logRead >= SD_CARD_BUFF_NUM)
-                {
-                    getlogbuff->logRead = 0;
-                }
-            }else
-            {
-                if(++getlogbuff->logRead >= SD_CARD_BUFF_NUM)
-                {
-                    getlogbuff->logRead = 0;
+                    // printf("log_str: %s\n", log_str);
+                    memcpy(batch_buffer + total_len, log_str, len);
+                    batch_buffer[total_len + len] = '\n';  // 添加换行符
+                    total_len += len + 1;
+                    batch_count++;
                 }
             }
+            
+            // 移动读指针（环形缓冲区）
+            if (++getlogbuff->logRead >= SD_CARD_BUFF_NUM) {
+                getlogbuff->logRead = 0;
+            }
         }
+        
+        // 释放互斥锁
         en_log_write_read_mutex_unlock();
-		vTaskDelay(500 / portTICK_PERIOD_MS);
+
+        // 批量写入SD卡（仅当有数据时）
+        if (batch_count > 0 && total_len > 0) {
+            esp_err_t ret = s_sd_fat_ops->append_file("SD_CARD", path, batch_buffer, total_len);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "append_file error!");
+            }
+        }
+        
+        // 动态调整轮询间隔：有数据时快速轮询，无数据时慢速轮询
+        if (batch_count > 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));   // 有数据时10ms轮询一次
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(100));  // 无数据时100ms轮询一次
+        }
     }
 }
 
