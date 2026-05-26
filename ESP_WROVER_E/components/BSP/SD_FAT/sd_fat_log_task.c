@@ -18,7 +18,7 @@
 #include "utility.h"
 #include "parameter.h"
 #include "parameterSet.h"
-#include "esp_heap_caps.h"
+#include "memory_pool.h"
 
 static const char* TAG = "sd_fat_log_task";
 
@@ -46,12 +46,8 @@ static volatile uint32_t dropped_log_count = 0;
 /* 系统时间是否为纪元时间标志 */
 static bool is_epoch_time = false;
 
-/* 内存池相关 */
-static sdCardLogNode_t* pool_start = NULL;      /* 内存池起始地址 */
-static sdCardLogNode_t* pool_free_list = NULL;  /* 空闲链表头 */
-static uint16_t pool_size = 0;                  /* 内存池总大小 */
-static uint16_t pool_used = 0;                  /* 当前使用数量 */
-static SemaphoreHandle_t pool_mutex = NULL;      /* 内存池互斥锁 */
+/* 内存池相关 - 使用公共内存池组件 */
+static memory_pool_t log_pool = {0};             /* 日志内存池 */
 
 bool Shellreadsd(const stShellPkt_t *pkg);
 
@@ -211,109 +207,32 @@ bool en_log_write_read_mutex_lock(void)
 }
 
 /**
- * @brief 初始化内存池
+ * @brief 初始化内存池（使用公共内存池组件）
  * @param size 内存池大小（节点数量）
  * @return 初始化成功返回 true，失败返回 false
  */
 bool sd_fat_log_pool_init(uint16_t size)
 {
-    if (pool_start) {
-        ESP_LOGW(TAG, "Memory pool already initialized");
-        return true;
-    }
-
-    pool_mutex = xSemaphoreCreateMutex();
-    if (!pool_mutex) {
-        ESP_LOGE(TAG, "Failed to create pool mutex");
-        return false;
-    }
-
-    pool_start = (sdCardLogNode_t*)heap_caps_malloc(size * sizeof(sdCardLogNode_t), MALLOC_CAP_SPIRAM);
-    if (!pool_start) {
-        ESP_LOGE(TAG, "Failed to allocate memory pool from PSRAM");
-        vSemaphoreDelete(pool_mutex);
-        return false;
-    }
-
-    for (uint16_t i = 0; i < size - 1; i++) {
-        pool_start[i].buff = (char*)heap_caps_malloc(SD_FAT_LOG_MAX_LEN, MALLOC_CAP_SPIRAM);
-        pool_start[i].buff_size = pool_start[i].buff ? SD_FAT_LOG_MAX_LEN : 0;
-        pool_start[i].next = &pool_start[i + 1];
-    }
-    pool_start[size - 1].buff = (char*)heap_caps_malloc(SD_FAT_LOG_MAX_LEN, MALLOC_CAP_SPIRAM);
-    pool_start[size - 1].buff_size = pool_start[size - 1].buff ? SD_FAT_LOG_MAX_LEN : 0;
-    pool_start[size - 1].next = NULL;
-    pool_free_list = pool_start;
-    pool_size = size;
-    pool_used = 0;
-
-    ESP_LOGI(TAG, "Memory pool initialized with %u nodes from PSRAM", size);
-    return true;
+    return mp_init(&log_pool, size, SD_FAT_LOG_MAX_LEN, true);
 }
 
 /**
- * @brief 从内存池分配节点
+ * @brief 从内存池分配节点（使用公共内存池组件）
  * @param data_size 需要存储的数据大小
  * @return 返回分配的节点指针，失败返回 NULL
  */
 sdCardLogNode_t* sd_fat_log_pool_alloc(size_t data_size)
 {
-    if (!pool_mutex || !pool_start) {
-        ESP_LOGW(TAG, "Memory pool not initialized");
-        return NULL;
-    }
-
-    if (xSemaphoreTake(pool_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to take pool mutex");
-        return NULL;
-    }
-
-    sdCardLogNode_t* node = pool_free_list;
-    if (node) {
-        pool_free_list = node->next;
-        pool_used++;
-        node->next = NULL;
-        
-        /* buff已在内存池初始化时从PSRAM预分配，直接使用 */
-        if (data_size > 0 && node->buff && data_size <= node->buff_size) {
-            memset(node->buff, 0, node->buff_size);
-        } else if (data_size > node->buff_size) {
-            ESP_LOGW(TAG, "Log data size %u exceeds buffer size %u", (unsigned int)data_size, (unsigned int)node->buff_size);
-            pool_free_list = node;
-            pool_used--;
-            node = NULL;
-        }
-    }
-
-    xSemaphoreGive(pool_mutex);
-    return node;
+    return (sdCardLogNode_t*)mp_alloc(&log_pool, data_size);
 }
 
 /**
- * @brief 将节点归还到内存池
+ * @brief 将节点归还到内存池（使用公共内存池组件）
  * @param node 要归还的节点指针
  */
 void sd_fat_log_pool_free(sdCardLogNode_t* node)
 {
-    if (!pool_mutex || !pool_start || !node) {
-        return;
-    }
-
-    if (xSemaphoreTake(pool_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to take pool mutex");
-        return;
-    }
-
-    /* buff属于内存池，不需要释放，只需重置 */
-    if (node->buff) {
-        memset(node->buff, 0, node->buff_size);
-    }
-
-    node->next = pool_free_list;
-    pool_free_list = node;
-    pool_used--;
-
-    xSemaphoreGive(pool_mutex);
+    mp_free(&log_pool, (mp_node_t*)node);
 }
 
 /**
@@ -327,7 +246,8 @@ void sd_fat_log_pool_free(sdCardLogNode_t* node)
 bool sdCardBuffInit(void)
 {
     if (!sdCardbuffer) {
-        sdCardbuffer = (sdCardLog_t*)malloc(sizeof(sdCardLog_t));
+        
+        sdCardbuffer = (sdCardLog_t*)heap_caps_malloc(sizeof(sdCardLog_t),MALLOC_CAP_SPIRAM);
         if (sdCardbuffer) {
             memset(sdCardbuffer, 0, sizeof(sdCardLog_t));
             sdCardbuffer->head = NULL;
@@ -489,14 +409,14 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     va_list args;
     va_start(args, format);
 
-    char temp_buff[SD_CARD_BUFF_SIZE];
-    int prefix_len = snprintf(temp_buff, SD_CARD_BUFF_SIZE, "%s %s (%s): ", timestamp, level_str, tag);
+  
+    int prefix_len = snprintf(sdCardbuffer->temp_buff, SD_CARD_BUFF_SIZE, "%s %s (%s): ", timestamp, level_str, tag);
     if (prefix_len > 0 && prefix_len < SD_CARD_BUFF_SIZE) {
-        vsnprintf(temp_buff + prefix_len, SD_CARD_BUFF_SIZE - prefix_len - 1, format, args);
+        vsnprintf(sdCardbuffer->temp_buff + prefix_len, SD_CARD_BUFF_SIZE - prefix_len - 1, format, args);
     }
     va_end(args);
 
-    size_t actual_size = strlen(temp_buff) + 1;
+    size_t actual_size = strlen(sdCardbuffer->temp_buff) + 1;
 
     if (!en_log_write_read_mutex_lock()) {
         __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
@@ -512,7 +432,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     }
 
     // 复制日志内容到节点
-    memcpy(new_node->buff, temp_buff, actual_size);
+    memcpy(new_node->buff, sdCardbuffer->temp_buff, actual_size);
     new_node->next = NULL;
 
     // 将新节点追加到链表尾部
@@ -546,9 +466,9 @@ static void sdCardLogTask(void* arg)
     static uint16_t last_year = 0;                /* 上次写入的年份 */
     static char last_path[64] = {0};              /* 上次日志文件路径（用于删除） */
     static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};  /* 批量写入缓冲区 */
-
+    uint32_t timeout = 0;
     uint32_t last_dropped_count = 0;              /* 上次监控时的丢弃计数 */
-    uint32_t monitor_interval_ms = 60000;         /* 监控间隔（毫秒） */
+    uint32_t monitor_interval_ms = 15;         /* 监控间隔（秒） */
     uint32_t last_monitor_time = esp_timer_get_time() / 1000;  /* 上次监控时间 */
 
     bool first_run = true;                        /* 首次运行标志 */
@@ -690,17 +610,17 @@ static void sdCardLogTask(void* arg)
         }
 
         /* 定期监控丢弃日志情况 */
-        uint32_t current_time = esp_timer_get_time() / 1000;
-        if (current_time - last_monitor_time >= monitor_interval_ms) {
+        if(tickOut(&timeout,15*1000))
+        {
+            tickOut(&timeout,0);
             uint32_t dropped_count = sd_fat_log_get_dropped_count();
             uint32_t dropped_since_last = dropped_count - last_dropped_count;
             if (dropped_since_last > 0) {
                 ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
             } else {
-                ESP_LOGD(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+                ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
             }
             last_dropped_count = dropped_count;
-            last_monitor_time = current_time;
         }
 
         vTaskDelay(pdMS_TO_TICKS(batch_count > 0 ? 10 : 100));

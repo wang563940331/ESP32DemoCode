@@ -58,6 +58,7 @@ typedef struct
 {
     sdCardLogNode_t* head;    /* 链表头指针 */
     sdCardLogNode_t* tail;    /* 链表尾指针 */
+    char temp_buff[SD_FAT_LOG_MAX_LEN]; /* 临时缓冲区 */
     uint16_t count;           /* 当前节点数量 */
 }__attribute__((packed)) sdCardLog_t;
 
