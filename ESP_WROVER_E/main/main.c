@@ -28,6 +28,7 @@
 #include "sd_fat_bsp.h"
 #include "sd_fat_ops.h"
 #include "sd_fat_log_task.h"
+#include "one_wire_bsp.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -191,6 +192,19 @@ void app_main(void)
     mdf_mem_print_heap();
     vTaskDelay(pdMS_TO_TICKS(1000));
 
+
+    const one_wire_device_t* sensor = one_wire_factory_get_device(GPIO_NUM_27);
+    
+    if (sensor == NULL) {
+        ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
+    } else {
+        // 初始化
+        esp_err_t ret = sensor->Init(GPIO_NUM_27);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
+            sensor = NULL;
+        }
+    }
 
 
     en_log_set();

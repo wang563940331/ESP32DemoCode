@@ -21,8 +21,8 @@ static const char* TAG = "one_wire_bsp";
 
 // 设备配置映射表（产品配置）
 static const one_wire_config_t one_wire_map[] = {
-    {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
-    // {GPIO_NUM_27, ONE_WIRE_TYPE_DHT11, 0, "DHT11_1"},  // 切换为DHT11时取消注释
+    // {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
+     {GPIO_NUM_27, ONE_WIRE_TYPE_DHT11, 0, "DHT11_1"},  // 切换为DHT11时取消注释
 };
 static const int one_wire_count = sizeof(one_wire_map) / sizeof(one_wire_map[0]);
 
@@ -209,7 +209,7 @@ static esp_err_t ds18b20_read_data(int gpio_num, one_wire_data_t* data) {
 
 // DS18B20获取温度
 static float ds18b20_get_temperature(int gpio_num) {
-    one_wire_data_t data;
+    one_wire_data_t data = {0};
     if (ds18b20_read_data(gpio_num, &data) == ESP_OK) {
         return data.temperature;
     }
@@ -247,12 +247,27 @@ static esp_err_t dht11_reset(int gpio_num) {
 
 // DHT11读位
 static uint8_t dht11_read_bit(int gpio_num) {
-    while (gpio_get_level(gpio_num) == 0);
+    const uint32_t timeout_us = 10000;
+    uint32_t start_time = esp_timer_get_time();
     
-    uint32_t start = esp_timer_get_time();
-    while (gpio_get_level(gpio_num) == 1);
-    uint32_t duration = esp_timer_get_time() - start;
+    while (gpio_get_level(gpio_num) == 0) {
+        if (esp_timer_get_time() - start_time > timeout_us) {
+            ESP_LOGE(TAG, "DHT11 read bit timeout (low)");
+            return 0;
+        }
+        taskYIELD();
+    }
     
+    start_time = esp_timer_get_time();
+    while (gpio_get_level(gpio_num) == 1) {
+        if (esp_timer_get_time() - start_time > timeout_us) {
+            ESP_LOGE(TAG, "DHT11 read bit timeout (high)");
+            return 0;
+        }
+        taskYIELD();
+    }
+    
+    uint32_t duration = esp_timer_get_time() - start_time;
     return (duration > 40) ? 1 : 0;
 }
 
