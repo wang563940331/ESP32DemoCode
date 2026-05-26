@@ -625,8 +625,12 @@ static void sdCardLogTask(void* arg)
             }else {
                 uint16_t pool_total = mp_get_pool_size(&log_pool);
                 uint16_t pool_used = mp_get_used_count(&log_pool);
-                ESP_LOGI(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
-                         path, (unsigned int)total_len, pool_used, pool_total);
+                if(pool_used>=2)
+                {
+                    ESP_LOGI(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
+                    path, (unsigned int)total_len, pool_used, pool_total);
+                }
+  
             }
         }
 
@@ -639,7 +643,7 @@ static void sdCardLogTask(void* arg)
             if (dropped_since_last > 0) {
                 ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
             } else {
-                ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+                // ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
             }
             last_dropped_count = dropped_count;
         }

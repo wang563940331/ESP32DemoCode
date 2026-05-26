@@ -820,7 +820,7 @@ int simple_init(void)
     ESP_LOGI(TAG, "simple_init AT CMD bRst: %d", bRst);
 
     TaskHandle_t TaskHandle = NULL;
-    xTaskCreatePinnedToCore(simple_task,"MyTask",4096,NULL,5,&TaskHandle,0);
+    xTaskCreatePinnedToCore(simple_task,"my_simple",4096,NULL,5,&TaskHandle,0);
     if(!TaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");

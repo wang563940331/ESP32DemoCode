@@ -93,6 +93,42 @@ void print_detailed_mem_info(void)
     ESP_LOGI(TAG, "\n外部RAM分布:");
     heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
 }
+void mdf_mem_print_heap2(void)
+{
+ const UBaseType_t uxMaxNumberOfTasks = uxTaskGetNumberOfTasks();
+    TaskStatus_t *pxTaskStatusArray = (TaskStatus_t *)pvPortMalloc(uxMaxNumberOfTasks * sizeof(TaskStatus_t));
+    
+    if (pxTaskStatusArray != NULL) {
+        UBaseType_t uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxMaxNumberOfTasks, NULL);
+        
+        ESP_LOGI(TAG, "========================================");
+        ESP_LOGI(TAG, "任务堆栈使用情况: 共 %u 个任务", uxArraySize);
+        ESP_LOGI(TAG, "任务名                  优先级  状态  剩余堆栈");
+        ESP_LOGI(TAG, "---------------------------------------------");
+        
+        for (UBaseType_t i = 0; i < uxArraySize; i++) {
+            char status_str[10];
+            switch (pxTaskStatusArray[i].eCurrentState) {
+                case eRunning:    strcpy(status_str, "运行"); break;
+                case eReady:      strcpy(status_str, "就绪"); break;
+                case eBlocked:    strcpy(status_str, "阻塞"); break;
+                case eSuspended:  strcpy(status_str, "挂起"); break;
+                case eDeleted:    strcpy(status_str, "删除"); break;
+                default:          strcpy(status_str, "未知"); break;
+            }
+            
+            ESP_LOGI(TAG, "%-20s  %-3u    %-4s  %5u",
+                     pxTaskStatusArray[i].pcTaskName,
+                     pxTaskStatusArray[i].uxCurrentPriority,
+                     status_str,
+                     pxTaskStatusArray[i].usStackHighWaterMark);
+        }
+        
+        ESP_LOGI(TAG, "========================================");
+        vPortFree(pxTaskStatusArray);
+    }
+
+}
 /**********************************************************************************************
 * Description       :     网关-打印RAM大小
 * Author            :     XRG
@@ -101,15 +137,6 @@ void print_detailed_mem_info(void)
 ***********************************************************************************************/
 void mdf_mem_print_heap(void)
 {
-// 修复后
-// ESP_LOGI(TAG, "internal:%zu, mini:%zu, spiram:%zu, mini:%zu, total:%zu, mini:%zu",
-// ESP_LOGI(TAG, "内部RAM可用:%zu, 最小:%zu, 外部RAM可用:%zu, 最小:%zu, 默认RAM可用:%zu, 最小:%zu",
-//          heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-//          heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
-//          heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-//          heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
-//          heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
-//          heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT));
 
    // 获取内存大小
     internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);

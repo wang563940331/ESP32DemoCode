@@ -95,4 +95,5 @@ typedef float                           f32;
 uint8_t tickOut(uint32_t *tick, uint32_t timeout);
 void mdf_mem_print_heap(void);
 u32 sGetTimestamp(void);
+void mdf_mem_print_heap2(void);
 #endif

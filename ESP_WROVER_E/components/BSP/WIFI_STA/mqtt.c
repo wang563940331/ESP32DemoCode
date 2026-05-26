@@ -410,7 +410,7 @@ int init_mqtt(void)
 {
     // xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
      // 使用外部RAM创建任务栈
-    xTaskCreatePinnedToCore(my_task, "MyTask", 4096, NULL, 5, &myTaskHandle, 0);
+    xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 5, &myTaskHandle, 0);
     if(!myTaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");
