@@ -24,8 +24,8 @@ static const char* TAG = "sd_fat_log_task";
 
 /* 批量写入SD卡的日志条数 */
 #define BATCH_SIZE 8
-/* 互斥锁超时时间（毫秒），0表示不等待 */
-#define MUTEX_TIMEOUT_MS 0
+/* 互斥锁超时时间（毫秒），高频场景下需要等待获取锁 */
+#define MUTEX_TIMEOUT_MS 50
 /* Unix纪元年份（1970年），用于判断系统时间是否已同步 */
 #define EPOCH_YEAR 1970
 /* SD卡挂载路径 */
@@ -423,8 +423,24 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
         return;
     }
 
-    // 从内存池分配节点，传入实际数据大小
-    sdCardLogNode_t* new_node = sd_fat_log_pool_alloc(actual_size);
+    sdCardLogNode_t* new_node = NULL;
+
+    // 尝试追加到尾部节点（如果有空间且日志较小）
+    // 阈值设为缓冲区大小的一半，确保有足够空间存储新日志
+    if (sdCardbuffer->tail && actual_size < SD_CARD_BUFF_SIZE / 2) {
+        size_t used_size = strlen(sdCardbuffer->tail->buff);
+        // 检查尾部节点是否有足够空间（+2 用于换行符和字符串结束符）
+        if (used_size + actual_size + 2 < sdCardbuffer->tail->buff_size) {
+            // 追加到尾部节点，用换行符分隔
+            strcat(sdCardbuffer->tail->buff, "\n");
+            strcat(sdCardbuffer->tail->buff, sdCardbuffer->temp_buff);
+            en_log_write_read_mutex_unlock();
+            return;
+        }
+    }
+
+    // 需要分配新节点
+    new_node = sd_fat_log_pool_alloc(actual_size);
     if (!new_node) {
         __atomic_fetch_add(&dropped_log_count, 1, __ATOMIC_RELAXED);
         en_log_write_read_mutex_unlock();
@@ -606,6 +622,11 @@ static void sdCardLogTask(void* arg)
             esp_err_t ret = s_sd_fat_ops->append_file("SD_CARD", path, batch_buffer, total_len);
             if (ret != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to append to file %s", path);
+            }else {
+                uint16_t pool_total = mp_get_pool_size(&log_pool);
+                uint16_t pool_used = mp_get_used_count(&log_pool);
+                ESP_LOGI(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
+                         path, (unsigned int)total_len, pool_used, pool_total);
             }
         }
 
@@ -623,7 +644,28 @@ static void sdCardLogTask(void* arg)
             last_dropped_count = dropped_count;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(batch_count > 0 ? 10 : 100));
+        /* 动态调整任务延迟：根据内存池使用率调整写入频率 */
+        uint16_t pool_total = mp_get_pool_size(&log_pool);
+        uint16_t pool_used = mp_get_used_count(&log_pool);
+        uint32_t delay_ms = 100;  // 默认延迟
+        
+        if (pool_total > 0) {
+            float usage_rate = (float)pool_used / pool_total;
+            if (usage_rate > 0.8) {
+                // 高水位：内存池使用超过80%，立即写入，不延迟
+                delay_ms = 0;
+                ESP_LOGW(TAG, "High pool usage: %u/%u (%.0f%%), forcing immediate write", 
+                         pool_used, pool_total, usage_rate * 100);
+            } else if (usage_rate > 0.5) {
+                // 中水位：内存池使用超过50%，缩短延迟
+                delay_ms = 5;
+            } else if (batch_count > 0) {
+                // 有数据待写入，正常延迟
+                delay_ms = 10;
+            }
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
 

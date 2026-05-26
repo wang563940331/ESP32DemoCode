@@ -291,7 +291,7 @@ esp_err_t sd_fat_ops_append_file(const char* device_name, const char* path, cons
         return ESP_ERR_NO_MEM;
     }
 
-    EN_SLOGI(TAG, "Append file success: %s, size: %u bytes", path, (unsigned int)len);
+    // EN_SLOGI(TAG, "Append file success: %s, size: %u bytes", path, (unsigned int)len);
     return ESP_OK;
 }
 

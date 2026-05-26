@@ -35,7 +35,7 @@ typedef struct {
     uint32_t max_files;           /* 最大日志文件数量，超过后删除最旧的 */
     uint32_t task_stack_size;     /* 日志任务栈大小 */
     uint32_t task_priority;       /* 日志任务优先级 */
-    uint32_t queue_size;          /* 日志队列大小 */
+    uint32_t queue_size;          /* 日志内存池队列大小 */
     sd_fat_log_level_t log_level; /* 日志级别过滤 */
 } sd_fat_log_config_t;
 
@@ -93,7 +93,7 @@ void sd_fat_log_pool_free(sdCardLogNode_t* node);
     .max_files = 255, \
     .task_stack_size = 5*1024, \
     .task_priority = 9, \
-    .queue_size = 50, \
+    .queue_size = 10, \
     .log_level = LOG_LEVEL_DEBUG \
 }
 
