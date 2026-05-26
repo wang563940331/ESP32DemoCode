@@ -11,6 +11,7 @@
 
 #define SD_CARD_BUFF_SIZE 		1024
 #define SD_CARD_BUFF_NUM		25
+#define SD_FAT_LOG_MAX_LEN      1024    /* 单条日志最大长度 */
 
 /**
  * @brief 日志级别枚举
@@ -42,11 +43,11 @@ typedef struct {
 
 
 /**
- * @brief 日志链表节点结构（buff动态分配）
+ * @brief 日志链表节点结构（buff由内存池从PSRAM预分配）
  */
 typedef struct sdCardLogNode {
-    char* buff;              /* 动态分配的日志内容缓冲区 */
-    size_t buff_size;        /* 实际使用的缓冲区大小 */
+    char* buff;              /* PSRAM预分配的日志内容缓冲区 */
+    size_t buff_size;        /* 缓冲区总大小 */
     struct sdCardLogNode* next;
 } sdCardLogNode_t;
 

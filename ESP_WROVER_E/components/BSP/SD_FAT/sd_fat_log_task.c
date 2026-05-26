@@ -18,6 +18,7 @@
 #include "utility.h"
 #include "parameter.h"
 #include "parameterSet.h"
+#include "esp_heap_caps.h"
 
 static const char* TAG = "sd_fat_log_task";
 
@@ -227,26 +228,26 @@ bool sd_fat_log_pool_init(uint16_t size)
         return false;
     }
 
-    pool_start = (sdCardLogNode_t*)malloc(size * sizeof(sdCardLogNode_t));
+    pool_start = (sdCardLogNode_t*)heap_caps_malloc(size * sizeof(sdCardLogNode_t), MALLOC_CAP_SPIRAM);
     if (!pool_start) {
-        ESP_LOGE(TAG, "Failed to allocate memory pool");
+        ESP_LOGE(TAG, "Failed to allocate memory pool from PSRAM");
         vSemaphoreDelete(pool_mutex);
         return false;
     }
 
     for (uint16_t i = 0; i < size - 1; i++) {
-        pool_start[i].buff = NULL;
-        pool_start[i].buff_size = 0;
+        pool_start[i].buff = (char*)heap_caps_malloc(SD_FAT_LOG_MAX_LEN, MALLOC_CAP_SPIRAM);
+        pool_start[i].buff_size = pool_start[i].buff ? SD_FAT_LOG_MAX_LEN : 0;
         pool_start[i].next = &pool_start[i + 1];
     }
-    pool_start[size - 1].buff = NULL;
-    pool_start[size - 1].buff_size = 0;
+    pool_start[size - 1].buff = (char*)heap_caps_malloc(SD_FAT_LOG_MAX_LEN, MALLOC_CAP_SPIRAM);
+    pool_start[size - 1].buff_size = pool_start[size - 1].buff ? SD_FAT_LOG_MAX_LEN : 0;
     pool_start[size - 1].next = NULL;
     pool_free_list = pool_start;
     pool_size = size;
     pool_used = 0;
 
-    ESP_LOGI(TAG, "Memory pool initialized with %u nodes", size);
+    ESP_LOGI(TAG, "Memory pool initialized with %u nodes from PSRAM", size);
     return true;
 }
 
@@ -273,21 +274,14 @@ sdCardLogNode_t* sd_fat_log_pool_alloc(size_t data_size)
         pool_used++;
         node->next = NULL;
         
-        /* 动态分配buff */
-        if (data_size > 0) {
-            node->buff = (char*)malloc(data_size);
-            if (node->buff) {
-                memset(node->buff, 0, data_size);
-                node->buff_size = data_size;
-            } else {
-                node->buff_size = 0;
-                pool_free_list = node;
-                pool_used--;
-                node = NULL;
-            }
-        } else {
-            node->buff = NULL;
-            node->buff_size = 0;
+        /* buff已在内存池初始化时从PSRAM预分配，直接使用 */
+        if (data_size > 0 && node->buff && data_size <= node->buff_size) {
+            memset(node->buff, 0, node->buff_size);
+        } else if (data_size > node->buff_size) {
+            ESP_LOGW(TAG, "Log data size %u exceeds buffer size %u", (unsigned int)data_size, (unsigned int)node->buff_size);
+            pool_free_list = node;
+            pool_used--;
+            node = NULL;
         }
     }
 
@@ -310,12 +304,10 @@ void sd_fat_log_pool_free(sdCardLogNode_t* node)
         return;
     }
 
-    /* 释放动态分配的buff */
+    /* buff属于内存池，不需要释放，只需重置 */
     if (node->buff) {
-        free(node->buff);
-        node->buff = NULL;
+        memset(node->buff, 0, node->buff_size);
     }
-    node->buff_size = 0;
 
     node->next = pool_free_list;
     pool_free_list = node;
