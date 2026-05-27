@@ -29,6 +29,7 @@
 #include "sd_fat_ops.h"
 #include "sd_fat_log_task.h"
 #include "one_wire_bsp.h"
+#include "app_config.h"
 
 // 定义日志标签
 static const char*TAG = "main";
@@ -179,7 +180,7 @@ void app_main(void)
 
     sShellInit();
     mdf_mem_print_heap();
-    
+#if (SDCARDLOGEN == TRUE)
     const sd_fat_ops_t* ops = sd_fat_get_ops();
     if(ESP_OK == ops->init("SD_CARD"))
     {
@@ -188,6 +189,8 @@ void app_main(void)
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
     app_print_version_info();
+#endif
+    mdf_mem_print_heap();
     NVS_init();
     mdf_mem_print_heap();
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -202,6 +205,7 @@ void app_main(void)
 
     init_netWork();
     mdf_mem_print_heap();
+
     // 初始化其他网络服务
     simple_init();
     mdf_mem_print_heap();
@@ -209,9 +213,6 @@ void app_main(void)
     init_mqtt();
     mdf_mem_print_heap();
 
-    // uart1_init();
-    // uart2_init();
-    //vTaskDelete(NULL);
     const  uart_device_t* uart1 = uart_factory_get_device(UART_NUM_1);
     if(uart1 == NULL)
     {

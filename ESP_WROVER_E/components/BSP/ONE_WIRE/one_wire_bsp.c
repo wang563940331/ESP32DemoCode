@@ -5,7 +5,7 @@
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "my_log.h"
-
+#include "app_config.h"
 static const char* TAG = "one_wire_bsp";
 
 // ==================== DS18B20相关定义 ====================
@@ -21,8 +21,11 @@ static const char* TAG = "one_wire_bsp";
 
 // 设备配置映射表（产品配置）
 static const one_wire_config_t one_wire_map[] = {
-    // {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
+#if(CONFIG_SENSOR_TEMP == CONFIG_SENSOR_DS18B20)
+     {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
+#else
      {GPIO_NUM_27, ONE_WIRE_TYPE_DHT11, 0, "DHT11_1"},  // 切换为DHT11时取消注释
+#endif
 };
 static const int one_wire_count = sizeof(one_wire_map) / sizeof(one_wire_map[0]);
 
