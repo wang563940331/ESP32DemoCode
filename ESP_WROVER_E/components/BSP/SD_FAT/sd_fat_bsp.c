@@ -241,9 +241,16 @@ static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
                 fseek(f, 0, SEEK_END);
                 long size = ftell(f);
                 fclose(f);
-                ESP_LOGI(TAG, "  %s (%ld bytes)", entry->d_name, size);
+                if (size < 1024) {
+                    ESP_LOGI(TAG, "%s (%u B)", entry->d_name, (unsigned int)size);
+                } else if (size < 1024 * 1024) {
+                    ESP_LOGI(TAG, "%s (%.2f KB)", entry->d_name, (float)size / 1024);
+                }else
+                {
+                    ESP_LOGI(TAG, "%s (%.2f MB)", entry->d_name, (float)size / (1024 * 1024));
+                }
             } else {
-                ESP_LOGI(TAG, "  %s (size unknown)", entry->d_name);
+                ESP_LOGI(TAG, "%s (size unknown)", entry->d_name);
             }
         }
     }

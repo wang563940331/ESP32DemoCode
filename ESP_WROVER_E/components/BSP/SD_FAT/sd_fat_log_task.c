@@ -107,10 +107,14 @@ bool Shellreadsd(const stShellPkt_t *pkg)
                     file_size = ftell(fp);
                     fclose(fp);
                     // 以 KB 格式显示文件大小
+           
                     if (file_size < 1024) {
                         printf("  - %s (%u 字节)\r\n", entry->d_name, (unsigned int)file_size);
-                    } else {
+                    } else if (file_size < 1024 * 1024) {
                         printf("  - %s (%.2f KB)\r\n", entry->d_name, (float)file_size / 1024);
+                    }else
+                    {
+                        printf("  - %s (%.2f MB)\r\n", entry->d_name, (float)file_size / (1024 * 1024));
                     }
                     file_count++;
                 } else {

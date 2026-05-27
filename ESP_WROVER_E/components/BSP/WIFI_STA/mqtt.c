@@ -265,10 +265,12 @@ void send_head(const char *data,float temperature, float humidity) {
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
     // 添加字段：temperature
-    cJSON_AddItemToObject(root, "temperature", cJSON_CreateNumber(temperature));
+    float temp_rounded = (float)((int)(temperature * 10 + 0.5)) / 10;
+    cJSON_AddItemToObject(root, "temperature", cJSON_CreateNumber(temp_rounded));
     // 添加字段：humidity（仅在有效时添加）
     if (humidity >= 0) {
-        cJSON_AddItemToObject(root, "humidity", cJSON_CreateNumber(humidity));
+        float hum_rounded = (float)((int)(humidity * 10 + 0.5)) / 10;
+        cJSON_AddItemToObject(root, "humidity", cJSON_CreateNumber(hum_rounded));
     }
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
