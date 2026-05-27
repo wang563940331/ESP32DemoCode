@@ -255,16 +255,16 @@ static uint8_t dht11_read_bit(int gpio_num) {
             ESP_LOGE(TAG, "DHT11 read bit timeout (low)");
             return 0;
         }
-        taskYIELD();
+        esp_rom_delay_us(1);
     }
     
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 1) {
         if (esp_timer_get_time() - start_time > timeout_us) {
-            ESP_LOGE(TAG, "DHT11 read bit timeout (high)");
+            // ESP_LOGE(TAG, "DHT11 read bit timeout (high)");
             return 0;
         }
-        taskYIELD();
+        esp_rom_delay_us(1);
     }
     
     uint32_t duration = esp_timer_get_time() - start_time;
@@ -276,6 +276,7 @@ static uint8_t dht11_read_byte(int gpio_num) {
     uint8_t byte = 0;
     for (int i = 0; i < 8; i++) {
         byte |= (dht11_read_bit(gpio_num) << (7 - i));
+        esp_rom_delay_us(2);
     }
     return byte;
 }
@@ -316,10 +317,10 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
     }
 
     uint8_t buffer[5];
-    const int max_retries = 3;
+    const int max_retries = 10;
     
     for (int retry = 0; retry < max_retries; retry++) {
-        if (dht11_reset(gpio_num) != ESP_OK) continue;
+         if (dht11_reset(gpio_num) != ESP_OK) continue;
 
         for (int i = 0; i < 5; i++) {
             buffer[i] = dht11_read_byte(gpio_num);
@@ -331,31 +332,28 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
             data->temperature = (float)buffer[2] + (float)buffer[3] / 10.0f;
             data->valid = 1;
             return ESP_OK;
+            
         }
         
-        ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+        //ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
     }
     
     ESP_LOGE(TAG, "DHT11 checksum error");
     return ESP_ERR_INVALID_CRC;
 }
-
+ one_wire_data_t datadht11;
 // DHT11获取温度
 static float dht11_get_temperature(int gpio_num) {
-    one_wire_data_t data;
-    if (dht11_read_data(gpio_num, &data) == ESP_OK) {
-        return data.temperature;
+  
+    if (dht11_read_data(gpio_num, &datadht11) == ESP_OK) {
+        return datadht11.temperature;
     }
     return -1000.0f;
 }
 
 // DHT11获取湿度
 static float dht11_get_humidity(int gpio_num) {
-    one_wire_data_t data;
-    if (dht11_read_data(gpio_num, &data) == ESP_OK) {
-        return data.humidity;
-    }
-    return -1.0f;
+    return datadht11.humidity;
 }
 
 // ==================== 传感器类型分发 ====================

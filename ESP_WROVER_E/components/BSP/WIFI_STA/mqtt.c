@@ -342,16 +342,16 @@ void my_task(void *pvParameters)
     EventBits_t ev = 0;
     const one_wire_device_t* sensor = one_wire_factory_get_device(GPIO_NUM_27);
     
-    // if (sensor == NULL) {
-    //     ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
-    // } else {
-    //     // 初始化
-    //     esp_err_t ret = sensor->Init(GPIO_NUM_27);
-    //     if (ret != ESP_OK) {
-    //         ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
-    //         sensor = NULL;
-    //     }
-    // }
+    if (sensor == NULL) {
+        ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
+    } else {
+        // 初始化
+        esp_err_t ret = sensor->Init(GPIO_NUM_27);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
+            sensor = NULL;
+        }
+    }
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
     // 获取WiFi事件句柄
@@ -410,7 +410,7 @@ int init_mqtt(void)
 {
     // xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
      // 使用外部RAM创建任务栈
-    xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 5, &myTaskHandle, 0);
+    xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 10, &myTaskHandle, 0);
     if(!myTaskHandle)
     {
          ESP_LOGI(TAG,"Task created failed!\n");
