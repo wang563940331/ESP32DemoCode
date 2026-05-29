@@ -17,6 +17,7 @@
 #include "parameterSet.h"
 #include "one_wire_bsp.h"
 #include "esp_heap_caps.h"
+#include "wifi_ap.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -340,6 +341,7 @@ void my_task(void *pvParameters)
     static int count = 0;
     // 静态变量tims，用于记录时间戳
     static uint32_t tims=0;
+    static uint32_t tims2=0;
     // MQTT发布消息缓冲区，大小为64字节
     char mqtt_pub_buff[64]={0};
     // 事件位变量，用于存储WiFi事件
@@ -408,6 +410,7 @@ void my_task(void *pvParameters)
                 }
                 
                 tickOut(&tims,0);
+                tickOut(&tims2,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
                 send_head(mqtt_pub_buff, temp, humi);
             }
@@ -415,6 +418,20 @@ void my_task(void *pvParameters)
         else
         {
             login_status= false;
+
+            if(get_ap_connected_status() == 0)
+            {
+                if(tickOut(&tims2,15*60*1000))
+                {
+                    ESP_LOGE(TAG, "MQTT连接超时，重启设备\r\n");
+                    vTaskDelay(pdMS_TO_TICKS(3000));
+                    esp_restart();
+                    tickOut(&tims2,0);
+                }                
+            }else
+            {
+                tickOut(&tims2,0);
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
