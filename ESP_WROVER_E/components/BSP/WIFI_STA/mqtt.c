@@ -333,7 +333,9 @@ esp_err_t mqtt_reinit(void) {
  */
 void my_task(void *pvParameters) 
 {
+    int errnmber = 0;
     static bool login_status = false; // 登录状态标志，初始为未登录
+    const one_wire_device_t* sensor=NULL;
     // 静态变量count，用于计数发布的消息数量
     static int count = 0;
     // 静态变量tims，用于记录时间戳
@@ -342,18 +344,28 @@ void my_task(void *pvParameters)
     char mqtt_pub_buff[64]={0};
     // 事件位变量，用于存储WiFi事件
     EventBits_t ev = 0;
-    const one_wire_device_t* sensor = one_wire_factory_get_device(GPIO_NUM_27);
-    
-    if (sensor == NULL) {
-        ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
-    } else {
-        // 初始化
-        esp_err_t ret = sensor->Init(GPIO_NUM_27);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
-            sensor = NULL;
+    do
+    {
+        errnmber++;
+        sensor = one_wire_factory_get_device(GPIO_NUM_27);
+        
+        if (sensor == NULL) {
+            ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
+        } else {
+            // 初始化
+            esp_err_t ret = sensor->Init(GPIO_NUM_27);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
+                sensor = NULL;
+            }
         }
-    }
+        if(errnmber > 10)
+        {
+            break;
+        }
+    } while (sensor == NULL);
+    
+
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
     // 获取WiFi事件句柄
