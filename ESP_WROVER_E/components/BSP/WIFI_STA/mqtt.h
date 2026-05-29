@@ -42,6 +42,7 @@ typedef enum
 {
     POWERON = 0,
     POWEROF = 1,
+    REBOOT = 2,
 }eControl;
 
 int init_mqtt(void);

@@ -117,6 +117,11 @@ void motorStateMachine()
             /* code */
             break;
         }
+        case REBOOT :
+        {
+            esp_restart();
+            break;
+        }
 
         default:
             break;

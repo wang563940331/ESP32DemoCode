@@ -104,6 +104,11 @@ void parse_json(const char *json_string,void *Start_once)
                                 ESP_LOGI(TAG, "Command: CLOSE");
                                 *((eControl*)Start_once) = POWEROF;
                             } 
+                            else if (strcmp(cmd_value, "reboot") == 0)
+                            {
+                                ESP_LOGI(TAG, "Command: REBOOT");
+                                *((eControl*)Start_once) = REBOOT;
+                            }
                         }
                     }
                 }
