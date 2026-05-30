@@ -6,6 +6,8 @@
 /* 引脚定义 */
 #define LED_GPIO_PIN    GPIO_NUM_33  /* LED连接的GPIO端口 */
 
+/* 引脚定义 */
+#define BEEP_GPIO_PIN    GPIO_NUM_25  /* BEEP连接的GPIO端口 */
 /* 函数声明*/
 void led_init(void);    
 void led_heartbeat(void); //心跳

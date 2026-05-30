@@ -30,7 +30,7 @@
 #include "sd_fat_log_task.h"
 #include "one_wire_bsp.h"
 #include "app_config.h"
-
+#include "gpio_output_bsp.h"
 // 定义日志标签
 static const char*TAG = "main";
 
@@ -199,6 +199,18 @@ void app_main(void)
     // 初始化基本硬件
     led_init();
     mdf_mem_print_heap();
+
+    gpio_output_factory_init(BEEP_GPIO_PIN);   
+    const gpio_output_device_t* dev = gpio_output_factory_get_device(BEEP_GPIO_PIN);
+    if (dev) {
+        dev->On(BEEP_GPIO_PIN);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(300));
+    
+    if (dev) {
+        dev->Off(BEEP_GPIO_PIN);
+    }
 
     pwm_init();
     mdf_mem_print_heap();

@@ -7,7 +7,6 @@
 // GPIO输出设备类型
 typedef enum {
     GPIO_OUTPUT_LED = 0,        // LED灯
-    GPIO_OUTPUT_RELAY,          // 继电器
     GPIO_OUTPUT_BUZZER,         // 蜂鸣器
     GPIO_OUTPUT_OTHER,          // 其他
     GPIO_OUTPUT_MAX

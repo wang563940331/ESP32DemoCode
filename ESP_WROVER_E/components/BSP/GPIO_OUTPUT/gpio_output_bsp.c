@@ -6,7 +6,7 @@ static const char* TAG = "gpio_output_bsp";
 // 设备配置映射表（产品配置）
 static const gpio_output_config_t gpio_output_map[] = {
     {GPIO_NUM_33, GPIO_OUTPUT_LED,    1, 0, "LED"},
-    // {GPIO_NUM_18, GPIO_OUTPUT_RELAY,  1, 0, "Relay"},
+    {GPIO_NUM_25, GPIO_OUTPUT_BUZZER,  1, 0, "BEEP"},
     // {GPIO_NUM_19, GPIO_OUTPUT_BUZZER, 1, 0, "Buzzer"},
 };
 static const int gpio_output_count = sizeof(gpio_output_map) / sizeof(gpio_output_map[0]);
