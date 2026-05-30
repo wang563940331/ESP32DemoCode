@@ -101,10 +101,10 @@ void mdf_mem_print_heap2(void)
     if (pxTaskStatusArray != NULL) {
         UBaseType_t uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxMaxNumberOfTasks, NULL);
         
-        ESP_LOGI(TAG, "========================================");
-        ESP_LOGI(TAG, "任务堆栈使用情况: 共 %u 个任务", uxArraySize);
-        ESP_LOGI(TAG, "任务名                  优先级  状态  剩余堆栈");
-        ESP_LOGI(TAG, "---------------------------------------------");
+        printf("========================================\n");
+        printf("任务堆栈使用情况: 共 %u 个任务\n", uxArraySize);
+        printf("任务名                  优先级  状态  剩余堆栈\n");
+        printf("---------------------------------------------\n");
         
         for (UBaseType_t i = 0; i < uxArraySize; i++) {
             char status_str[10];
@@ -117,14 +117,14 @@ void mdf_mem_print_heap2(void)
                 default:          strcpy(status_str, "未知"); break;
             }
             
-            ESP_LOGI(TAG, "%-20s  %-3u    %-4s  %5u",
+            printf("%-20s  %-3u    %-4s  %5u\n",
                      pxTaskStatusArray[i].pcTaskName,
                      pxTaskStatusArray[i].uxCurrentPriority,
                      status_str,
                      pxTaskStatusArray[i].usStackHighWaterMark);
         }
         
-        ESP_LOGI(TAG, "========================================");
+        printf("========================================\n");
         vPortFree(pxTaskStatusArray);
     }
 

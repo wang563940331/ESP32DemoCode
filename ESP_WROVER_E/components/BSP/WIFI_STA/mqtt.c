@@ -253,6 +253,7 @@ void send_head(const char *data,float temperature, float humidity) {
     char sn[20] = {0};
     sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
     char time_str[32];
+    char str[10];
     // 将时间格式化为"YYYY-MM-DD HH:MM:SS"格式
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
@@ -265,13 +266,14 @@ void send_head(const char *data,float temperature, float humidity) {
     cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
-    // 添加字段：temperature
-    float temp_rounded = (float)((int)(temperature * 10 + 0.5)) / 10;
-    cJSON_AddItemToObject(root, "temperature", cJSON_CreateNumber(temp_rounded));
+    // 添加字段：temperature（精确到1位小数）
+    snprintf(str, sizeof(str), "%.2f", temperature);
+    cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
     // 添加字段：humidity（仅在有效时添加）
     if (humidity >= 0) {
-        float hum_rounded = (float)((int)(humidity * 10 + 0.5)) / 10;
-        cJSON_AddItemToObject(root, "humidity", cJSON_CreateNumber(hum_rounded));
+        memset(str, 0, sizeof(str));
+        snprintf(str, sizeof(str), "%.2f", humidity);
+        cJSON_AddItemToObject(root, "humidity", cJSON_CreateString(str));
     }
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
