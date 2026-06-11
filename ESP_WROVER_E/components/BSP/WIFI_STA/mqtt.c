@@ -137,7 +137,7 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
         case MQTT_EVENT_UNSUBSCRIBED:   //收到解订阅消息ACK
             break;
         case MQTT_EVENT_PUBLISHED://收到发布消息ACK
-            ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
+            // ESP_LOGI(TAG, "MQTT 发布确认, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_DATA:
             EN_SLOGI(TAG,"topic=%.*s", event->topic_len, event->topic);       //收到Pub消息直接打印出来
@@ -237,6 +237,7 @@ void send_ctrlacl(const char *data) {
     esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                            mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
     cJSON_Delete(root);
+    EN_SLOGI(TAG,"%s",mqtt_pub_buff);
     heap_caps_free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
     mqtt_pub_buff = NULL;
 }
@@ -303,7 +304,7 @@ void send_head(const char *data,float temperature, float humidity) {
         esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                                json_str, strlen(json_str), 1, 0);
     }
-    
+    EN_SLOGI(TAG,"%s",json_str);
     cJSON_Delete(root);
     heap_caps_free(json_str); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
 }
@@ -400,9 +401,9 @@ void my_task(void *pvParameters)
                     humi = sensor->GetHumidity(GPIO_NUM_27);
                     if (temp != -1000.0f) {
                         if (humi >= 0) {
-                            ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
+                            // ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
                         } else {
-                            ESP_LOGI(TAG, "温度: %.2f°C", temp);
+                            // ESP_LOGI(TAG, "温度: %.2f°C", temp);
                         }
                     } else {
                         ESP_LOGE(TAG, "读取传感器数据失败");
