@@ -217,12 +217,12 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
             eRst    = eStorageApRstFail;
             switch(eCmd)
             {
-                case cStorageApCmdGwNvsSn:
-                    bRst = cJSON_SetStringEx(pObj , cStorageGwNvsSn, (const char *)pData);
-                    break;
-                case cStorageApCmdGwNvsDeviceType:
-                    bRst = cJSON_SetIntEx(pObj , cStorageGwNvsDeviceType, (*pData));
-                    break;
+                // case cStorageApCmdGwNvsSn:
+                //     bRst = cJSON_SetStringEx(pObj , cStorageGwNvsSn, (const char *)pData);
+                //     break;
+                // case cStorageApCmdGwNvsDeviceType:
+                //     bRst = cJSON_SetIntEx(pObj , cStorageGwNvsDeviceType, (*pData));
+                //     break;
                 case cStorageApCmdFlg:
                     bRst = cJSON_SetIntEx(pObj, cStorageApNvsFlg, (*pData));
                     break;
@@ -314,7 +314,9 @@ eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
                 case cStorageApCmdGwNvsDeviceType:
                     bRst = cJSON_SetIntEx(pObj , cStorageGwNvsDeviceType, (*pData));
                     break;
-             
+                case cStorageApCmdTmpMode:
+                    bRst = cJSON_SetStringEx(pObj , cStorageGwNvsTmpMode, (const char *)pData);
+                    break;
                 default:
                     bRst    = false;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -512,6 +514,14 @@ eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     (*pData) = (u8)i32Value;
+                    break;
+                case cStorageApCmdTmpMode:
+                    if(!cJSON_GetStringEx(pObj, cStorageGwNvsTmpMode, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "TmpMode 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
                     break;
                 default:
                     eRst = eStorageApRstParamErr;

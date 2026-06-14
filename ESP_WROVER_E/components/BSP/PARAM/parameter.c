@@ -13,6 +13,8 @@ const stParamConfig_t g_stParamConfig[] = {
     // ====== 网关参数组 ======
     {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName},
     {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName},
+    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",         cStorageGwNvsName},
+    
     
     // ====== AP参数组 ======
     {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName},

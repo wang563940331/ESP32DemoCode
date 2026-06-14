@@ -59,6 +59,7 @@ char g_string_var[256] = APP_VERSION_FULL;
 char g_wifi_name[24] = "";
 char g_wifi_passwd[24] = "";
 char g_sn[20] = "";  // 序列号（只读）
+char g_tmpmode[20] = "";  // 温度模式（只读）
 char g_mqtt_user[64] = "";   // MQTT用户名
 char g_mqtt_passwd[64] = ""; // MQTT密码
 
@@ -70,6 +71,7 @@ config_param_t config_params[] = {
     {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE},
     {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE},
     {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE},
+    {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "", cStorageApCmdTmpMode, WRITEABLE},
     {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE},
     {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE},
 };
@@ -356,6 +358,9 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
                 break;
             case cStorageApCmdGwNvsSn:
                 sStorageGwSet(cStorageApCmdGwNvsSn, (u8 *)param->value);
+                break;
+            case cStorageApCmdTmpMode:
+                sStorageGwSet(cStorageApCmdTmpMode, (u8 *)param->value);
                 break;
             case cStorageApCmdNvsmqttuser:
                 sStorageApSetNvsmqttuser((char *)param->value);

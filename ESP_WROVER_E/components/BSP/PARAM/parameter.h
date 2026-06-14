@@ -47,6 +47,8 @@
 #define cStorageGwNvsName               "gate"                                  //第一级
 #define cStorageGwNvsSn                 "sn"                                    //SN
 #define cStorageGwNvsDeviceType         "deviceType"                            //设备类型
+#define cStorageGwNvsTmpMode            "tmpMode"                               //温度传感器模式
+
 #define cStorageGwNvsFormatCnt          "formatCnt"                             //文件系统格式次数
 #define cStorageGwNvsDebug              "deBugOn"                               //调试
 #define cStorageGwNvsGwWorkMode         "gwWork"                                //网关工作模式
@@ -97,6 +99,7 @@ typedef enum
     
     cStorageApCmdGwNvsSn,                                                      //网关SN
     cStorageApCmdGwNvsDeviceType,                                                  //网关设备类型
+    cStorageApCmdTmpMode,                                                       //温度传感器模式
     cStorageApCmdFlg,                                                       //使能标志
     cStorageApCmdSsid,                                                          //热点名称
     cStorageApCmdPassword,                                                      //热点密码

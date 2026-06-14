@@ -6,6 +6,8 @@
 #include "esp_timer.h"
 #include "my_log.h"
 #include "app_config.h"
+#include "parameterSet.h"
+
 static const char* TAG = "one_wire_bsp";
 
 // ==================== DS18B20相关定义 ====================
@@ -21,22 +23,32 @@ static const char* TAG = "one_wire_bsp";
 
 // 设备配置映射表（产品配置）
 static const one_wire_config_t one_wire_map[] = {
-#if(CONFIG_SENSOR_TEMP == CONFIG_SENSOR_DS18B20)
+// #if(CONFIG_SENSOR_TEMP == CONFIG_SENSOR_DS18B20)
      {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
-#else
+// #else
      {GPIO_NUM_27, ONE_WIRE_TYPE_DHT11, 0, "DHT11_1"},  // 切换为DHT11时取消注释
-#endif
+// #endif
 };
-static const int one_wire_count = sizeof(one_wire_map) / sizeof(one_wire_map[0]);
+// static const int one_wire_count = sizeof(one_wire_map) / sizeof(one_wire_map[0]);
 
 // 获取设备配置
 static const one_wire_config_t* get_one_wire_config(int gpio_num) {
-    for (int i = 0; i < one_wire_count; i++) {
-        if (one_wire_map[i].gpio_num == gpio_num) {
-            return &one_wire_map[i];
-        }
+    char tmp[20] = {0};
+    sStorageGwGet(cStorageApCmdTmpMode,sizeof(tmp),(u8 *)tmp);
+    if(memcmp(tmp,"DS18B20",sizeof("DS18B20")) == 0)
+    {
+        return &one_wire_map[0];
+    }else if(memcmp(tmp,"DHT11",sizeof("DHT11")) == 0)
+    {
+        return &one_wire_map[1];
     }
-    return NULL;
+
+    // for (int i = 0; i < one_wire_count; i++) {
+    //     if (one_wire_map[i].gpio_num == gpio_num) {
+    //         return &one_wire_map[i];
+    //     }
+    // }
+     return NULL;
 }
 
 // ==================== 通用GPIO操作 ====================
