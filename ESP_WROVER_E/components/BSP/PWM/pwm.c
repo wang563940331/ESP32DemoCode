@@ -60,6 +60,7 @@ void pwmSet(uint32_t new_freq,uint32_t  duty)
 
 static void pwmCrl(float data)
 {
+    static float lodangles = PWMPCLOSE;
     float angles = PWMPCLOSE;
     angles = data;
     if(angles > PWMPMAX)//2ms  20*0.1    90°
@@ -70,8 +71,12 @@ static void pwmCrl(float data)
     {
         angles = PWMMIN;
     }
-
-    pwmSet(50,4095* angles);//1ms  20*0.05   0°
+    if(angles != lodangles)
+    {
+        lodangles = angles;
+        pwmSet(50,4095* angles);//1ms  20*0.05   0°
+    }
+    
 }
 void motorStateMachine()
 {
