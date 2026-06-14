@@ -388,10 +388,11 @@ void my_task(void *pvParameters)
                 sensor = NULL;
             }
         }
-        if(errnmber > 10)
+        if(errnmber > 30)
         {
             break;
         }
+        vTaskDelay(pdMS_TO_TICKS(100));
     } while (sensor == NULL);
     
 
