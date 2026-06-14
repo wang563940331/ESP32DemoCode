@@ -18,6 +18,7 @@
 #include "one_wire_bsp.h"
 #include "esp_heap_caps.h"
 #include "wifi_ap.h"
+#include "meter_DLT645.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -27,7 +28,7 @@ static bool   s_is_mqtt_connected = false;
 
 static eControl Start_once=POWEROF;
 
-
+extern MeterData_t g_meter_data;
 
 
 
@@ -268,14 +269,37 @@ void send_head(const char *data,float temperature, float humidity) {
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
     // 添加字段：temperature（精确到1位小数）
-    snprintf(str, sizeof(str), "%.2f", temperature);
-    cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
+    if (temperature != -200) {
+        snprintf(str, sizeof(str), "%.2f", temperature);
+        cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
+    }
     // 添加字段：humidity（仅在有效时添加）
     if (humidity >= 0) {
         memset(str, 0, sizeof(str));
         snprintf(str, sizeof(str), "%.2f", humidity);
         cJSON_AddItemToObject(root, "humidity", cJSON_CreateString(str));
     }
+    if (g_meter_data.VolageA != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.VolageA);
+        cJSON_AddItemToObject(root, "VolageA", cJSON_CreateString(str));
+    }
+    if (g_meter_data.CurrentA != 0) {
+        snprintf(str, sizeof(str), "%.3f", g_meter_data.CurrentA);
+        cJSON_AddItemToObject(root, "CurrentA", cJSON_CreateString(str));
+    }
+    if (g_meter_data.PowerPA != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.PowerPA);
+        cJSON_AddItemToObject(root, "PowerPA", cJSON_CreateString(str));
+    }
+    if (g_meter_data.Frequency != 0) {
+        snprintf(str, sizeof(str), "%.2f", g_meter_data.Frequency);
+        cJSON_AddItemToObject(root, "Frequency", cJSON_CreateString(str));
+    }   
+    if (g_meter_data.Totol_Energy != 0) {
+        snprintf(str, sizeof(str), "%.2f", g_meter_data.Totol_Energy);
+        cJSON_AddItemToObject(root, "Totol_Energy", cJSON_CreateString(str));
+    }
+
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
     

@@ -31,6 +31,7 @@
 #include "one_wire_bsp.h"
 #include "app_config.h"
 #include "gpio_output_bsp.h"
+#include "meter_DLT645.h"
 // 定义日志标签
 static const char*TAG = "main";
 
@@ -225,13 +226,8 @@ void app_main(void)
     init_mqtt();
     mdf_mem_print_heap();
 
-    const  uart_device_t* uart1 = uart_factory_get_device(UART_NUM_1);
-    if(uart1 == NULL)
-    {
-        ESP_LOGE(TAG, "UART1实例化失败");
-        return;
-    }
-    uart1->Init(UART_NUM_1);
+    meter_DLT645_init();
+
     const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
     if(uart2 == NULL)
     {
@@ -240,37 +236,10 @@ void app_main(void)
     }
     uart2->Init(UART_NUM_2);
 
-
-    
-    uint16_t len = 0;
-    char data[1024] = {"hello world"};
     while(1)
     {
 
 
-        len = uart1->GetBufferedDataLen(UART_NUM_1);
-        if (len > 0)
-        {
-            uart1->Read(UART_NUM_1, data, len, 100);    
-            // uart_read_bytes(UART_NUM_1, data, len, 100);
-          
-            // uart_write_bytes(UART_NUM_1, data, len);
-            uart1->Write(UART_NUM_1,"hello world\n", strlen("hello world\n"));
-
-            printf("uart0 size: %d receive data: %s\n", len, data);
-            uart1->Write(UART_NUM_1,data, len);
-            memset(data, 0, sizeof(data));
-        }
-
-        len = uart2->GetBufferedDataLen(UART_NUM_2);
-        if (len > 0)
-        {
-            uart2->Read(UART_NUM_2, data, len, 100);
-            data[len] = '\0';
-             uart2->Write(UART_NUM_2, data, len);
-            printf("uart2 receive data: %s\n", data);
-            memset(data, 0, sizeof(data));
-        }
 
         if(gets_is_smartconfig() == true)
         {

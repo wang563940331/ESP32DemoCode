@@ -103,6 +103,89 @@ static inline const char* get_filename_only(const char* path)
     return path;  // 如果没有斜杠，返回原路径
 }
 
+// 十六进制缓冲区转换为字符串（每字节两个十六进制字符，空格分隔）
+// 返回值为写入缓冲区的字符数（不含结尾 '\0'）
+static inline int hex_buf_to_str(const uint8_t* data, size_t len, char* out, size_t out_size)
+{
+    if (!data || !out || out_size < 3 || len == 0) {
+        if (out && out_size >= 1) out[0] = '\0';
+        return 0;
+    }
+    size_t written = 0;
+    for (size_t i = 0; i < len && written + 3 <= out_size; i++) {
+        if (i > 0) {
+            out[written++] = ' ';
+        }
+        snprintf(out + written, 3, "%02X", data[i]);
+        written += 2;
+    }
+    out[written] = '\0';
+    return (int)written;
+}
+
+// 打印十六进制数据到SD卡日志（可选）
+static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8_t* data, size_t len)
+{
+    static char hex_line[256];
+    size_t pos = 0;
+    for (size_t i = 0; i < len; i += 16) {
+        size_t chunk = (len - i) > 16 ? 16 : (len - i);
+        hex_buf_to_str(data + i, chunk, hex_line, sizeof(hex_line));
+        pos = (size_t)snprintf(hex_line + strlen(hex_line), sizeof(hex_line) - strlen(hex_line), "  [%zu/%zu]", i + chunk, len);
+        (void)pos;
+        sd_fat_log_buffer_write(level, tag, "%s", hex_line);
+    }
+}
+
+#define ESP_LOG_HEX_MAX_LEN  512
+#define ESP_LOG_HEX_BUF_SIZE (ESP_LOG_HEX_MAX_LEN * 3 + 16)
+
+#define ESP_LOG_HEX(tag, level, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    if ((level) == ESP_LOG_ERROR) ESP_LOGE((tag), "%s", _hex_buf); \
+    else if ((level) == ESP_LOG_WARN) ESP_LOGW((tag), "%s", _hex_buf); \
+    else if ((level) == ESP_LOG_INFO) ESP_LOGI((tag), "%s", _hex_buf); \
+    else if ((level) == ESP_LOG_DEBUG) ESP_LOGD((tag), "%s", _hex_buf); \
+    else ESP_LOGV((tag), "%s", _hex_buf); \
+} while(0)
+
+#define ESP_LOGE_HEX(tag, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    ESP_LOGE((tag), "%s", _hex_buf); \
+} while(0)
+
+#define ESP_LOGW_HEX(tag, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    ESP_LOGW((tag), "%s", _hex_buf); \
+} while(0)
+
+#define ESP_LOGI_HEX(tag, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    ESP_LOGI((tag), "%s", _hex_buf); \
+} while(0)
+
+#define ESP_LOGD_HEX(tag, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    ESP_LOGD((tag), "%s", _hex_buf); \
+} while(0)
+
+#define ESP_LOGV_HEX(tag, data, len) do { \
+    static char _hex_buf[ESP_LOG_HEX_BUF_SIZE]; \
+    size_t _hex_len = (len) > ESP_LOG_HEX_MAX_LEN ? ESP_LOG_HEX_MAX_LEN : (len); \
+    hex_buf_to_str((const uint8_t*)(data), _hex_len, _hex_buf, sizeof(_hex_buf)); \
+    ESP_LOGV((tag), "%s", _hex_buf); \
+} while(0)
+
 // 先undef原始的宏，然后重新定义
 #undef LOG_FORMAT
 #define LOG_FORMAT(letter, format) LOG_COLOR_ ## letter #letter " (%s) [%s:%d]: " format LOG_RESET_COLOR "\n"
@@ -179,5 +262,10 @@ static inline const char* get_filename_only(const char* path)
 #define EN_SLOGI                        ESP_LOGI
 #define EN_SLOGW                        ESP_LOGW
 #define EN_SLOGE                        ESP_LOGE
+
+#define EN_SLOGD_HEX                    ESP_LOGD_HEX
+#define EN_SLOGI_HEX                    ESP_LOGI_HEX
+#define EN_SLOGW_HEX                    ESP_LOGW_HEX
+#define EN_SLOGE_HEX                    ESP_LOGE_HEX
 
 #endif /* MY_LOG_H */
