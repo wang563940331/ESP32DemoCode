@@ -239,51 +239,64 @@ static float ds18b20_get_humidity(int gpio_num) {
 
 // ==================== DHT11实现 ====================
 
+// DHT11自旋锁，用于临界区内保护微秒级时序
+static portMUX_TYPE dht11_spinlock = portMUX_INITIALIZER_UNLOCKED;
+
 // DHT11复位
 static esp_err_t dht11_reset(int gpio_num) {
     set_gpio_output(gpio_num);
     gpio_set_level(gpio_num, 0);
     vTaskDelay(pdMS_TO_TICKS(20));
-    
+
     set_gpio_input(gpio_num);
+
+    // 进入临界区保护响应检测时序（DHT11应答信号约80us低+80us高）
+    taskENTER_CRITICAL(&dht11_spinlock);
     delay_us(40);
-    
     int response1 = gpio_get_level(gpio_num);
     delay_us(80);
-    
     int response2 = gpio_get_level(gpio_num);
     delay_us(40);
-    
+    taskEXIT_CRITICAL(&dht11_spinlock);
+
     if (response1 == 0 && response2 == 1) {
         return ESP_OK;
     }
     return ESP_ERR_NOT_FOUND;
 }
 
-// DHT11读位
+// DHT11读位（临界区保护，防止中断/任务切换破坏微秒级时序）
 static uint8_t dht11_read_bit(int gpio_num) {
-    const uint32_t timeout_us = 10000;
-    uint32_t start_time = esp_timer_get_time();
-    
+    uint32_t start_time;
+    uint8_t bit = 0;
+
+    // 进入临界区：禁止任务切换和中断，确保微秒级时序精确
+    taskENTER_CRITICAL(&dht11_spinlock);
+
+    // 等待低→高跳变（DHT11每个数据位以低电平开始）
+    start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 0) {
-        if (esp_timer_get_time() - start_time > timeout_us) {
-            ESP_LOGE(TAG, "DHT11 read bit timeout (low)");
+        if (esp_timer_get_time() - start_time > 200) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
             return 0;
         }
-        esp_rom_delay_us(1);
     }
-    
+
+    // 测量高电平持续时间判断0/1
+    // DHT11协议: '0' ≈ 26-28us 高电平, '1' ≈ 70us 高电平
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 1) {
-        if (esp_timer_get_time() - start_time > timeout_us) {
-            // ESP_LOGE(TAG, "DHT11 read bit timeout (high)");
+        if (esp_timer_get_time() - start_time > 150) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
             return 0;
         }
-        esp_rom_delay_us(1);
     }
-    
-    uint32_t duration = esp_timer_get_time() - start_time;
-    return (duration > 40) ? 1 : 0;
+
+    bit = (esp_timer_get_time() - start_time > 40) ? 1 : 0;
+
+    taskEXIT_CRITICAL(&dht11_spinlock);
+
+    return bit;
 }
 
 // DHT11读字节
@@ -332,10 +345,13 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
     }
 
     uint8_t buffer[5];
-    const int max_retries = 10;
-    
+    const int max_retries = 5;
+
     for (int retry = 0; retry < max_retries; retry++) {
-         if (dht11_reset(gpio_num) != ESP_OK) continue;
+         if (dht11_reset(gpio_num) != ESP_OK) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
 
         for (int i = 0; i < 5; i++) {
             buffer[i] = dht11_read_byte(gpio_num);
@@ -347,27 +363,31 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
             data->temperature = (float)buffer[2] + (float)buffer[3] / 10.0f;
             data->valid = 1;
             return ESP_OK;
-            
         }
-        
-        //ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+
+        ESP_LOGD(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
     
     ESP_LOGE(TAG, "DHT11 checksum error");
     return ESP_ERR_INVALID_CRC;
 }
- one_wire_data_t datadht11;
+
+static one_wire_data_t datadht11;
 // DHT11获取温度
 static float dht11_get_temperature(int gpio_num) {
-  
     if (dht11_read_data(gpio_num, &datadht11) == ESP_OK) {
         return datadht11.temperature;
     }
+    datadht11.valid = 0;  // 读取失败，标记数据无效
     return -1000.0f;
 }
 
 // DHT11获取湿度
 static float dht11_get_humidity(int gpio_num) {
+    if (!datadht11.valid) {
+        return -1.0f;
+    }
     return datadht11.humidity;
 }
 
