@@ -147,9 +147,11 @@ void sd_fat_log_write(sd_fat_log_level_t level, const char* tag, const char* for
  * 
  * @param level 日志级别（0=DEBUG, 1=INFO, 2=WARN, 3=ERROR）
  * @param tag 日志标签
+ * @param file 文件名
+ * @param line 行号
  * @param format 格式化字符串
  * @param ... 可变参数
  */
-void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...);
+void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int line, const char* format, ...);
 
 #endif

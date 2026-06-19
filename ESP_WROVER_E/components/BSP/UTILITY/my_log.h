@@ -46,7 +46,7 @@ static inline bool log_tag_in_blacklist(const char* tag) {
 extern "C" {
 #endif
 
-void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...);
+void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int line, const char* format, ...);
 
 #ifdef __cplusplus
 }
@@ -133,7 +133,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
         hex_buf_to_str(data + i, chunk, hex_line, sizeof(hex_line));
         pos = (size_t)snprintf(hex_line + strlen(hex_line), sizeof(hex_line) - strlen(hex_line), "  [%zu/%zu]", i + chunk, len);
         (void)pos;
-        sd_fat_log_buffer_write(level, tag, "%s", hex_line);
+        sd_fat_log_buffer_write(level, tag, __FILE__, __LINE__, "%s", hex_line);
     }
 }
 
@@ -198,7 +198,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
         if (!log_tag_in_blacklist(tag)) { \
-            sd_fat_log_buffer_write(3, tag, format, ##__VA_ARGS__); \
+            sd_fat_log_buffer_write(3, tag, __FILE__, __LINE__, format, ##__VA_ARGS__); \
         } \
     } \
 } while(0)
@@ -211,7 +211,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
         if (!log_tag_in_blacklist(tag)) { \
-            sd_fat_log_buffer_write(2, tag, format, ##__VA_ARGS__); \
+            sd_fat_log_buffer_write(2, tag, __FILE__, __LINE__, format, ##__VA_ARGS__); \
         } \
     } \
 } while(0)
@@ -225,7 +225,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
         if (!log_tag_in_blacklist(tag)) { \
-            sd_fat_log_buffer_write(1, tag, format, ##__VA_ARGS__); \
+            sd_fat_log_buffer_write(1, tag, __FILE__, __LINE__, format, ##__VA_ARGS__); \
         } \
     } \
 } while(0)
@@ -238,7 +238,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
         if (!log_tag_in_blacklist(tag)) { \
-            sd_fat_log_buffer_write(4, tag, format, ##__VA_ARGS__); \
+            sd_fat_log_buffer_write(4, tag, __FILE__, __LINE__, format, ##__VA_ARGS__); \
         } \
     } \
 } while(0)
@@ -251,7 +251,7 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
                       get_custom_timestamp(), get_filename_only(__FILE__), __LINE__, ##__VA_ARGS__); \
         if (log_mutex) xSemaphoreGive(log_mutex); \
         if (!log_tag_in_blacklist(tag)) { \
-            sd_fat_log_buffer_write(5, tag, format, ##__VA_ARGS__); \
+            sd_fat_log_buffer_write(5, tag, __FILE__, __LINE__, format, ##__VA_ARGS__); \
         } \
     } \
 } while(0)

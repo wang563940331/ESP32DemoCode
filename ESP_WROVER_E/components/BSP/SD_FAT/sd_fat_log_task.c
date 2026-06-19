@@ -377,10 +377,10 @@ static inline void format_timestamp(char* buffer, size_t size)
     time_t now = time(NULL);
     struct tm tm_now;
     if (localtime_r(&now, &tm_now) == NULL) {
-        snprintf(buffer, size, "[-------- --:--:--]");
+        snprintf(buffer, size, "-------- --:--:--");
         return;
     }
-    snprintf(buffer, size, "[%04d-%02d-%02d %02d:%02d:%02d]",
+    snprintf(buffer, size, "%04d-%02d-%02d %02d:%02d:%02d",
              tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
              tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
 }
@@ -389,10 +389,12 @@ static inline void format_timestamp(char* buffer, size_t size)
  * @brief 将日志写入SD卡缓冲区（线程安全）
  * @param level 日志级别
  * @param tag 日志标签
+ * @param file 文件名
+ * @param line 行号
  * @param format 格式化字符串
  * @param ... 可变参数
  */
-void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...)
+void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int line, const char* format, ...)
 {
     if (!sdCardbuffer_init || !sdCardbuffer) {
         return;
@@ -413,8 +415,17 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* format, ...
     va_list args;
     va_start(args, format);
 
-  
-    int prefix_len = snprintf(sdCardbuffer->temp_buff, SD_CARD_BUFF_SIZE, "%s %s (%s): ", timestamp, level_str, tag);
+    const char* filename = file;
+    if (filename) {
+        const char* last_slash = strrchr(filename, '/');
+        if (last_slash) {
+            filename = last_slash + 1;
+        }
+    } else {
+        filename = "unknown";
+    }
+
+    int prefix_len = snprintf(sdCardbuffer->temp_buff, SD_CARD_BUFF_SIZE, "%s (%s) [%s:%d]: ", level_str, timestamp, filename, line);
     if (prefix_len > 0 && prefix_len < SD_CARD_BUFF_SIZE) {
         vsnprintf(sdCardbuffer->temp_buff + prefix_len, SD_CARD_BUFF_SIZE - prefix_len - 1, format, args);
     }
