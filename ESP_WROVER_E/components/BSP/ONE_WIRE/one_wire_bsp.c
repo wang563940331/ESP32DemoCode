@@ -61,8 +61,7 @@ static inline void set_gpio_input(int gpio_num) {
 }
 
 static inline void delay_us(uint32_t us) {
-    // esp_rom_delay_us(us);
-    ets_delay_us(us);
+    esp_rom_delay_us(us);
 }
 
 // ==================== DS18B20实现 ====================
@@ -244,26 +243,48 @@ static float ds18b20_get_humidity(int gpio_num) {
 static portMUX_TYPE dht11_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // DHT11复位
+// DHT11时序: 主机拉低>18ms → 释放总线 → DHT11应答(80us低+80us高) → 开始数据
 static esp_err_t dht11_reset(int gpio_num) {
+    uint32_t start_time;
+
+// 主机拉低至少18ms
     set_gpio_output(gpio_num);
     gpio_set_level(gpio_num, 0);
-    // vTaskDelay(pdMS_TO_TICKS(20));
-    delay_us(200*100); 
+    delay_us(DHT11_START_SIGNAL_LOW);
     set_gpio_input(gpio_num);
 
-    // 进入临界区保护响应检测时序（DHT11应答信号约80us低+80us高）
-    // taskENTER_CRITICAL(&dht11_spinlock);
-    delay_us(40);
-    int response1 = gpio_get_level(gpio_num);
-    delay_us(80);
-    int response2 = gpio_get_level(gpio_num);
-    delay_us(40);
-    // taskEXIT_CRITICAL(&dht11_spinlock);
+    // 临界区保护应答检测（与 dht11_read_bit 使用相同保护策略）
+    taskENTER_CRITICAL(&dht11_spinlock);
 
-    if (response1 == 0 && response2 == 1) {
-        return ESP_OK;
+    // 1. 等待 DHT11 拉低总线（应答开始，在释放总线后20-40us内应发生）
+    start_time = esp_timer_get_time();
+    while (gpio_get_level(gpio_num) == 1) {
+        if (esp_timer_get_time() - start_time > 100) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
+            return ESP_ERR_NOT_FOUND;
+        }
     }
-    return ESP_ERR_NOT_FOUND;
+
+    // 2. 等待 DHT11 释放总线（低电平持续约80us后变高）
+    start_time = esp_timer_get_time();
+    while (gpio_get_level(gpio_num) == 0) {
+        if (esp_timer_get_time() - start_time > 100) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+    }
+
+    // 3. 等待 DHT11 再次拉低总线（高电平约80us后开始传输数据位）
+    start_time = esp_timer_get_time();
+    while (gpio_get_level(gpio_num) == 1) {
+        if (esp_timer_get_time() - start_time > 100) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
+            return ESP_ERR_TIMEOUT;
+        }
+    }
+
+    taskEXIT_CRITICAL(&dht11_spinlock);
+    return ESP_OK;
 }
 
 // DHT11读位（临界区保护，防止中断/任务切换破坏微秒级时序）
@@ -327,9 +348,7 @@ static esp_err_t dht11_init(int gpio_num) {
     };
     gpio_config(&io_conf);
     gpio_set_level(gpio_num, 1);
-    taskENTER_CRITICAL(&dht11_spinlock);
     esp_err_t ret = dht11_reset(gpio_num);
-    taskEXIT_CRITICAL(&dht11_spinlock);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "DHT11 (%s) initialized on GPIO%d", config->name, gpio_num);
     } else {
@@ -341,28 +360,42 @@ static esp_err_t dht11_init(int gpio_num) {
 
 // DHT11读取数据
 static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
+    esp_err_t ret;
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config || config->type != ONE_WIRE_TYPE_DHT11) {
         return ESP_ERR_NOT_FOUND;
     }
-
+    
     uint8_t buffer[5];
     const int max_retries = 5;
     // 进入临界区：禁止任务切换和中断，确保微秒级时序精确
 
     for (int retry = 0; retry < max_retries; retry++) {
-        taskENTER_CRITICAL(&dht11_spinlock);
-         if (dht11_reset(gpio_num) != ESP_OK) 
-         {
-            taskEXIT_CRITICAL(&dht11_spinlock);
-            vTaskDelay(pdMS_TO_TICKS(200));
+        ret = dht11_reset(gpio_num);
+        // 复位不在临界区内：18ms busy-wait 期间中断应保持开启
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "DHT11 reset failed=%d, retry %d/%d", ret, retry + 1, max_retries);
+            vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
 
+        // 复位成功后，DHT11 立即开始发送40位数据
+        // 临界区保护整个位读取序列，防止中断破坏字节间时序
+        taskENTER_CRITICAL(&dht11_spinlock);
         for (int i = 0; i < 5; i++) {
             buffer[i] = dht11_read_byte(gpio_num);
         }
         taskEXIT_CRITICAL(&dht11_spinlock);
+        ESP_LOGI(TAG, "DHT11 data: %02X %02X %02X %02X %02X", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]);
+
+        // 检测全零数据：DHT11未响应时总线保持高电平，读到的全是0
+        // 全零的校验和虽然"通过"(0=0)，但这是假合法数据，必须拒绝
+        if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 && buffer[3] == 0 && buffer[4] == 0) {
+            ESP_LOGE(TAG, "DHT11 all-zero (sensor not responding), retry %d/%d", retry + 1, max_retries);
+            vTaskDelay(pdMS_TO_TICKS(1000));  // 给传感器更长的恢复时间
+            continue;
+        }
+
         uint8_t checksum = buffer[0] + buffer[1] + buffer[2] + buffer[3];
         if (checksum == buffer[4]) {
             data->humidity = (float)buffer[0] + (float)buffer[1] / 10.0f;
@@ -371,8 +404,8 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
             return ESP_OK;
         }
 
-        ESP_LOGD(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
-        vTaskDelay(pdMS_TO_TICKS(200));
+        ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+        vTaskDelay(pdMS_TO_TICKS(1000));  // DHT11至少需要1秒恢复时间
     }
     
     ESP_LOGE(TAG, "DHT11 checksum error");

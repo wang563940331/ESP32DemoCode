@@ -394,7 +394,7 @@ void my_task(void *pvParameters)
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     } while (sensor == NULL);
-    
+    errnmber=0;
 
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
@@ -432,6 +432,13 @@ void my_task(void *pvParameters)
                         }
                     } else {
                         ESP_LOGE(TAG, "读取传感器数据失败");
+                        errnmber++;
+                        if(errnmber > 3)
+                        {
+                            //复位
+                            esp_restart();
+                            break;
+                        }
                         temp = -200.0f;
                         humi = -1.0f;
                     }
