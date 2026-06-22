@@ -425,6 +425,7 @@ void my_task(void *pvParameters)
                     temp = sensor->GetTemperature(GPIO_NUM_27);
                     humi = sensor->GetHumidity(GPIO_NUM_27);
                     if (temp != -1000.0f) {
+                        errnmber = 0;  // 读取成功，重置连续失败计数
                         if (humi >= 0) {
                             // ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
                         } else {

@@ -242,25 +242,16 @@ static float ds18b20_get_humidity(int gpio_num) {
 // DHT11自旋锁，用于临界区内保护微秒级时序
 static portMUX_TYPE dht11_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-// DHT11复位
-// DHT11时序: 主机拉低>18ms → 释放总线 → DHT11应答(80us低+80us高) → 开始数据
-static esp_err_t dht11_reset(int gpio_num) {
+// ===== 内部辅助函数：调用者必须持有 dht11_spinlock =====
+
+// 检测DHT11应答信号（调用者持有自旋锁）
+static esp_err_t dht11_detect_response(int gpio_num) {
     uint32_t start_time;
-
-// 主机拉低至少18ms
-    set_gpio_output(gpio_num);
-    gpio_set_level(gpio_num, 0);
-    delay_us(DHT11_START_SIGNAL_LOW);
-    set_gpio_input(gpio_num);
-
-    // 临界区保护应答检测（与 dht11_read_bit 使用相同保护策略）
-    taskENTER_CRITICAL(&dht11_spinlock);
 
     // 1. 等待 DHT11 拉低总线（应答开始，在释放总线后20-40us内应发生）
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 1) {
         if (esp_timer_get_time() - start_time > 100) {
-            taskEXIT_CRITICAL(&dht11_spinlock);
             return ESP_ERR_NOT_FOUND;
         }
     }
@@ -269,7 +260,6 @@ static esp_err_t dht11_reset(int gpio_num) {
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 0) {
         if (esp_timer_get_time() - start_time > 100) {
-            taskEXIT_CRITICAL(&dht11_spinlock);
             return ESP_ERR_NOT_SUPPORTED;
         }
     }
@@ -278,28 +268,21 @@ static esp_err_t dht11_reset(int gpio_num) {
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 1) {
         if (esp_timer_get_time() - start_time > 100) {
-            taskEXIT_CRITICAL(&dht11_spinlock);
             return ESP_ERR_TIMEOUT;
         }
     }
 
-    taskEXIT_CRITICAL(&dht11_spinlock);
     return ESP_OK;
 }
 
-// DHT11读位（临界区保护，防止中断/任务切换破坏微秒级时序）
-static uint8_t dht11_read_bit(int gpio_num) {
+// 读取单个位（调用者持有自旋锁）
+static uint8_t dht11_read_bit_locked(int gpio_num) {
     uint32_t start_time;
-    uint8_t bit = 0;
 
-    // 进入临界区：禁止任务切换和中断，确保微秒级时序精确
-    taskENTER_CRITICAL(&dht11_spinlock);
-
-    // 等待低→高跳变（DHT11每个数据位以低电平开始）
+    // 等待低→高跳变（DHT11每个数据位以50us低电平开始）
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 0) {
         if (esp_timer_get_time() - start_time > 200) {
-            taskEXIT_CRITICAL(&dht11_spinlock);
             return 0;
         }
     }
@@ -309,19 +292,50 @@ static uint8_t dht11_read_bit(int gpio_num) {
     start_time = esp_timer_get_time();
     while (gpio_get_level(gpio_num) == 1) {
         if (esp_timer_get_time() - start_time > 150) {
-            taskEXIT_CRITICAL(&dht11_spinlock);
             return 0;
         }
     }
 
-    bit = (esp_timer_get_time() - start_time > 40) ? 1 : 0;
+    return (esp_timer_get_time() - start_time > 40) ? 1 : 0;
+}
 
+// 读取一个字节（调用者持有自旋锁）
+static uint8_t dht11_read_byte_locked(int gpio_num) {
+    uint8_t byte = 0;
+    for (int i = 0; i < 8; i++) {
+        byte |= (dht11_read_bit_locked(gpio_num) << (7 - i));
+    }
+    return byte;
+}
+
+// ===== 对外接口（自带自旋锁保护，可独立调用） =====
+
+// DHT11复位
+// DHT11时序: 主机拉低>18ms → 释放总线 → DHT11应答(80us低+80us高) → 开始数据
+static esp_err_t dht11_reset(int gpio_num) {
+    // 主机拉低至少18ms（临界区外：固定延时无需保护）
+    set_gpio_output(gpio_num);
+    gpio_set_level(gpio_num, 0);
+    delay_us(DHT11_START_SIGNAL_LOW);
+    set_gpio_input(gpio_num);
+
+    // 临界区保护应答检测
+    taskENTER_CRITICAL(&dht11_spinlock);
+    esp_err_t ret = dht11_detect_response(gpio_num);
     taskEXIT_CRITICAL(&dht11_spinlock);
 
+    return ret;
+}
+
+// DHT11读位（自带临界区保护，用于调试或独立调用）
+static uint8_t dht11_read_bit(int gpio_num) {
+    taskENTER_CRITICAL(&dht11_spinlock);
+    uint8_t bit = dht11_read_bit_locked(gpio_num);
+    taskEXIT_CRITICAL(&dht11_spinlock);
     return bit;
 }
 
-// DHT11读字节
+// DHT11读字节（自带临界区保护，用于调试或独立调用）
 static uint8_t dht11_read_byte(int gpio_num) {
     uint8_t byte = 0;
     for (int i = 0; i < 8; i++) {
@@ -359,33 +373,43 @@ static esp_err_t dht11_init(int gpio_num) {
 }
 
 // DHT11读取数据
+// 关键设计：应答检测 + 40位数据读取在同一个临界区内完成
+// 防止中断在 reset 和 read 之间插入，导致位偏移（数据翻倍/减半）
 static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
     esp_err_t ret;
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config || config->type != ONE_WIRE_TYPE_DHT11) {
         return ESP_ERR_NOT_FOUND;
     }
-    
+
     uint8_t buffer[5];
     const int max_retries = 5;
-    // 进入临界区：禁止任务切换和中断，确保微秒级时序精确
 
     for (int retry = 0; retry < max_retries; retry++) {
-        ret = dht11_reset(gpio_num);
-        // 复位不在临界区内：18ms busy-wait 期间中断应保持开启
+        // 发送起始信号（临界区外：18ms忙等期间中断应保持开启）
+        set_gpio_output(gpio_num);
+        gpio_set_level(gpio_num, 0);
+        delay_us(DHT11_START_SIGNAL_LOW);
+        set_gpio_input(gpio_num);
+
+        // 统一临界区：应答检测 + 40位数据读取，中间不能被中断打断
+        taskENTER_CRITICAL(&dht11_spinlock);
+
+        ret = dht11_detect_response(gpio_num);
         if (ret != ESP_OK) {
+            taskEXIT_CRITICAL(&dht11_spinlock);
             ESP_LOGE(TAG, "DHT11 reset failed=%d, retry %d/%d", ret, retry + 1, max_retries);
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
 
-        // 复位成功后，DHT11 立即开始发送40位数据
-        // 临界区保护整个位读取序列，防止中断破坏字节间时序
-        taskENTER_CRITICAL(&dht11_spinlock);
+        // 使用 _locked 版本：自旋锁已在上方获取，避免嵌套死锁
         for (int i = 0; i < 5; i++) {
-            buffer[i] = dht11_read_byte(gpio_num);
+            buffer[i] = dht11_read_byte_locked(gpio_num);
         }
+
         taskEXIT_CRITICAL(&dht11_spinlock);
+
         ESP_LOGI(TAG, "DHT11 data: %02X %02X %02X %02X %02X", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]);
 
         // 检测全零数据：DHT11未响应时总线保持高电平，读到的全是0
