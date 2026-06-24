@@ -24,7 +24,8 @@ typedef enum {
     WIFIAP_PARAM_STRING,
     WIFIAP_PARAM_INT,
     WIFIAP_PARAM_WIFI_SSID,
-    WIFIAP_PARAM_WIFI_PASSWD
+    WIFIAP_PARAM_WIFI_PASSWD,
+    WIFIAP_PARAM_TOGGLE
 } wifiap_param_type_t;
 
 typedef enum {
@@ -62,6 +63,7 @@ char g_sn[20] = "";  // 序列号（只读）
 char g_tmpmode[20] = "";  // 温度模式（只读）
 char g_mqtt_user[64] = "";   // MQTT用户名
 char g_mqtt_passwd[64] = ""; // MQTT密码
+char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF=关闭
 
 // 参数描述数组 - 集中管理所有参数
 config_param_t config_params[] = {
@@ -74,6 +76,7 @@ config_param_t config_params[] = {
     {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "", cStorageApCmdTmpMode, WRITEABLE},
     {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE},
     {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE},
+    {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))
 
@@ -130,14 +133,26 @@ static void generate_form_fields(char *buffer, size_t buffer_len)
     char field_template[512];
     for (int i = 0; i < NUM_PARAMS; i++) {
         config_param_t *param = &config_params[i];
-        const char *input_type = (param->type == WIFIAP_PARAM_INT) ? "number" : "text";
         const char *readonly_attr = param->is_readonly ? " readonly" : "";
-        
-        if (param->type == WIFIAP_PARAM_INT) {
+
+        if (param->type == WIFIAP_PARAM_TOGGLE) {
+            uint8_t val = *(uint8_t *)param->value;
+            snprintf(field_template, sizeof(field_template),
+                "<label>%s:</label>\n"
+                "<select name='%s'%s>\n"
+                "  <option value='1'%s>开启</option>\n"
+                "  <option value='0'%s>关闭</option>\n"
+                "</select><br>\n",
+                param->label, param->name, readonly_attr,
+                (val == 1) ? " selected" : "",
+                (val == 0) ? " selected" : "");
+        } else if (param->type == WIFIAP_PARAM_INT) {
+            const char *input_type = "number";
             snprintf(field_template, sizeof(field_template),
                 "<label>%s:</label>\n<input type='%s' name='%s' value='%d'%s><br>\n",
                 param->label, input_type, param->name, *(uint16_t *)param->value, readonly_attr);
         } else {
+            const char *input_type = "text";
             snprintf(field_template, sizeof(field_template),
                 "<label>%s:</label>\n<input type='%s' name='%s' value='%s'%s><br>\n",
                 param->label, input_type, param->name, (char *)param->value, readonly_attr);
@@ -152,7 +167,11 @@ static void generate_current_params(char *buffer, size_t buffer_len)
     char param_line[256];
     for (int i = 0; i < NUM_PARAMS; i++) {
         config_param_t *param = &config_params[i];
-        if (param->type == WIFIAP_PARAM_INT) {
+        if (param->type == WIFIAP_PARAM_TOGGLE) {
+            uint8_t val = *(uint8_t *)param->value;
+            snprintf(param_line, sizeof(param_line),
+                "<p>%s: %s</p>\n", param->label, (val == 1) ? "开启" : "关闭");
+        } else if (param->type == WIFIAP_PARAM_INT) {
             snprintf(param_line, sizeof(param_line),
                 "<p>%s: %d</p>\n", param->label, *(uint16_t *)param->value);
         } else {
@@ -324,6 +343,8 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
     
     if (param->type == WIFIAP_PARAM_INT && value) {
         *(uint16_t *)param->value = atoi(value);
+    } else if (param->type == WIFIAP_PARAM_TOGGLE && value) {
+        *(uint8_t *)param->value = (uint8_t)atoi(value);
     } else if (value) {
         strncpy((char *)param->value, value, param->max_len - 1);
         ((char *)param->value)[param->max_len - 1] = '\0';
@@ -367,6 +388,9 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
                 break;
             case cStorageApCmdNvsmqttpasswd:
                 sStorageApSetNvsmqttpasswd((char *)param->value);
+                break;
+            case cStorageApCmdMeter485En:
+                sStorageGwSetMeter485En((char *)param->value);
                 break;
             default:
                 break;

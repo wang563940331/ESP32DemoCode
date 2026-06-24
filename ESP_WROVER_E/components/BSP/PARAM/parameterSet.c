@@ -249,8 +249,8 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
                     break;  
                 case cStorageApCmdNvsmqttpasswd:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttpasswd, (const char *)pData);
-                    break;  
-            
+                    break;
+
                 default:
                     bRst    = false;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -316,6 +316,9 @@ eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
                     break;
                 case cStorageApCmdTmpMode:
                     bRst = cJSON_SetStringEx(pObj , cStorageGwNvsTmpMode, (const char *)pData);
+                    break;
+                case cStorageApCmdMeter485En:
+                    bRst = cJSON_SetStringEx(pObj, cStorageGwNvsMeter485En, (const char *)pData);
                     break;
                 default:
                     bRst    = false;
@@ -435,7 +438,7 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     break;
-                case cStorageApCmdNvsmqttpasswd:    
+                case cStorageApCmdNvsmqttpasswd:
                     if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttpasswd, (char *)pData, u16MaxLen))
                     {
                         EN_SLOGE(TAG, "Nvsmqttpasswd 对象不存在");
@@ -519,6 +522,14 @@ eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                     if(!cJSON_GetStringEx(pObj, cStorageGwNvsTmpMode, (char *)pData, u16MaxLen))
                     {
                         EN_SLOGE(TAG, "TmpMode 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdMeter485En:
+                    if(!cJSON_GetStringEx(pObj, cStorageGwNvsMeter485En, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "Meter485En 对象不存在");
                         eRst = eStorageApRstObjNull;
                         break;
                     }
@@ -636,6 +647,24 @@ bool sStorageApSetNvsmqttpasswd(char *data)
     if(sStorageApSet(cStorageApCmdNvsmqttpasswd, (const u8 *)data) == eStorageApRstSuccess)
     {
 
+        return(true);
+    }
+    return(false);
+}
+
+bool sStorageGwSetMeter485En(char *mode)
+{
+    if(sStorageGwSet(cStorageApCmdMeter485En, (const u8 *)mode) == eStorageApRstSuccess)
+    {
+        return(true);
+    }
+    return(false);
+}
+
+bool sStorageGwGetMeter485En(char *mode, u16 maxLen)
+{
+    if(sStorageGwGet(cStorageApCmdMeter485En, maxLen, (u8 *)mode) == eStorageApRstSuccess)
+    {
         return(true);
     }
     return(false);

@@ -8,6 +8,7 @@
 extern char g_domain[128];
 extern uint16_t g_port;
 extern char g_string_var[256];
+extern char g_meter485_mode[20];
 
 // AP连接状态
 extern volatile uint8_t g_ap_connected;

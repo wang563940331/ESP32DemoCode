@@ -10,6 +10,9 @@
 #include "utility.h"
 #include "driver/uart.h"
 #include "meter_DLT645.h"
+#include "parameterSet.h"
+#include "json.h"
+#include "cJSON.h"
 
 static const char*TAG = "meter_DLT645";
 TaskHandle_t dlt645TaskHandle = NULL;
@@ -288,6 +291,9 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
 static const uart_device_t *s_uart_dev = NULL;
 // 串口接收缓冲区
 static uint8_t s_rx_buffer[512];
+// 485无应答超时计时 (30s)
+static uint32_t s_no_resp_tick = 0;
+static bool s_timeout_active = false;
 
 /*
  * @brief 发送一次读数据请求
@@ -317,6 +323,12 @@ static void dlt645_send_read(uint32_t addr_di)
 
     // 发送到串口
     s_uart_dev->Write(UART_NUM_1, (const char*)frame, frame_len);
+
+    // 启动30s无应答超时计时 (仅当未激活时)
+    if (!s_timeout_active) {
+        tickOut(&s_no_resp_tick, 0);
+        s_timeout_active = true;
+    }
 }
 
 /*
@@ -331,8 +343,8 @@ void dlt645_task(void *pvParameters)
     uint16_t len = 0;
     static uint8_t send_count = 0;   // 轮询计数: 0=电能 1=电压 2=电流 3=功率 4=频率
     s_uart_dev = (const uart_device_t *)pvParameters;
-
-    while (1) {
+    EN_SLOGI(TAG, "DLT645任务启动");
+       while (1) {
         // 1秒定时器: 触发一次读数据请求
         if (tickOut(&times, 1000)) {
             tickOut(&times, 0);
@@ -352,6 +364,8 @@ void dlt645_task(void *pvParameters)
         if (len > 0 && len < 512) {
             int read_len = s_uart_dev->Read(UART_NUM_1, (char*)s_rx_buffer, len, 100);
             if (read_len > 0) {
+                // 收到应答，取消超时计时
+                s_timeout_active = false;
                 // 调试输出: 打印接收到的原始十六进制帧
                 ESP_LOGD(TAG, "RX (%d bytes):", read_len);
                 EN_SLOGD_HEX(TAG, s_rx_buffer, read_len);
@@ -359,6 +373,11 @@ void dlt645_task(void *pvParameters)
                 dlt645_parse_response(s_rx_buffer, (uint16_t)read_len);
             }
             memset(s_rx_buffer, 0, sizeof(s_rx_buffer));
+        }
+        // 30s无应答超时检查
+        if (s_timeout_active && tickOut(&s_no_resp_tick, 30000)) {
+            ESP_LOGW(TAG, "485电表发送数据无应答，超时30s");
+            tickOut(&s_no_resp_tick, 0);
         }
         // 任务睡眠 100ms
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -372,6 +391,34 @@ void dlt645_task(void *pvParameters)
  */
 void meter_DLT645_init(void)
 {
+    // 检查485电表模式: DLT645=开启, OFF=关闭
+    // 兼容旧版NVS中uint8数值(1=开启)，自动迁移为字符串
+    char meter_mode[20] = {0};
+    if (!sStorageGwGetMeter485En(meter_mode, sizeof(meter_mode))) {
+        // 读失败可能是旧版数值类型，尝试强制迁移
+        sNvsParamLock();
+        cJSON *pRoot = sNvsParamGet();
+        if (pRoot) {
+            cJSON *pGw = cJSON_GetObjectItem(pRoot, "gate");
+            if (pGw) {
+                cJSON *pItem = cJSON_GetObjectItem(pGw, "meter485En");
+                if (pItem && cJSON_IsNumber(pItem)) {
+                    // 旧数值格式: 1=开启 → 迁移为 "DLT645"
+                    cJSON_ReplaceItemInObject(pGw, "meter485En",
+                        cJSON_CreateString("DLT645"));
+                    sNvsParamSet();
+                    ESP_LOGI(TAG, "485电表参数已从旧数值格式迁移为DLT645");
+                    strncpy(meter_mode, "DLT645", sizeof(meter_mode) - 1);
+                }
+            }
+        }
+        sNvsParamUnlock();
+    }
+    if (memcmp(meter_mode, "DLT645", sizeof("DLT645")) != 0) {
+        ESP_LOGI(TAG, "485电表模式=%s，跳过初始化", meter_mode);
+        return;
+    }
+
     // 从BSP工厂获取UART1实例
     const uart_device_t *uart1 = uart_factory_get_device(UART_NUM_1);
     if (uart1 == NULL) {

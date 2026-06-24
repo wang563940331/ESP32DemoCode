@@ -14,8 +14,9 @@ const stParamConfig_t g_stParamConfig[] = {
     {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName},
     {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName},
     {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",         cStorageGwNvsName},
-    
-    
+    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",        cStorageGwNvsName},   // 485电表模式: DLT645=开启, OFF=关闭
+
+
     // ====== AP参数组 ======
     {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName},
     {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",       cStorageApNvsName},

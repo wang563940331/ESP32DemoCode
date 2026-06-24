@@ -48,6 +48,7 @@
 #define cStorageGwNvsSn                 "sn"                                    //SN
 #define cStorageGwNvsDeviceType         "deviceType"                            //设备类型
 #define cStorageGwNvsTmpMode            "tmpMode"                               //温度传感器模式
+#define cStorageGwNvsMeter485En         "meter485En"                            //485电表使能
 
 #define cStorageGwNvsFormatCnt          "formatCnt"                             //文件系统格式次数
 #define cStorageGwNvsDebug              "deBugOn"                               //调试
@@ -65,7 +66,7 @@
 #define cStorageApNvsmqttsub            "mqttsub"                                  //连接固定子码掩码
 #define cStorageApNvsmqttclient         "mqttclient"                          //WEB登录密码有效时间(必须U32)
 #define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
-#define cStorageApNvsmqttpasswd         "mqttpasswd"  
+#define cStorageApNvsmqttpasswd         "mqttpasswd"
 
 
 
@@ -109,7 +110,8 @@ typedef enum
     cStorageApCmdNvsmqttclient,                                                  //WEB密码有效时间(4个字节时间戳)
     cStorageApCmdNvsmqttuser,                                                       //WEB申请码
     cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
-    
+    cStorageApCmdMeter485En,                                                    //485电表使能
+
     eStorageApCmdMax
 }__attribute__((packed)) eStorageApCmd_t;
 
