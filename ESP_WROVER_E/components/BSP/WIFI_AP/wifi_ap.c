@@ -51,6 +51,7 @@ typedef struct {
     const char *default_str;    // 默认字符串值
     int storage_cmd;            // NVS存储命令
     int is_readonly;            // 是否只读（1=只读，0=可读写）
+    int reboot_action;          // 保存后行为: 0=不操作, 1=重连网络, 2=重启设备
 } config_param_t;
 
 // 全局配置变量
@@ -67,16 +68,16 @@ char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF=关闭
 
 // 参数描述数组 - 集中管理所有参数
 config_param_t config_params[] = {
-    {"domain", "Domain", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_domain), g_domain, 0, "default.domain.com", cStorageApCmdNvsmqttIp, WRITEABLE},
-    {"port", "Port", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_port), &g_port, 8080, NULL, cStorageApCmdNvsmqttport, WRITEABLE},
-    {"Version", "Version", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_string_var), g_string_var, 0, APP_VERSION_FULL, -1, READONLY},
-    {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE},
-    {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE},
-    {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE},
-    {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "", cStorageApCmdTmpMode, WRITEABLE},
-    {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE},
-    {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE},
-    {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE},
+    {"domain", "Domain", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_domain), g_domain, 0, "default.domain.com", cStorageApCmdNvsmqttIp, WRITEABLE, 1},
+    {"port", "Port", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_port), &g_port, 8080, NULL, cStorageApCmdNvsmqttport, WRITEABLE, 1},
+    {"Version", "Version", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_string_var), g_string_var, 0, APP_VERSION_FULL, -1, READONLY, 0},
+    {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE, 1},
+    {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE, 1},
+    {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE, 2},
+    {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "", cStorageApCmdTmpMode, WRITEABLE, 2},
+    {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE, 1},
+    {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE, 1},
+    {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE, 2},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))
 
@@ -436,30 +437,57 @@ static esp_err_t save_handler(httpd_req_t *req)
     buf[received] = '\0';
     ESP_LOGI(TAG, "Received data: %s", buf);
     
-    // 统一解析所有参数
+    // 统一解析所有参数，跟踪变更参数的 reboot_action 最大值
+    int max_action = 0;
     for (int i = 0; i < NUM_PARAMS; i++) {
         config_param_t *param = &config_params[i];
-        char value_buf[64] = {0};  // 减小缓冲区大小避免栈溢出
+        char value_buf[64] = {0};
         char *value = extract_param(buf, param->name, value_buf, sizeof(value_buf));
         ESP_LOGI(TAG, "参数 %s, 值: %s", param->name, value ? value : "NULL");
-        save_param_to_nvs(param, value);
+        if (value) {
+            // 判断值是否变更
+            char old_val[64] = {0};
+            int changed = 1;
+            if (param->type == WIFIAP_PARAM_INT) {
+                snprintf(old_val, sizeof(old_val), "%d", *(uint16_t *)param->value);
+            } else if (param->type == WIFIAP_PARAM_TOGGLE) {
+                snprintf(old_val, sizeof(old_val), "%d", *(uint8_t *)param->value);
+            } else {
+                strncpy(old_val, (char *)param->value, sizeof(old_val) - 1);
+            }
+            if (strcmp(old_val, value) == 0) {
+                changed = 0;
+            }
+            save_param_to_nvs(param, value);
+            if (changed && param->reboot_action > max_action) {
+                max_action = param->reboot_action;
+            }
+        }
     }
 
-    upwificonfig();
-    mqtt_reinit();
+    if (max_action >= 1) {
+        upwificonfig();
+        mqtt_reinit();
+    }
+    ESP_LOGI(TAG, "配置保存完成, max_action=%d", max_action);
 
     // 重定向回根路径
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, NULL, 0);
-    
-    ESP_LOGI(TAG, "配置保存: MqttIP=%s, MqttPort=%d, string=%s ,sn=%s", 
-        g_domain, 
-        g_port, 
-        g_string_var,
+
+    ESP_LOGI(TAG, "配置保存: MqttIP=%s, MqttPort=%d, sn=%s",
+        g_domain,
+        g_port,
         g_sn);
-    
+
     heap_caps_free(buf);
+
+    if (max_action == 2) {
+        ESP_LOGI(TAG, "参数变更需重启，1.5s后重启...");
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        esp_restart();
+    }
     return ESP_OK;
 }
 

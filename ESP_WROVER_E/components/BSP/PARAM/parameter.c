@@ -11,22 +11,22 @@ stNvsCache_t stNvsCache;
 // 参数配置数组 - 添加新参数只需在这里加一行！
 const stParamConfig_t g_stParamConfig[] = {
     // ====== 网关参数组 ======
-    {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName},
-    {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName},
-    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",         cStorageGwNvsName},
-    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",        cStorageGwNvsName},   // 485电表模式: DLT645=开启, OFF=关闭
+    {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName, 2},     // SN变更需重启
+    {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName, 2},     // 设备类型变更需重启
+    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",         cStorageGwNvsName, 2},     // 温度模式变更需重启
+    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",        cStorageGwNvsName, 2},     // 485电表模式变更需重启
 
 
     // ====== AP参数组 ======
-    {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName},
-    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",       cStorageApNvsName},
-    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",       cStorageApNvsName},
-    {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "mqtt://47.107.58.46",    cStorageApNvsName},
-    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "6004",           cStorageApNvsName},
-    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "SubTopic",            cStorageApNvsName},
-    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",         cStorageApNvsName},
-    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",          cStorageApNvsName},
-    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",         cStorageApNvsName},
+    {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName, 0},
+    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",       cStorageApNvsName, 1},     // WiFi名称变更重连网络
+    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",       cStorageApNvsName, 1},     // WiFi密码变更重连网络
+    {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "mqtt://47.107.58.46",    cStorageApNvsName, 1},     // MQTT IP变更重连网络
+    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "6004",           cStorageApNvsName, 1},     // MQTT端口变更重连网络
+    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "SubTopic",            cStorageApNvsName, 1},     // MQTT主题变更重连网络
+    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",         cStorageApNvsName, 1},     // MQTT客户端ID变更重连网络
+    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",          cStorageApNvsName, 1},     // MQTT用户名变更重连网络
+    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",         cStorageApNvsName, 1},     // MQTT密码变更重连网络
 };
 const int g_iParamCount = sizeof(g_stParamConfig) / sizeof(g_stParamConfig[0]);
 

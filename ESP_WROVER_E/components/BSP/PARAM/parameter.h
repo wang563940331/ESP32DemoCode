@@ -186,6 +186,7 @@ typedef struct {
     eParamType_t     eType;          // 参数类型
     const char*      pDefaultValue;  // 默认值（字符串形式）
     const char*      pGroupName;     // 所属分组（"gate" 或 "ap"）
+    uint8_t          rebootAction;   // 保存后行为: 0=不操作, 1=重连网络, 2=重启设备
 } stParamConfig_t;
 
 
