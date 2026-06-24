@@ -2,6 +2,8 @@
 #include "parameterSet.h"
 #include "utility.h"
 static const char *TAG = "parameterSet";
+// 批量保存模式标志: true=缓存写(仅改JSON不写NVS), false=立即写NVS
+static bool s_batch_mode = false;
 
 /*
     JSON 配置中更新某个数字类型的参数
@@ -207,7 +209,8 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
     
     
     eRst = eStorageApRstObjNull;
-    sNvsParamLock();
+    // 批量模式下已由 sStorageBeginBatch 提前加锁，此处跳过
+    if (!s_batch_mode) { sNvsParamLock(); }
     pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageApNvsName);
     if(pObj != NULL)
     {
@@ -260,15 +263,17 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
             
             if(bRst)
             {
-                bRst   &= sNvsParamSet();
+                if (!s_batch_mode) {
+                    bRst &= sNvsParamSet();
+                }
                 eRst    = (bRst)?eStorageApRstSuccess:eStorageApRstFail;
                 break;
             }
         }while (0);
     }
     sNvsParamUnlock();
-    
-    
+
+
     return eRst;
 }
 
@@ -298,7 +303,8 @@ eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
     
     
     eRst = eStorageApRstObjNull;
-    sNvsParamLock();
+    // 批量模式下已由 sStorageBeginBatch 提前加锁，此处跳过
+    if (!s_batch_mode) { sNvsParamLock(); }
     pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageGwNvsName);
     if(pObj != NULL)
     {
@@ -329,21 +335,24 @@ eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
             
             if(bRst)
             {
-                bRst   &= sNvsParamSet();
+                // 批量模式下延迟到 sStorageEndBatch 统一写NVS
+                if (!s_batch_mode) {
+                    bRst &= sNvsParamSet();
+                }
                 eRst    = (bRst)?eStorageApRstSuccess:eStorageApRstFail;
                 break;
             }
         }while (0);
     }
     sNvsParamUnlock();
-    
-    
+
+
     return eRst;
 }
 
 
 /**********************************************************************************************
-* Description       :     AP层-存储设置
+* Description       :     GW层-存储设置 (同AP层，支持批量模式)
 * Author            :     XRG
 * modified Date     :     2024-01-24
 * param[in]         :     eCmd      支持设置的列表
@@ -364,7 +373,7 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
         EN_SLOGE(TAG, "输入参数为异常");
         return(false);
     }
-    
+
     eRst = eStorageApRstObjNull;
     sNvsParamLock();
     pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageApNvsName);
@@ -478,14 +487,14 @@ eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
     cJSON                 *pObj     = NULL;
     double                 d64Value  = 0.0;
     i32                    i32Value;
-    
-    
+
+
     if((pData == NULL) || (eCmd >= eStorageApCmdMax))
     {
         EN_SLOGE(TAG, "输入参数为异常");
         return(false);
     }
-    
+
     eRst = eStorageApRstObjNull;
     sNvsParamLock();
     pObj = cJSON_GetObjectItem(sNvsParamGet(), cStorageGwNvsName);
@@ -668,4 +677,24 @@ bool sStorageGwGetMeter485En(char *mode, u16 maxLen)
         return(true);
     }
     return(false);
+}
+
+/*
+ * @brief 批量保存开始: 加锁 + 开启批量模式
+ *        后续 sStorageApSet / sStorageGwSet 调用将只更新JSON缓存不写NVS
+ */
+void sStorageBeginBatch(void)
+{
+    s_batch_mode = true;
+    sNvsParamLock();
+}
+
+/*
+ * @brief 批量保存结束: 统一写入NVS + 解锁 + 退出批量模式
+ */
+void sStorageEndBatch(void)
+{
+    sNvsParamSet();          // 将整个JSON对象一次性写入NVS
+    sNvsParamUnlock();
+    s_batch_mode = false;
 }

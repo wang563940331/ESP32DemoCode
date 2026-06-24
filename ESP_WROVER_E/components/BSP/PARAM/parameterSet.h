@@ -24,6 +24,8 @@ bool sStorageApSetNvsmqttuser(char *data);
 bool sStorageApSetNvsmqttpasswd(char *data);
 bool sStorageGwSetMeter485En(char *mode);
 bool sStorageGwGetMeter485En(char *mode, u16 maxLen);
+void sStorageBeginBatch(void);
+void sStorageEndBatch(void);
 eStorageApRst_t sStorageGwGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData);
 eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData);
 #endif

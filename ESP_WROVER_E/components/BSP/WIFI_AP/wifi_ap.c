@@ -437,15 +437,21 @@ static esp_err_t save_handler(httpd_req_t *req)
     buf[received] = '\0';
     ESP_LOGI(TAG, "Received data: %s", buf);
     
-    // 统一解析所有参数，跟踪变更参数的 reboot_action 最大值
+    /*
+     * 批量保存策略:
+     *   sStorageBeginBatch  → 加锁 + 进入批量模式
+     *   逐参数: 对比新旧值 → 仅更新JSON内存缓存 (不写NVS)
+     *   sStorageEndBatch    → 一次性写NVS + 解锁
+     * 避免原来每个参数保存都触发一次完整NVS写入的问题
+     */
+    sStorageBeginBatch();
     int max_action = 0;
     for (int i = 0; i < NUM_PARAMS; i++) {
         config_param_t *param = &config_params[i];
         char value_buf[64] = {0};
         char *value = extract_param(buf, param->name, value_buf, sizeof(value_buf));
-        ESP_LOGI(TAG, "参数 %s, 值: %s", param->name, value ? value : "NULL");
         if (value) {
-            // 判断值是否变更
+            // 对比旧值判断是否实际变更 (防止未修改的参数触发不必要的重启)
             char old_val[64] = {0};
             int changed = 1;
             if (param->type == WIFIAP_PARAM_INT) {
@@ -458,18 +464,22 @@ static esp_err_t save_handler(httpd_req_t *req)
             if (strcmp(old_val, value) == 0) {
                 changed = 0;
             }
+            ESP_LOGI(TAG, "参数 %s=%s %s", param->name, value, changed ? "(变更)" : "(未变)");
             save_param_to_nvs(param, value);
+            // 取所有变更参数中 reboot_action 的最大值
             if (changed && param->reboot_action > max_action) {
                 max_action = param->reboot_action;
             }
         }
     }
+    sStorageEndBatch();
+    ESP_LOGI(TAG, "配置批量保存完成, max_action=%d", max_action);
 
+    // 根据 reboot_action 最大值决定后续行为
     if (max_action >= 1) {
-        upwificonfig();
-        mqtt_reinit();
+        upwificonfig();   // 重连WiFi
+        mqtt_reinit();    // 重连MQTT
     }
-    ESP_LOGI(TAG, "配置保存完成, max_action=%d", max_action);
 
     // 重定向回根路径
     httpd_resp_set_status(req, "302 Found");
@@ -483,9 +493,10 @@ static esp_err_t save_handler(httpd_req_t *req)
 
     heap_caps_free(buf);
 
+    // max_action=2: 参数变更需要重启才能生效 (如SN/设备类型/485电表模式等)
     if (max_action == 2) {
         ESP_LOGI(TAG, "参数变更需重启，1.5s后重启...");
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        vTaskDelay(pdMS_TO_TICKS(1500));  // 预留时间让HTTP响应返回给客户端
         esp_restart();
     }
     return ESP_OK;
