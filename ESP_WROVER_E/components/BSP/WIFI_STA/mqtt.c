@@ -146,7 +146,9 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
             parse_json(event->data,&Start_once);
             break;
         case MQTT_EVENT_ERROR:
-            ESP_LOGI(TAG, "MQTT 错误");
+            ESP_LOGE(TAG, "MQTT 错误: type=%d, connect_code=%d",
+                     event->error_handle->error_type,
+                     event->error_handle->connect_return_code);
             break;
         default:
             break;
@@ -203,6 +205,8 @@ void mqtt_start(void)
     mqtt_cfg.session.keepalive = 120;
 
     mqtt_cfg.session.disable_clean_session = false;  // 设置为true禁用持久会话
+
+    mqtt_cfg.network.disable_auto_reconnect = true;   // 关闭自动重连，避免FRP透传下clientId冲突死循环
 
     ESP_LOGI(TAG,"MQTT连接配置:clientId:%s,username:%s,password:%s",mqtt_cfg.credentials.client_id,
     mqtt_cfg.credentials.username,mqtt_cfg.credentials.authentication.password);
