@@ -377,27 +377,37 @@ void my_task(void *pvParameters)
     char mqtt_pub_buff[64]={0};
     // 事件位变量，用于存储WiFi事件
     EventBits_t ev = 0;
-    do
+
+    char buf[20] = {0};
+    sStorageGwGet(cStorageApCmdTmpMode,sizeof(buf),(u8 *)buf);
+ 
+    if (memcmp(buf, "OFF", sizeof("OFF")) == 0) {
+        ESP_LOGI(TAG, "单总线传感器模式为OFF，不初始化传感器");
+    }else
     {
-        errnmber++;
-        sensor = one_wire_factory_get_device(GPIO_NUM_27);
-        
-        if (sensor == NULL) {
-            ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
-        } else {
-            // 初始化
-            esp_err_t ret = sensor->Init(GPIO_NUM_27);
-            if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
-                sensor = NULL;
-            }
-        }
-        if(errnmber > 30)
+        do
         {
-            break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    } while (sensor == NULL);
+            errnmber++;
+            sensor = one_wire_factory_get_device(GPIO_NUM_27);
+            
+            if (sensor == NULL) {
+                ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
+            } else {
+                // 初始化
+                esp_err_t ret = sensor->Init(GPIO_NUM_27);
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
+                    sensor = NULL;
+                }
+            }
+            if(errnmber > 30)
+            {
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+        } while (sensor == NULL);
+    }
+
     errnmber=0;
 
     //【日志】【初始化】【MQTT】【网络服务】【】
