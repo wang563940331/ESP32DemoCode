@@ -115,9 +115,14 @@ char* generateDefaultJsonString(void)
             {
                 cJSON_AddNumberToObject(pDataObj, pParam->pParamName, atof(pParam->pDefaultValue));
             }
-            else
+            else if(pParam->eType == PARAM_TYPE_STRING)
             {
                 cJSON_AddStringToObject(pDataObj, pParam->pParamName, pParam->pDefaultValue);
+            }
+            else
+            {
+                // PARAM_TYPE_UINT32, UINT16, UINT8, INT 等数值类型
+                cJSON_AddNumberToObject(pDataObj, pParam->pParamName, atof(pParam->pDefaultValue));
             }
         }
     }

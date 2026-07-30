@@ -401,19 +401,10 @@ void dlt645_save_power_peaks(void)
     }
 
     // 辅助宏: 写入一个窗口的峰值和时间戳到JSON
+// 使用 cJSON_ReplaceItemInObject 确保类型正确 (修复 string->number 类型转换问题)
 #define SAVE_WINDOW(key_v, key_time, win) do { \
-    cJSON *item_v = cJSON_GetObjectItem(pGw, key_v); \
-    if (item_v) { \
-        cJSON_SetNumberValue(item_v, (win).peak_power); \
-    } else { \
-        EN_SLOGE("SAVE_WINDOW: %s not found", key_v); \
-    } \
-    cJSON *item_t = cJSON_GetObjectItem(pGw, key_time); \
-    if (item_t) { \
-        cJSON_SetNumberValue(item_t, (win).peak_time); \
-    } else { \
-        EN_SLOGE("SAVE_WINDOW: %s not found", key_time); \
-    } \
+    cJSON_ReplaceItemInObject(pGw, key_v, cJSON_CreateNumber((win).peak_power)); \
+    cJSON_ReplaceItemInObject(pGw, key_time, cJSON_CreateNumber((win).peak_time)); \
 } while(0)
 
     SAVE_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_1hour);
@@ -424,7 +415,7 @@ void dlt645_save_power_peaks(void)
 
 #undef SAVE_WINDOW
 
-    sNvsParamSet(true);
+    sNvsParamSet(false);
     sNvsParamUnlock();
 }
 
