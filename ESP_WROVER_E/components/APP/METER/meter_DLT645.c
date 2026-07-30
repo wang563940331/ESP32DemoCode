@@ -364,8 +364,8 @@ void dlt645_load_power_peaks(void)
     } \
 } while(0)
 
-    LOAD_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_1hour);
-    LOAD_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT,  g_meter_data.peak_12hour);
+    LOAD_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_3min);
+    LOAD_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT,  g_meter_data.peak_1hour);
     LOAD_WINDOW(cStorageDataNvsPk1dV,  cStorageDataNvsPk1dT,  g_meter_data.peak_1day);
     LOAD_WINDOW(cStorageDataNvsPk7dV,  cStorageDataNvsPk7dT,  g_meter_data.peak_7day);
     LOAD_WINDOW(cStorageDataNvsPk1mV,  cStorageDataNvsPk1mT,  g_meter_data.peak_1month);
@@ -374,8 +374,8 @@ void dlt645_load_power_peaks(void)
 
     sNvsParamUnlock();
     ESP_LOGI(TAG, "Power peaks loaded from NVS: 1h=%.1f, 12h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
+             g_meter_data.peak_3min.peak_power,
              g_meter_data.peak_1hour.peak_power,
-             g_meter_data.peak_12hour.peak_power,
              g_meter_data.peak_1day.peak_power,
              g_meter_data.peak_7day.peak_power,
              g_meter_data.peak_1month.peak_power);
@@ -407,8 +407,8 @@ void dlt645_save_power_peaks(void)
     cJSON_ReplaceItemInObject(pGw, key_time, cJSON_CreateNumber((win).peak_time)); \
 } while(0)
 
-    SAVE_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_1hour);
-    SAVE_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT, g_meter_data.peak_12hour);
+    SAVE_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_3min);
+    SAVE_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT, g_meter_data.peak_1hour);
     SAVE_WINDOW(cStorageDataNvsPk1dV,  cStorageDataNvsPk1dT,  g_meter_data.peak_1day);
     SAVE_WINDOW(cStorageDataNvsPk7dV,  cStorageDataNvsPk7dT,  g_meter_data.peak_7day);
     SAVE_WINDOW(cStorageDataNvsPk1mV,  cStorageDataNvsPk1mT,  g_meter_data.peak_1month);
@@ -452,8 +452,8 @@ void dlt645_update_power_peaks(float current_power)
     } \
 } while(0)
 
-    UPDATE_WINDOW(g_meter_data.peak_1hour,   PEAK_WINDOW_1HOUR);
-    UPDATE_WINDOW(g_meter_data.peak_12hour,  PEAK_WINDOW_12HOUR);
+    UPDATE_WINDOW(g_meter_data.peak_3min,   PEAK_WINDOW_3MIN);
+    UPDATE_WINDOW(g_meter_data.peak_1hour,  PEAK_WINDOW_1HOUR);
     UPDATE_WINDOW(g_meter_data.peak_1day,    PEAK_WINDOW_1DAY);
     UPDATE_WINDOW(g_meter_data.peak_7day,    PEAK_WINDOW_7DAY);
     UPDATE_WINDOW(g_meter_data.peak_1month,  PEAK_WINDOW_1MONTH);

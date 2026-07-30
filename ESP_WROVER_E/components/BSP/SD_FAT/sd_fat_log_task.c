@@ -361,7 +361,7 @@ static bool find_latest_log_file(char* path, size_t path_size)
 
     if (latest_file[0] != '\0') {
         snprintf(path, path_size, "%s", latest_file);
-        ESP_LOGI(TAG, "Found latest log file by date in name: %s", path);
+        ESP_LOGI(TAG, "找到最新日志文件: %s", path);
         return true;
     }
 
@@ -571,7 +571,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int l
  */
 static void sdCardLogTask(void* arg)
 {
-    ESP_LOGI(TAG, "SD card log task started");
+    ESP_LOGI(TAG, "SD卡日志任务启动");
 
     static char path[64] = "2020-01-01.log";      /* 当前日志文件路径 */
     static uint8_t last_day = 0, last_mon = 0;    /* 上次写入的日期 */
@@ -610,11 +610,11 @@ static void sdCardLogTask(void* arg)
             if (year == EPOCH_YEAR) {
                 /* 系统时间未同步，使用epoch时间 */
                 is_epoch_time = true;
-                ESP_LOGW(TAG, "System time is epoch (1970), searching for latest log file");
+                ESP_LOGW(TAG, "系统时间是epoch (1970)，正在搜索最新日志文件");
                 
                 if (find_latest_log_file(path, sizeof(path))) {
                     if (parse_log_filename(path, &last_year, &last_mon, &last_day)) {
-                        ESP_LOGI(TAG, "Using existing log file: %s (date: %u-%02u-%02u)", 
+                        ESP_LOGI(TAG, "使用已存在日志文件: %s (日期: %u-%02u-%02u)", 
                                  path, last_year, last_mon, last_day);
                     }
                 } else {
@@ -638,7 +638,6 @@ static void sdCardLogTask(void* arg)
         if (is_epoch_time && year != EPOCH_YEAR) {
             ESP_LOGI(TAG, "时间同步成功,日志保存到文件%u-%02u-%02u.log",
                      year, mon, tm_now.tm_mday);
-            
             is_epoch_time = false;
             snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
             last_day = tm_now.tm_mday;
@@ -647,11 +646,12 @@ static void sdCardLogTask(void* arg)
             enforce_max_log_files(0);
         } else if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
             /* 日期变更，切换到新日志文件 */
+            EN_SLOGI(TAG, "日期变更，切换到新日志文件: %s", path);
             snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
             last_day = tm_now.tm_mday;
             last_mon = mon;
             last_year = year;
-
+           
             /* 限制日志文件数量，超过MAX_LOG_FILES则删除最早的 */
             enforce_max_log_files(1);
         }
@@ -809,6 +809,6 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
 
 
     bRst &= sShellCmdRegister(&readsd);
-    ESP_LOGI(TAG, " sd_fat_log_task_init AT CMD bRst: %d", bRst);
+    ESP_LOGI(TAG, " SHELL AT CMD 注册结果: %d", bRst);
     return ESP_OK;
 }

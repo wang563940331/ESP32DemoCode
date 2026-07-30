@@ -9,6 +9,7 @@
 #include "my_log.h"
 #include "sd_fat_log_task.h"
 #include "ff.h"
+
 static const char* TAG = "sd_fat_ops";
 
 static const sd_fat_device_t* s_sd_device = NULL;
@@ -62,9 +63,23 @@ esp_err_t sd_fat_ops_init(const char* device_name) {
                 ret = s_sd_device->GetCardHandle(device_name, &card);
                 if (ret == ESP_OK && card != NULL) {
                     ESP_LOGI(TAG, "SD卡信息:");
-                    ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * 512 / 1024 / 1024);
+                    ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * card->csd.sector_size / 1024 / 1024);
                     ESP_LOGI(TAG, "  块大小: %d bytes", card->csd.sector_size);
-                }
+
+                    /* 通过 FatFs f_getfree 获取剩余/已用空间 */
+                    FATFS *fs = NULL;
+                    DWORD free_clust = 0;
+                    FRESULT fres = f_getfree("/sdcard", &free_clust, &fs);
+                    if (fres == FR_OK && fs != NULL) {
+                        DWORD total_sectors = (fs->n_fatent - 2) * fs->csize;
+                        DWORD free_sectors  = free_clust * fs->csize;
+                        unsigned long long total_bytes = (unsigned long long)total_sectors * card->csd.sector_size;
+                        unsigned long long free_bytes  = (unsigned long long)free_sectors * card->csd.sector_size;
+                        unsigned long long used_bytes  = total_bytes - free_bytes;
+                        ESP_LOGI(TAG, "  剩余空间: %.2f MB", (float)free_bytes / 1024 / 1024);
+                        ESP_LOGI(TAG, "  已用空间: %.2f MB", (float)used_bytes / 1024 / 1024);
+                    }
+                }               
             } else {
                 ESP_LOGE(TAG, "SD卡挂载失败: %s", esp_err_to_name(ret));
                 return ret;

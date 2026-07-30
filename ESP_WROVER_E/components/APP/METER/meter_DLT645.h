@@ -35,8 +35,8 @@
 #define DATAEVEN        10
 
 // 功率峰值时间窗口 (秒)
-#define PEAK_WINDOW_1HOUR    180
-#define PEAK_WINDOW_12HOUR   3600
+#define PEAK_WINDOW_3MIN    180
+#define PEAK_WINDOW_1HOUR   3600
 #define PEAK_WINDOW_1DAY     86400
 #define PEAK_WINDOW_7DAY     604800
 #define PEAK_WINDOW_1MONTH   2592000
@@ -59,8 +59,8 @@ typedef struct {
     float PowerEVEN;
     float Frequency;
     // 各时间窗口瞬时功率峰值
+    PowerPeakWindow_t peak_3min;
     PowerPeakWindow_t peak_1hour;
-    PowerPeakWindow_t peak_12hour;
     PowerPeakWindow_t peak_1day;
     PowerPeakWindow_t peak_7day;
     PowerPeakWindow_t peak_1month;
