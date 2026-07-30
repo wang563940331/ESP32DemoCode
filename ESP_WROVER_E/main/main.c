@@ -51,7 +51,7 @@ void system_info_timercb(TimerHandle_t timer)
     // sGetTimestamp(),
     // u32SysTime);
     // print_detailed_mem_info();
-    mdf_mem_print_heap2();
+    // mdf_mem_print_heap2();
     mdf_mem_print_heap();
 }
 

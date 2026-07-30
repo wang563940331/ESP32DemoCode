@@ -306,7 +306,27 @@ void send_head(const char *data,float temperature, float humidity) {
 
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
-    
+    // 各时间窗口瞬时功率峰值
+    if (g_meter_data.peak_1hour.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1hour.peak_power);
+        cJSON_AddItemToObject(root, "PowerPeak_1h", cJSON_CreateString(str));
+    }
+    if (g_meter_data.peak_12hour.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_12hour.peak_power);
+        cJSON_AddItemToObject(root, "PowerPeak_12h", cJSON_CreateString(str));
+    }
+    if (g_meter_data.peak_1day.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1day.peak_power);
+        cJSON_AddItemToObject(root, "PowerPeak_1d", cJSON_CreateString(str));
+    }
+    if (g_meter_data.peak_7day.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_7day.peak_power);
+        cJSON_AddItemToObject(root, "PowerPeak_7d", cJSON_CreateString(str));
+    }
+    if (g_meter_data.peak_1month.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1month.peak_power);
+        cJSON_AddItemToObject(root, "PowerPeak_1m", cJSON_CreateString(str));
+    }
     // 使用外部RAM存储JSON字符串
     char *json_str = cJSON_PrintUnformatted(root);
     if (json_str == NULL) {

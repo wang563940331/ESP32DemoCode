@@ -270,6 +270,8 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
                     count3 = 0;
                     PowerPA_ALL = 0.0f;
                 }
+                // 更新各时间窗口的功率峰值
+                dlt645_update_power_peaks(g_meter_data.PowerPA);
                 // ESP_LOGI(TAG, "Power: %.1f W (avg: %.2f W)", g_meter_data.PowerPA, g_meter_data.PowerEVEN);
             }
             break;
@@ -328,6 +330,148 @@ static void dlt645_send_read(uint32_t addr_di)
     if (!s_timeout_active) {
         tickOut(&s_no_resp_tick, 0);
         s_timeout_active = true;
+    }
+}
+
+/*
+ * @brief 从NVS JSON中加载功率峰值数据
+ *        在 meter_DLT645_init 时调用，恢复上次保存的峰值
+ *        数据存储在 gate 子对象下，使用现有参数存储方案
+ */
+void dlt645_load_power_peaks(void)
+{
+    sNvsParamLock();
+    cJSON *pRoot = sNvsParamGet();
+    if (pRoot == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+    cJSON *pGw = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
+    if (pGw == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    // 辅助宏: 从JSON读取一个窗口的峰值和时间戳
+#define LOAD_WINDOW(key_v, key_t, win) do { \
+    cJSON *item_v = cJSON_GetObjectItem(pGw, key_v); \
+    if (item_v && cJSON_IsNumber(item_v)) { \
+        (win).peak_power = (float)item_v->valuedouble; \
+    } \
+    cJSON *item_t = cJSON_GetObjectItem(pGw, key_t); \
+    if (item_t && cJSON_IsNumber(item_t)) { \
+        (win).peak_time = (uint32_t)item_t->valuedouble; \
+    } \
+} while(0)
+
+    LOAD_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_1hour);
+    LOAD_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT,  g_meter_data.peak_12hour);
+    LOAD_WINDOW(cStorageDataNvsPk1dV,  cStorageDataNvsPk1dT,  g_meter_data.peak_1day);
+    LOAD_WINDOW(cStorageDataNvsPk7dV,  cStorageDataNvsPk7dT,  g_meter_data.peak_7day);
+    LOAD_WINDOW(cStorageDataNvsPk1mV,  cStorageDataNvsPk1mT,  g_meter_data.peak_1month);
+
+#undef LOAD_WINDOW
+
+    sNvsParamUnlock();
+    ESP_LOGI(TAG, "Power peaks loaded from NVS: 1h=%.1f, 12h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
+             g_meter_data.peak_1hour.peak_power,
+             g_meter_data.peak_12hour.peak_power,
+             g_meter_data.peak_1day.peak_power,
+             g_meter_data.peak_7day.peak_power,
+             g_meter_data.peak_1month.peak_power);
+}
+
+/*
+ * @brief 将功率峰值数据写入NVS JSON
+ *        使用现有参数存储方案，数据存入 gate 子对象
+ *        仅在峰值更新时调用，减少Flash磨损
+ */
+void dlt645_save_power_peaks(void)
+{
+    sNvsParamLock();
+    cJSON *pRoot = sNvsParamGet();
+    if (pRoot == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+    cJSON *pGw = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
+    if (pGw == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    // 辅助宏: 写入一个窗口的峰值和时间戳到JSON
+#define SAVE_WINDOW(key_v, key_time, win) do { \
+    cJSON *item_v = cJSON_GetObjectItem(pGw, key_v); \
+    if (item_v) { \
+        cJSON_SetNumberValue(item_v, (win).peak_power); \
+    } else { \
+        EN_SLOGE("SAVE_WINDOW: %s not found", key_v); \
+    } \
+    cJSON *item_t = cJSON_GetObjectItem(pGw, key_time); \
+    if (item_t) { \
+        cJSON_SetNumberValue(item_t, (win).peak_time); \
+    } else { \
+        EN_SLOGE("SAVE_WINDOW: %s not found", key_time); \
+    } \
+} while(0)
+
+    SAVE_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_1hour);
+    SAVE_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT, g_meter_data.peak_12hour);
+    SAVE_WINDOW(cStorageDataNvsPk1dV,  cStorageDataNvsPk1dT,  g_meter_data.peak_1day);
+    SAVE_WINDOW(cStorageDataNvsPk7dV,  cStorageDataNvsPk7dT,  g_meter_data.peak_7day);
+    SAVE_WINDOW(cStorageDataNvsPk1mV,  cStorageDataNvsPk1mT,  g_meter_data.peak_1month);
+
+#undef SAVE_WINDOW
+
+    sNvsParamSet(true);
+    sNvsParamUnlock();
+}
+
+/*
+ * @brief 更新各时间窗口的功率峰值
+ *        滑动窗口算法: 峰值过期后自动重置，当前功率更高时更新
+ * @param current_power  当前瞬时功率值 (W)
+ */
+void dlt645_update_power_peaks(float current_power)
+{
+    uint32_t now = sGetTimestamp();
+
+    // 时间戳有效性检查: SNTP未同步时跳过，避免用1970年时间戳污染数据
+    if (now < PEAK_TIME_VALID_MIN) {
+        return;
+    }
+
+    bool updated = false;
+
+    // 辅助宏: 检查并更新单个窗口
+#define UPDATE_WINDOW(win, duration_sec) do { \
+    if ((win).peak_time == 0 || now - (win).peak_time > (duration_sec)) { \
+        /* 未初始化或窗口已过期，重置峰值，刷新窗口起始时间 */ \
+        (win).peak_power = current_power; \
+        (win).peak_time = now; \
+        updated = true; \
+        ESP_LOGI(TAG, "Window %s reset: %.1f time=%d", #win, (win).peak_power, (win).peak_time); \
+    } else if (current_power > (win).peak_power) { \
+        /* 当前功率更高，仅更新峰值（不改变窗口起始时间，保持各窗口独立过期） */ \
+        (win).peak_power = current_power; \
+        (win).peak_time = now; \
+        updated = true; \
+        ESP_LOGI(TAG, "Window %s updated: %.1f time=%d", #win, (win).peak_power, (win).peak_time); \
+    } \
+} while(0)
+
+    UPDATE_WINDOW(g_meter_data.peak_1hour,   PEAK_WINDOW_1HOUR);
+    UPDATE_WINDOW(g_meter_data.peak_12hour,  PEAK_WINDOW_12HOUR);
+    UPDATE_WINDOW(g_meter_data.peak_1day,    PEAK_WINDOW_1DAY);
+    UPDATE_WINDOW(g_meter_data.peak_7day,    PEAK_WINDOW_7DAY);
+    UPDATE_WINDOW(g_meter_data.peak_1month,  PEAK_WINDOW_1MONTH);
+
+#undef UPDATE_WINDOW
+
+    // 仅在峰值变化时写入NVS，减少Flash磨损
+    if (updated) {
+        dlt645_save_power_peaks();
     }
 }
 
@@ -406,7 +550,7 @@ void meter_DLT645_init(void)
                     // 旧数值格式: 1=开启 → 迁移为 "DLT645"
                     cJSON_ReplaceItemInObject(pGw, "meter485En",
                         cJSON_CreateString("DLT645"));
-                    sNvsParamSet();
+                    sNvsParamSet(true);
                     ESP_LOGI(TAG, "485电表参数已从旧数值格式迁移为DLT645");
                     strncpy(meter_mode, "DLT645", sizeof(meter_mode) - 1);
                 }
@@ -426,6 +570,9 @@ void meter_DLT645_init(void)
         return;
     }
     uart1->Init(UART_NUM_1);
+
+    // 从NVS加载上次保存的功率峰值
+    dlt645_load_power_peaks();
 
     // 创建任务: 4KB栈，优先级10，绑定到Core 0
     xTaskCreatePinnedToCore(dlt645_task, "meter_DLT645", 4096, uart1, 10, &dlt645TaskHandle, 0);

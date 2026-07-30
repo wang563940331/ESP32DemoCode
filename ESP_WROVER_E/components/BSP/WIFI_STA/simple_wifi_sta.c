@@ -427,7 +427,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
             break;
         case WIFI_EVENT_STA_DISCONNECTED:   //WIFI从路由器断开连接后触发此事件
             esp_wifi_connect();             //继续重连
-            ESP_LOGI(TAG,"wifi sta 连接断开");
+            ESP_LOGE(TAG,"wifi sta 连接断开");
             break;
         default:
             break;

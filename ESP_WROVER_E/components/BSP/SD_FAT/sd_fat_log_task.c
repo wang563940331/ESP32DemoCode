@@ -642,7 +642,7 @@ static void sdCardLogTask(void* arg)
                 uint16_t pool_used = mp_get_used_count(&log_pool);
                 if(pool_used>=2)
                 {
-                    ESP_LOGI(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
+                    ESP_LOGW(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
                     path, (unsigned int)total_len, pool_used, pool_total);
                 }
   

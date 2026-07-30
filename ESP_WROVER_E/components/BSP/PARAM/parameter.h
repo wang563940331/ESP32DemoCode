@@ -55,7 +55,7 @@
 #define cStorageGwNvsGwWorkMode         "gwWork"                                //网关工作模式
 #define cStorageGwNvsGwChargeMode1      "gwChgMode1"                            //1枪网关充电模式
 #define cStorageGwNvsGwChargeMode2      "gwChgMode2"                            //2枪网关充电模式
-     
+
 
 #define cStorageApNvsName               "ap"                                    //第一级
 #define cStorageApNvsFlg                "enableFlg"                             //使能标志,0不使能,非0使能
@@ -68,19 +68,29 @@
 #define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
 #define cStorageApNvsmqttpasswd         "mqttpasswd"
 
+#define cStorageDataNvsName               "data"                                    //第一级
+#define cStorageDataNvsPk1hV             "pk1h_v"                                //1小时功率峰值(W)
+#define cStorageDataNvsPk1hT             "pk1h_t"                                //1小时峰值时间戳
+#define cStorageDataNvsPk12hV            "pk12h_v"                               //12小时功率峰值(W)
+#define cStorageDataNvsPk12hT            "pk12h_t"                               //12小时峰值时间戳
+#define cStorageDataNvsPk1dV             "pk1d_v"                                //1天功率峰值(W)
+#define cStorageDataNvsPk1dT             "pk1d_t"                                //1天峰值时间戳
+#define cStorageDataNvsPk7dV             "pk7d_v"                                //7天功率峰值(W)
+#define cStorageDataNvsPk7dT             "pk7d_t"                                //7天峰值时间戳
+#define cStorageDataNvsPk1mV             "pk1m_v"                                //1月功率峰值(W)
+#define cStorageDataNvsPk1mT             "pk1m_t"                                //1月峰值时间戳
 
-
-#define cStorageNetAppNvsName           "netApp"                               //第一级
-#define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
-#define cStorageNetAppNvsHost1          "host1"                                //主机1
-#define cStorageNetAppNvsHost2          "host2"                                //主机2
-#define cStorageNetAppNvsWhtdEn         "whtdEn"                               //WHT设备使能
-#define cStorageNetAppNvsWhtdHost       "whtdHost"                             //WHT设备主机
-#define cStorageNetAppNvsProtocol       "protocol"                             //协议
-#define cStorageNetAppNvsIp             "ip"                                   //IP地址
-#define cStorageNetAppNvsPort           "port"                                 //端口
-#define cStorageNetAppNvsPath           "path"                                 //路径
-#define cStorageNetAppNvsInfo           "info"  
+// #define cStorageNetAppNvsName           "netApp"                               //第一级
+// #define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
+// #define cStorageNetAppNvsHost1          "host1"                                //主机1
+// #define cStorageNetAppNvsHost2          "host2"                                //主机2
+// #define cStorageNetAppNvsWhtdEn         "whtdEn"                               //WHT设备使能
+// #define cStorageNetAppNvsWhtdHost       "whtdHost"                             //WHT设备主机
+// #define cStorageNetAppNvsProtocol       "protocol"                             //协议
+// #define cStorageNetAppNvsIp             "ip"                                   //IP地址
+// #define cStorageNetAppNvsPort           "port"                                 //端口
+// #define cStorageNetAppNvsPath           "path"                                 //路径
+// #define cStorageNetAppNvsInfo           "info"  
 
 
 
@@ -90,7 +100,8 @@ typedef enum {
     PARAM_TYPE_INT,       // 整数类型
     PARAM_TYPE_UINT32,    // 无符号32位整数
     PARAM_TYPE_UINT16,    // 无符号16位整数
-    PARAM_TYPE_UINT8      // 无符号8位整数
+    PARAM_TYPE_UINT8,     // 无符号8位整数
+    PARAM_TYPE_FLOAT      // 浮点数类型
 } eParamType_t;
 
  
@@ -101,6 +112,9 @@ typedef enum
     cStorageApCmdGwNvsSn,                                                      //网关SN
     cStorageApCmdGwNvsDeviceType,                                                  //网关设备类型
     cStorageApCmdTmpMode,                                                       //温度传感器模式
+    cStorageApCmdMeter485En,                                                    //485电表使能
+
+    
     cStorageApCmdFlg,                                                       //使能标志
     cStorageApCmdSsid,                                                          //热点名称
     cStorageApCmdPassword,                                                      //热点密码
@@ -110,7 +124,18 @@ typedef enum
     cStorageApCmdNvsmqttclient,                                                  //WEB密码有效时间(4个字节时间戳)
     cStorageApCmdNvsmqttuser,                                                       //WEB申请码
     cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
-    cStorageApCmdMeter485En,                                                    //485电表使能
+  
+
+    cStorageApCmdPk1hV,                                                         //1小时功率峰值
+    cStorageApCmdPk1hT,                                                         //1小时峰值时间戳
+    cStorageApCmdPk12hV,                                                        //12小时功率峰值
+    cStorageApCmdPk12hT,                                                        //12小时峰值时间戳
+    cStorageApCmdPk1dV,                                                         //1天功率峰值
+    cStorageApCmdPk1dT,                                                         //1天峰值时间戳
+    cStorageApCmdPk7dV,                                                         //7天功率峰值
+    cStorageApCmdPk7dT,                                                         //7天峰值时间戳
+    cStorageApCmdPk1mV,                                                         //1月功率峰值
+    cStorageApCmdPk1mT,                                                         //1月峰值时间戳
 
     eStorageApCmdMax
 }__attribute__((packed)) eStorageApCmd_t;
@@ -203,7 +228,7 @@ extern const int g_iParamCount;
 bool NVS_init(void);
 bool sNvsParamUnlock(void);
 bool sNvsParamLock(void);
-bool sNvsParamSet(void);
+bool sNvsParamSet(bool printfen);
 cJSON *sNvsParamGet(void);
 char* generateDefaultJsonString(void);
 bool sNvsParamRestoreDefaults(void);

@@ -410,7 +410,7 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
 
         taskEXIT_CRITICAL(&dht11_spinlock);
 
-        ESP_LOGI(TAG, "DHT11 data: %02X %02X %02X %02X %02X", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]);
+        // ESP_LOGI(TAG, "DHT11 data: %02X %02X %02X %02X %02X", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]);
 
         // 检测全零数据：DHT11未响应时总线保持高电平，读到的全是0
         // 全零的校验和虽然"通过"(0=0)，但这是假合法数据，必须拒绝

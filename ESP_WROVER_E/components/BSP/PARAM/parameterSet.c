@@ -264,7 +264,7 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
             if(bRst)
             {
                 if (!s_batch_mode) {
-                    bRst &= sNvsParamSet();
+                    bRst &= sNvsParamSet(true);
                 }
                 eRst    = (bRst)?eStorageApRstSuccess:eStorageApRstFail;
                 break;
@@ -337,7 +337,7 @@ eStorageApRst_t sStorageGwSet(eStorageApCmd_t eCmd, const u8 *pData)
             {
                 // 批量模式下延迟到 sStorageEndBatch 统一写NVS
                 if (!s_batch_mode) {
-                    bRst &= sNvsParamSet();
+                    bRst &= sNvsParamSet(true);
                 }
                 eRst    = (bRst)?eStorageApRstSuccess:eStorageApRstFail;
                 break;
@@ -694,7 +694,7 @@ void sStorageBeginBatch(void)
  */
 void sStorageEndBatch(void)
 {
-    sNvsParamSet();          // 将整个JSON对象一次性写入NVS
+    sNvsParamSet(true);          // 将整个JSON对象一次性写入NVS
     sNvsParamUnlock();
     s_batch_mode = false;
 }

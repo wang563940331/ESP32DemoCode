@@ -11,22 +11,33 @@ stNvsCache_t stNvsCache;
 // 参数配置数组 - 添加新参数只需在这里加一行！
 const stParamConfig_t g_stParamConfig[] = {
     // ====== 网关参数组 ======
-    {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001", cStorageGwNvsName, 2},     // SN变更需重启
-    {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",              cStorageGwNvsName, 2},     // 设备类型变更需重启
-    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",         cStorageGwNvsName, 2},     // 温度模式变更需重启
-    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",        cStorageGwNvsName, 2},     // 485电表模式变更需重启
+    {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001",         cStorageGwNvsName, 2},     // SN变更需重启
+    {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",                      cStorageGwNvsName, 2},     // 设备类型变更需重启
+    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",                 cStorageGwNvsName, 2},     // 温度模式变更需重启
+    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",                cStorageGwNvsName, 2},     // 485电表模式变更需重启
 
 
     // ====== AP参数组 ======
-    {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",              cStorageApNvsName, 0},
-    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",       cStorageApNvsName, 1},     // WiFi名称变更重连网络
-    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",       cStorageApNvsName, 1},     // WiFi密码变更重连网络
+    {cStorageApCmdFlg,              cStorageApNvsFlg,         PARAM_TYPE_UINT8,   "0",                      cStorageApNvsName, 0},
+    {cStorageApCmdSsid,             cStorageApNvsSsid,        PARAM_TYPE_STRING,  "TTS",                    cStorageApNvsName, 1},     // WiFi名称变更重连网络
+    {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",               cStorageApNvsName, 1},     // WiFi密码变更重连网络
     {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "mqtt://47.107.58.46",    cStorageApNvsName, 1},     // MQTT IP变更重连网络
-    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "6004",           cStorageApNvsName, 1},     // MQTT端口变更重连网络
-    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "SubTopic",            cStorageApNvsName, 1},     // MQTT主题变更重连网络
-    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",         cStorageApNvsName, 1},     // MQTT客户端ID变更重连网络
-    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",          cStorageApNvsName, 1},     // MQTT用户名变更重连网络
-    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",         cStorageApNvsName, 1},     // MQTT密码变更重连网络
+    {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "6004",                   cStorageApNvsName, 1},     // MQTT端口变更重连网络
+    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "SubTopic",               cStorageApNvsName, 1},     // MQTT主题变更重连网络
+    {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",                       cStorageApNvsName, 1},     // MQTT客户端ID变更重连网络
+    {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",                  cStorageApNvsName, 1},     // MQTT用户名变更重连网络
+    {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",                 cStorageApNvsName, 1},     // MQTT密码变更重连网络
+
+    {cStorageApCmdPk1hV,          cStorageDataNvsPk1hV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk1hT,          cStorageDataNvsPk1hT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk12hV,         cStorageDataNvsPk12hV,       PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk12hT,         cStorageDataNvsPk12hT,       PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk1dV,          cStorageDataNvsPk1dV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk1dT,          cStorageDataNvsPk1dT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk7dV,          cStorageDataNvsPk7dV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk7dT,          cStorageDataNvsPk7dT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk1mV,          cStorageDataNvsPk1mV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdPk1mT,          cStorageDataNvsPk1mT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
 };
 const int g_iParamCount = sizeof(g_stParamConfig) / sizeof(g_stParamConfig[0]);
 
@@ -67,6 +78,7 @@ char* generateDefaultJsonString(void)
     cJSON *pRoot = cJSON_CreateObject();
     cJSON *pGwObj = cJSON_CreateObject();
     cJSON *pApObj = cJSON_CreateObject();
+    cJSON *pDataObj = cJSON_CreateObject();
     
     // 将参数按分组添加到对应的JSON对象
     for(int i = 0; i < g_iParamCount; i++)
@@ -96,11 +108,23 @@ char* generateDefaultJsonString(void)
             {
                 cJSON_AddNumberToObject(pApObj, pParam->pParamName, atoi(pParam->pDefaultValue));
             }
+        }else if (strcmp(pParam->pGroupName, cStorageDataNvsName) == 0)
+        {
+            // 数据参数
+            if(pParam->eType == PARAM_TYPE_FLOAT)
+            {
+                cJSON_AddNumberToObject(pDataObj, pParam->pParamName, atof(pParam->pDefaultValue));
+            }
+            else
+            {
+                cJSON_AddStringToObject(pDataObj, pParam->pParamName, pParam->pDefaultValue);
+            }
         }
     }
     
     cJSON_AddItemToObject(pRoot, cStorageGwNvsName, pGwObj);
     cJSON_AddItemToObject(pRoot, cStorageApNvsName, pApObj);
+    cJSON_AddItemToObject(pRoot, cStorageDataNvsName, pDataObj);
     
     // 将JSON对象转换为字符串
     char *pJsonStr = cJSON_Print(pRoot);
@@ -116,7 +140,7 @@ char* generateDefaultJsonString(void)
 * Creat Date                            :     2023-10-25
 * notice                                :     参数区:cNvsKeyParam @cNvsName 区域
 ****************************************************************************************************/
-bool sNvsParamSet(void)
+bool sNvsParamSet(bool printfen)
 {
     char *pJsonTxt = NULL;
     nvs_handle handle;
@@ -128,7 +152,7 @@ bool sNvsParamSet(void)
         EN_SLOGI(TAG, "打开NVS参数区:%s@%s, 失败!!!", cNvsKeyParam, cNvsName);
         return(false);
     }
-    EN_SLOGI(TAG, "打开NVS参数区:%s@%s, 成功!!!", cNvsKeyParam, cNvsName);
+    // EN_SLOGI(TAG, "打开NVS参数区:%s@%s, 成功!!!", cNvsKeyParam, cNvsName);
     
     
     //2:打印JSON文本---这里打印不带任何格式 便于存储
@@ -136,7 +160,10 @@ bool sNvsParamSet(void)
     pJsonTxt = cJSON_PrintUnformatted(stNvsCache.pJsonParam);
     if(pJsonTxt != NULL)
     {
-        ESP_LOGI(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
+        if(printfen)
+        {
+            ESP_LOGI(TAG, "NVS参数区:%s@%s, 写入参数内容:\r\n%s", cNvsKeyParam, cNvsName, pJsonTxt);
+        }
         //调用 nvs_set_str 将 JSON 字符串写入 NVS，键名为 cNvsKeyParam
         nvs_set_str(handle, cNvsKeyParam, pJsonTxt);
         heap_caps_free(pJsonTxt);
@@ -334,7 +361,7 @@ bool sNvsParamCheck(void)
     EN_SLOGI(TAG, "默认检查:%s,状态:%d", (bRst)?"正在同步...":"无需同步",i32Rst);
     if(i32Rst > 0)
     {
-        bRst = sNvsParamSet();
+        bRst = sNvsParamSet(true);
     }
     
     return(bRst);
@@ -461,7 +488,7 @@ bool sNvsParamRestoreDefaults(void)
             if (stNvsCache.pJsonParam != NULL)
             {
                 // 保存到NVS
-                bRst = sNvsParamSet();
+                bRst = sNvsParamSet(true);
                 if (bRst)
                 {
                     ESP_LOGI(TAG, "Default parameters restored successfully");
