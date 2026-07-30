@@ -8,6 +8,7 @@
  */
 
 #include "shell.h"
+#include "parameter.h"
 
 static const char *TAG = "shell";
 
@@ -88,7 +89,7 @@ bool sShellDebugOn(const stShellPkt_t *pkg)
 
 
 
-stShellCmd_t stSellCmdDebugOnCmd = 
+stShellCmd_t stSellCmdDebugOnCmd =
 {
     .pCmd       = "debugon",
     .pFormat    = "格式:debugon password",
@@ -100,10 +101,59 @@ stShellCmd_t stSellCmdDebugOnCmd =
 
 
 /**********************************************************************************************
+* Description       :     shell-清理NVS数据
+* Author            :     AutoGen
+* modified Date     :     2026-07-30
+* notice            :
+***********************************************************************************************/
+static void clearDataTask(void *pvParam)
+{
+    sNvsParamCleanUnused();
+    vTaskDelete(NULL);
+}
+
+bool sShellClearData(const stShellPkt_t *pkg)
+{
+    if (pkg->paraNum < 1)
+    {
+        printf("用法: cleardata <subcommand>\r\n");
+        printf("  parm - 清理NVS中未使用的参数键值对\r\n");
+        return(false);
+    }
+
+    if (strcmp(pkg->para[0], "parm") == 0)
+    {
+        printf("正在后台清理NVS中未使用的键值对, 请稍候...\r\n");
+        if (pdPASS != xTaskCreate(clearDataTask, "clearData", 4096, NULL, 5, NULL))
+        {
+            printf("错误: 创建清理任务失败\r\n");
+        }
+        return(true);
+    }
+
+    printf("未知子命令: %s\r\n", pkg->para[0]);
+    printf("用法: cleardata parm\r\n");
+    return(false);
+}
+
+
+
+stShellCmd_t stSellCmdClearData =
+{
+    .pCmd       = "cleardata",
+    .pFormat    = "格式:cleardata parm",
+    .pFunction  = "功能:清理NVS中未使用的参数键值对",
+    .pRemarks   = "备注: parm - 根据parameter.h中的定义清理未使用的键值对",
+    .pFunc      = sShellClearData,
+};
+
+
+
+/**********************************************************************************************
 * Description       :     shell 界面 指令注册
 * Author            :     Hall
 * modified Date     :     2023-11-08
-* notice            :     
+* notice            :
 ***********************************************************************************************/
 bool sShellCmdRegister(stShellCmd_t *pCmd)
 {
@@ -443,6 +493,7 @@ bool sShellInit(void)
     bRst  = true;
     bRst &= sShellCmdRegister(&stSellCmdDebugOnCmd);
     bRst &= sShellCmdRegister(&stSellCmdDebugOffCmd);
+    bRst &= sShellCmdRegister(&stSellCmdClearData);
     // bRst &= sShellCmdRegister(&stSellCmdListCmd);
     // bRst &= sShellCmdRegister(&stSellCmdRebootCmd);
     // bRst &= sShellCmdRegister(&stSellCmdSetrtcCmd);

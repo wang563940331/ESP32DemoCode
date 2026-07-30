@@ -520,6 +520,189 @@ bool sNvsParamRestoreDefaults(void)
     {
         ESP_LOGE(TAG, "Failed to acquire NVS lock");
     }
-    
+
     return bRst;
+}
+
+/***************************************************************************************************
+* Description                           :     清理NVS中未使用的键值对
+* Author                                :     AutoGen
+* Creat Date                            :     2026-07-30
+* notice                                :     根据g_stParamConfig中的定义, 删除NVS中未被引用的键值对
+****************************************************************************************************/
+bool sNvsParamCleanUnused(void)
+{
+    int total_deleted = 0;
+    int json_deleted = 0;
+    nvs_handle handle;
+
+    ESP_LOGI(TAG, "=== NVS清理: 开始扫描未使用的键值对 ===");
+
+    // Step 1: 清理 "nvs_file" 命名空间中除 "nvs_key_param" 外的所有NVS键
+    nvs_iterator_t it = NULL;
+    esp_err_t res = nvs_entry_find("nvs", cNvsName, NVS_TYPE_ANY, &it);
+    while (res == ESP_OK && it != NULL) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+
+        if (strcmp(info.key, cNvsKeyParam) != 0) {
+            // 非预期的NVS键 - 删除
+            if (nvs_open(cNvsName, NVS_READWRITE, &handle) == ESP_OK) {
+                esp_err_t err = nvs_erase_key(handle, info.key);
+                if (err == ESP_OK) {
+                    nvs_commit(handle);
+                    total_deleted++;
+                    ESP_LOGI(TAG, "NVS键已删除: %s@%s (type=%d)", info.key, cNvsName, info.type);
+                } else {
+                    ESP_LOGW(TAG, "NVS键删除失败: %s@%s (err=%d)", info.key, cNvsName, err);
+                }
+                nvs_close(handle);
+            }
+        }
+        res = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+
+    // Step 2: 从g_stParamConfig构建每个分组下的已知键名白名单
+    // 已知分组名
+    const char *known_groups[] = {cStorageGwNvsName, cStorageApNvsName, cStorageDataNvsName};
+    const int group_count = sizeof(known_groups) / sizeof(known_groups[0]);
+
+    // 为每个分组构建键名列表 (最多32个键)
+    #define MAX_KEYS_PER_GROUP 32
+    const char *known_keys_per_group[3][MAX_KEYS_PER_GROUP];
+    int key_count_per_group[3] = {0};
+
+    memset(known_keys_per_group, 0, sizeof(known_keys_per_group));
+
+    for (int i = 0; i < g_iParamCount; i++) {
+        const stParamConfig_t *pParam = &g_stParamConfig[i];
+        for (int g = 0; g < group_count; g++) {
+            if (strcmp(pParam->pGroupName, known_groups[g]) == 0) {
+                int kc = key_count_per_group[g];
+                if (kc < MAX_KEYS_PER_GROUP) {
+                    known_keys_per_group[g][kc] = pParam->pParamName;
+                    key_count_per_group[g] = kc + 1;
+                }
+                break;
+            }
+        }
+    }
+
+    // Step 3: 清理JSON内各分组子对象中的未使用键
+    if (sNvsParamLock()) {
+        cJSON *pRoot = sNvsParamGet();
+        if (pRoot != NULL) {
+            bool json_modified = false;
+            #define MAX_ITER_SAFETY 128  // 安全迭代上限, 防止链表损坏导致死循环
+
+            // 3a: 清理已知分组(gate/ap/data)中的未使用键
+            for (int g = 0; g < group_count; g++) {
+                cJSON *pGroup = cJSON_GetObjectItem(pRoot, known_groups[g]);
+                if (pGroup == NULL) {
+                    continue;
+                }
+
+                int iter_cnt = 0;
+                cJSON *pChild = pGroup->child;
+                while (pChild != NULL && iter_cnt < MAX_ITER_SAFETY) {
+                    cJSON *pNext = pChild->next;
+                    const char *key_name = pChild->string;
+                    iter_cnt++;
+
+                    // 安全检查: 跳过NULL或空键名
+                    if (key_name == NULL || key_name[0] == '\0') {
+                        ESP_LOGW(TAG, "跳过空键名 @ 分组\"%s\"", known_groups[g]);
+                        pChild = pNext;
+                        continue;
+                    }
+
+                    // 检查该键是否在白名单中
+                    bool is_known = false;
+                    for (int k = 0; k < key_count_per_group[g]; k++) {
+                        if (strcmp(key_name, known_keys_per_group[g][k]) == 0) {
+                            is_known = true;
+                            break;
+                        }
+                    }
+
+                    if (!is_known) {
+                        // 安全检查: 键名包含不可打印字符则可能是脏数据, 显示hex
+                        bool printable = true;
+                        for (const char *c = key_name; *c != '\0'; c++) {
+                            if ((unsigned char)*c < 0x20 || (unsigned char)*c > 0x7e) {
+                                printable = false;
+                                break;
+                            }
+                        }
+                        if (printable) {
+                            ESP_LOGI(TAG, "JSON键已删除: \"%s\" @ 分组\"%s\"", key_name, known_groups[g]);
+                        } else {
+                            ESP_LOGI(TAG, "JSON脏键已删除(len=%d) @ 分组\"%s\"", (int)strlen(key_name), known_groups[g]);
+                        }
+                        cJSON_DeleteItemFromObject(pGroup, key_name);
+                        json_deleted++;
+                        json_modified = true;
+                    }
+
+                    pChild = pNext;
+                }
+
+                if (iter_cnt >= MAX_ITER_SAFETY) {
+                    ESP_LOGW(TAG, "分组\"%s\"迭代次数超限, 可能存在链表损坏, 已中断", known_groups[g]);
+                }
+            }
+
+            // 3b: 删除g_stParamConfig中未定义的根级分组
+            //     已知分组来自g_stParamConfig的pGroupName: gate, ap, data
+            {
+                int root_iter = 0;
+                cJSON *pRootChild = pRoot->child;
+                while (pRootChild != NULL && root_iter < MAX_ITER_SAFETY) {
+                    cJSON *pNextRoot = pRootChild->next;
+                    const char *group_name = pRootChild->string;
+                    root_iter++;
+
+                    if (group_name != NULL) {
+                        bool is_known_group = false;
+                        for (int g = 0; g < group_count; g++) {
+                            if (strcmp(group_name, known_groups[g]) == 0) {
+                                is_known_group = true;
+                                break;
+                            }
+                        }
+
+                        if (!is_known_group) {
+                            ESP_LOGI(TAG, "未定义分组已删除: \"%s\"", group_name);
+                            cJSON_DeleteItemFromObject(pRoot, group_name);
+                            json_modified = true;
+                        }
+                    }
+
+                    pRootChild = pNextRoot;
+                }
+            }
+
+            // 保存修改后的JSON到NVS
+            if (json_modified) {
+                sNvsParamSet(true);
+            }
+        } else {
+            ESP_LOGW(TAG, "无法获取NVS参数JSON对象");
+        }
+        sNvsParamUnlock();
+    } else {
+        ESP_LOGW(TAG, "无法获取NVS锁");
+    }
+
+    total_deleted += json_deleted;
+
+    if (total_deleted > 0) {
+        ESP_LOGI(TAG, "=== NVS清理完成: 共删除 %d 个键值对 (NVS层:%d, JSON层:%d) ===",
+                 total_deleted, total_deleted - json_deleted, json_deleted);
+    } else {
+        ESP_LOGI(TAG, "=== NVS清理完成: 未发现未使用的键值对 ===");
+    }
+
+    return true;
 }

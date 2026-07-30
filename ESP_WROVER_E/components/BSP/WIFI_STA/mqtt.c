@@ -309,11 +309,11 @@ void send_head(const char *data,float temperature, float humidity) {
     // 各时间窗口瞬时功率峰值
     if (g_meter_data.peak_1hour.peak_power != 0) {
         snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1hour.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_1h", cJSON_CreateString(str));
+        cJSON_AddItemToObject(root, "PowerPeak_3min", cJSON_CreateString(str));
     }
     if (g_meter_data.peak_12hour.peak_power != 0) {
         snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_12hour.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_12h", cJSON_CreateString(str));
+        cJSON_AddItemToObject(root, "PowerPeak_1h", cJSON_CreateString(str));
     }
     if (g_meter_data.peak_1day.peak_power != 0) {
         snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1day.peak_power);

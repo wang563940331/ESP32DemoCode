@@ -232,4 +232,5 @@ bool sNvsParamSet(bool printfen);
 cJSON *sNvsParamGet(void);
 char* generateDefaultJsonString(void);
 bool sNvsParamRestoreDefaults(void);
+bool sNvsParamCleanUnused(void);
 #endif
