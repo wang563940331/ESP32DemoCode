@@ -30,6 +30,8 @@ static const char* TAG = "sd_fat_log_task";
 #define EPOCH_YEAR 1970
 /* SD卡挂载路径 */
 #define SD_MOUNT_POINT "/sdcard"
+/* 日志文件最大保留数量 */
+#define MAX_LOG_FILES 7
 
 /* 日志缓冲区读写互斥锁 */
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;
@@ -368,6 +370,85 @@ static bool find_latest_log_file(char* path, size_t path_size)
 }
 
 /**
+ * @brief 限制日志文件数量，超过 MAX_LOG_FILES 则删除最早的文件
+ *
+ * @param pending_new 即将创建的新文件数量(跨天切换时传1, 用于预留位置)
+ *
+ * 扫描SD卡根目录下所有 .log 文件，按文件名中的日期排序，
+ * 如果 已有文件数 + pending_new 超过限制则依次删除日期最早的文件。
+ */
+static void enforce_max_log_files(int pending_new)
+{
+    int deleted = 0;
+    int target_max = MAX_LOG_FILES - pending_new;  /* 为新文件预留位置 */
+
+    if (target_max < 0) {
+        target_max = 0;
+    }
+
+    while (1) {
+        char oldest_file[64] = {0};
+        uint16_t oldest_year = 9999, oldest_mon = 99, oldest_day = 99;
+        int file_count = 0;
+
+        DIR* dir = opendir(SD_MOUNT_POINT);
+        if (!dir) {
+            return;
+        }
+
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            const char* name = entry->d_name;
+            size_t len = strlen(name);
+
+            if (len > 4 && strcmp(name + len - 4, ".log") == 0) {
+                uint16_t year = 0;
+                uint8_t mon = 0, day = 0;
+
+                if (parse_log_filename(name, &year, &mon, &day)) {
+                    file_count++;
+
+                    /* 找出最早的日期 */
+                    if (year < oldest_year ||
+                        (year == oldest_year && mon < oldest_mon) ||
+                        (year == oldest_year && mon == oldest_mon && day < oldest_day)) {
+                        oldest_year = year;
+                        oldest_mon = mon;
+                        oldest_day = day;
+                        strlcpy(oldest_file, name, sizeof(oldest_file));
+                    }
+                }
+            }
+        }
+        closedir(dir);
+
+        /* 未超限则退出 */
+        if (file_count <= target_max) {
+            break;
+        }
+
+        /* 删除最早的文件，然后继续检查 */
+        if (oldest_file[0] != '\0') {
+            ESP_LOGI(TAG, "Log files: %d > target %d (max %d, pending %d), deleting oldest: %s",
+                     file_count, target_max, MAX_LOG_FILES, pending_new, oldest_file);
+            if (s_sd_fat_ops && s_sd_fat_ops->delete_file("SD_CARD", oldest_file) == ESP_OK) {
+                deleted++;
+                ESP_LOGI(TAG, "Oldest log file deleted: %s", oldest_file);
+            } else {
+                ESP_LOGW(TAG, "Failed to delete oldest log file: %s", oldest_file);
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    if (deleted > 0) {
+        ESP_LOGI(TAG, "Log rotation complete: %d file(s) deleted", deleted);
+    }
+}
+
+/**
  * @brief 格式化时间戳字符串
  * @param buffer 输出缓冲区
  * @param size 缓冲区大小
@@ -495,7 +576,6 @@ static void sdCardLogTask(void* arg)
     static char path[64] = "2020-01-01.log";      /* 当前日志文件路径 */
     static uint8_t last_day = 0, last_mon = 0;    /* 上次写入的日期 */
     static uint16_t last_year = 0;                /* 上次写入的年份 */
-    static char last_path[64] = {0};              /* 上次日志文件路径（用于删除） */
     static char batch_buffer[BATCH_SIZE * SD_CARD_BUFF_SIZE] = {0};  /* 批量写入缓冲区 */
     uint32_t timeout = 0;
     uint32_t last_dropped_count = 0;              /* 上次监控时的丢弃计数 */
@@ -556,7 +636,7 @@ static void sdCardLogTask(void* arg)
 
         /* 时间同步完成后切换到正常时间命名 */
         if (is_epoch_time && year != EPOCH_YEAR) {
-            ESP_LOGI(TAG, "Time sync completed, switching from epoch time to normal time: %u-%02u-%02d",
+            ESP_LOGI(TAG, "时间同步成功,日志保存到文件%u-%02u-%02u.log",
                      year, mon, tm_now.tm_mday);
             
             is_epoch_time = false;
@@ -564,35 +644,16 @@ static void sdCardLogTask(void* arg)
             last_day = tm_now.tm_mday;
             last_mon = mon;
             last_year = year;
+            enforce_max_log_files(0);
         } else if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
-            /* 日期变更，切换日志文件并删除旧文件 */
-            if (last_day != 0) {
-                struct tm last_tm = {0};
-                last_tm.tm_year = last_year - 1900;
-                last_tm.tm_mon = last_mon - 1;
-                last_tm.tm_mday = last_day;
-                time_t last_time = mktime(&last_tm);
-                struct tm prev_tm;
-                if (localtime_r(&last_time, &prev_tm) != NULL) {
-                    snprintf(last_path, sizeof(last_path), "%04d-%02d-%02d.log",
-                             prev_tm.tm_year + 1900, prev_tm.tm_mon + 1, prev_tm.tm_mday);
-
-                    if (s_sd_fat_ops->is_file_exist("SD_CARD", last_path)) {
-                        if (s_sd_fat_ops->delete_file("SD_CARD", last_path) == ESP_OK) {
-                            EN_SLOGD(TAG, "Deleted file %s", last_path);
-                        } else {
-                            ESP_LOGW(TAG, "Failed to delete file %s", last_path);
-                        }
-                    }
-                }
-            }
-
-            /* 创建新日期的日志文件 */
+            /* 日期变更，切换到新日志文件 */
             snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
-
             last_day = tm_now.tm_mday;
             last_mon = mon;
             last_year = year;
+
+            /* 限制日志文件数量，超过MAX_LOG_FILES则删除最早的 */
+            enforce_max_log_files(1);
         }
 
         /* 批量读取日志缓冲区 */

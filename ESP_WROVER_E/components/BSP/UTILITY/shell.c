@@ -9,6 +9,7 @@
 
 #include "shell.h"
 #include "parameter.h"
+#include <sys/time.h>
 
 static const char *TAG = "shell";
 
@@ -145,6 +146,66 @@ stShellCmd_t stSellCmdClearData =
     .pFunction  = "功能:清理NVS中未使用的参数键值对",
     .pRemarks   = "备注: parm - 根据parameter.h中的定义清理未使用的键值对",
     .pFunc      = sShellClearData,
+};
+
+
+
+/**********************************************************************************************
+* Description       :     shell-设置系统时间
+* Author            :     AutoGen
+* modified Date     :     2026-07-30
+* notice            :
+***********************************************************************************************/
+bool sShellSetTime(const stShellPkt_t *pkg)
+{
+    if (pkg->paraNum < 1)
+    {
+        printf("用法: settime <timestamp>\r\n");
+        printf("  data - Unix时间戳(秒)\r\n");
+        return(false);
+    }
+
+    /* 解析时间戳 */
+    char *endptr = NULL;
+    time_t timestamp = (time_t)strtoll(pkg->para[0], &endptr, 10);
+    if (endptr == NULL || *endptr != '\0')
+    {
+        printf("错误: 无效的时间戳 \"%s\"\r\n", pkg->para[0]);
+        return(false);
+    }
+
+    /* 设置系统时间 */
+    struct timeval tv;
+    tv.tv_sec = timestamp;
+    tv.tv_usec = 0;
+
+    if (settimeofday(&tv, NULL) != 0)
+    {
+        printf("错误: 设置系统时间失败\r\n");
+        return(false);
+    }
+
+    /* 打印设置后的时间确认 */
+    time_t now = time(NULL);
+    struct tm tm_now;
+    localtime_r(&now, &tm_now);
+    printf("系统时间已设置: %04d-%02d-%02d %02d:%02d:%02d (timestamp: %lld)\r\n",
+           tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
+           tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec,
+           (long long)timestamp);
+
+    return(true);
+}
+
+
+
+stShellCmd_t stSellCmdSetTime =
+{
+    .pCmd       = "settime",
+    .pFormat    = "格式:settime data <timestamp>",
+    .pFunction  = "功能:设置系统时间(Unix时间戳)",
+    .pRemarks   = "备注: data - 10位Unix时间戳(秒), 如 settime data 1753891200",
+    .pFunc      = sShellSetTime,
 };
 
 
@@ -494,6 +555,7 @@ bool sShellInit(void)
     bRst &= sShellCmdRegister(&stSellCmdDebugOnCmd);
     bRst &= sShellCmdRegister(&stSellCmdDebugOffCmd);
     bRst &= sShellCmdRegister(&stSellCmdClearData);
+    bRst &= sShellCmdRegister(&stSellCmdSetTime);
     // bRst &= sShellCmdRegister(&stSellCmdListCmd);
     // bRst &= sShellCmdRegister(&stSellCmdRebootCmd);
     // bRst &= sShellCmdRegister(&stSellCmdSetrtcCmd);
