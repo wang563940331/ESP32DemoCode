@@ -1,6 +1,5 @@
 set(src_dirs
         EXIT
-        LED
         PWM
         UTILITY
         PARAM
@@ -11,7 +10,6 @@ set(src_dirs
 
 set(include_dirs
         EXIT
-        LED
         PWM
         UTILITY
         PARAM

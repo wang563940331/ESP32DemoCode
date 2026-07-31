@@ -34,7 +34,7 @@ static const one_wire_device_t *s_sensor = NULL;
 #define SENSOR_MAX_FAILURES  3
 
 // 传感器读取间隔 (ms)
-#define SENSOR_READ_INTERVAL 15000
+#define SENSOR_READ_INTERVAL 3000
 
 /*
  * @brief 传感器采集主任务

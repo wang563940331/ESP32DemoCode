@@ -4,6 +4,7 @@ set(src_dirs
         WIFI_STA
         WIFI_AP
         SD_FAT
+        LED
         )
 
 set(include_dirs
@@ -12,6 +13,7 @@ set(include_dirs
         WIFI_STA
         WIFI_AP
         SD_FAT
+        LED
         )
 
 set(requires

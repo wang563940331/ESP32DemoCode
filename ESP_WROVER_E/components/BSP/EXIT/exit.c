@@ -41,7 +41,7 @@ static void IRAM_ATTR exit_gpio_isr_handler(void *arg)
     
     if (gpio_num == BOOT_INT_GPIO_PIN)
     {
-        LED_TOGGLE();
+        // LED_TOGGLE();
     }
 }
 
