@@ -373,7 +373,7 @@ void dlt645_load_power_peaks(void)
 #undef LOAD_WINDOW
 
     sNvsParamUnlock();
-    ESP_LOGI(TAG, "Power peaks loaded from NVS: 1h=%.1f, 12h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
+    ESP_LOGI(TAG, "Power peaks loaded from NVS: 3min=%.1f, 1h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
              g_meter_data.peak_3min.peak_power,
              g_meter_data.peak_1hour.peak_power,
              g_meter_data.peak_1day.peak_power,
@@ -388,33 +388,44 @@ void dlt645_load_power_peaks(void)
  */
 void dlt645_save_power_peaks(void)
 {
+    /* 加锁，防止多任务竞争 NVS JSON 缓存 */
     sNvsParamLock();
+
+    /* 获取根 JSON 对象 (整个配置: {gate:{...}, ap:{...}}) */
     cJSON *pRoot = sNvsParamGet();
     if (pRoot == NULL) {
         sNvsParamUnlock();
         return;
     }
+
+    /* 定位到 "gate" 子对象，峰值数据存储在其中 */
     cJSON *pGw = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
     if (pGw == NULL) {
         sNvsParamUnlock();
         return;
     }
 
-    // 辅助宏: 写入一个窗口的峰值和时间戳到JSON
-// 使用 cJSON_ReplaceItemInObject 确保类型正确 (修复 string->number 类型转换问题)
+    /*
+     * 辅助宏: 将单个窗口的峰值和时间戳写入 JSON
+     * 使用 cJSON_ReplaceItemInObject 确保 JSON 节点类型为 number
+     * (避免之前 string 类型转换错误的遗留问题)
+     */
 #define SAVE_WINDOW(key_v, key_time, win) do { \
     cJSON_ReplaceItemInObject(pGw, key_v, cJSON_CreateNumber((win).peak_power)); \
     cJSON_ReplaceItemInObject(pGw, key_time, cJSON_CreateNumber((win).peak_time)); \
 } while(0)
 
+    /* 依次写入 5 个时间窗口的功率峰值 (3min / 1hour / 1day / 7day / 1month) */
     SAVE_WINDOW(cStorageDataNvsPk1hV,  cStorageDataNvsPk1hT,  g_meter_data.peak_3min);
     SAVE_WINDOW(cStorageDataNvsPk12hV,  cStorageDataNvsPk12hT, g_meter_data.peak_1hour);
     SAVE_WINDOW(cStorageDataNvsPk1dV,  cStorageDataNvsPk1dT,  g_meter_data.peak_1day);
     SAVE_WINDOW(cStorageDataNvsPk7dV,  cStorageDataNvsPk7dT,  g_meter_data.peak_7day);
     SAVE_WINDOW(cStorageDataNvsPk1mV,  cStorageDataNvsPk1mT,  g_meter_data.peak_1month);
 
+    /* 临时宏已用完，立即取消定义，避免污染后续代码 */
 #undef SAVE_WINDOW
 
+    /* 将整个 JSON 对象序列化写入 NVS (false=不打印日志) */
     sNvsParamSet(false);
     sNvsParamUnlock();
 }
@@ -436,17 +447,18 @@ void dlt645_update_power_peaks(float current_power)
     bool updated = false;
 
     // 辅助宏: 检查并更新单个窗口
+// 注意: peak_1hour 用于内存统计但不触发 NVS 写入，减少 Flash 磨损
 #define UPDATE_WINDOW(win, duration_sec) do { \
     if ((win).peak_time == 0 || now - (win).peak_time > (duration_sec)) { \
         (win).peak_power = current_power; \
         ESP_LOGW(TAG, "Window %s reset: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
-        updated = true; \
+        if (&(win) != &(g_meter_data.peak_3min)) { updated = true; } \
     } else if (current_power > (win).peak_power) { \
         (win).peak_power = current_power; \
         ESP_LOGW(TAG, "Window %s updated: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
-        updated = true; \
+        if (&(win) != &(g_meter_data.peak_3min)) { updated = true; } \
     } \
 } while(0)
 
