@@ -30,7 +30,7 @@ SensorData_t g_sensor_data = {
 // 传感器设备接口指针
 static const one_wire_device_t *s_sensor = NULL;
 
-// 连续读取失败计数（3次失败 → 重启）
+// 连续读取失败计数（超过阈值 → 重新初始化传感器外设）
 #define SENSOR_MAX_FAILURES  3
 
 // 传感器读取间隔 (ms)
@@ -116,9 +116,17 @@ static void sensor_task(void *pvParameters)
                 ESP_LOGE(TAG, "读取传感器数据失败 (连续 %d/%d)", err_number + 1, SENSOR_MAX_FAILURES);
                 err_number++;
                 if (err_number > SENSOR_MAX_FAILURES) {
-                    ESP_LOGE(TAG, "传感器连续%d次读取失败，触发系统重启", SENSOR_MAX_FAILURES);
-                    vTaskDelay(pdMS_TO_TICKS(500));
-                    esp_restart();
+                    ESP_LOGW(TAG, "传感器连续%d次读取失败，重新初始化外设", SENSOR_MAX_FAILURES);
+                    err_number = 0;
+                    if (s_sensor != NULL) {
+                        s_sensor->Reset(GPIO_NUM_27);
+                        esp_err_t ret = s_sensor->Init(GPIO_NUM_27);
+                        if (ret != ESP_OK) {
+                            ESP_LOGE(TAG, "传感器重新初始化失败");
+                        } else {
+                            ESP_LOGI(TAG, "传感器重新初始化成功");
+                        }
+                    }
                 }
                 g_sensor_data.temperature = -200.0f;
                 g_sensor_data.humidity = -1.0f;

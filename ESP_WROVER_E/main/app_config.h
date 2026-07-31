@@ -18,6 +18,7 @@ extern "C" {
 // #define CONFIG_SENSOR_TEMP CONFIG_SENSOR_DHT11
 
 
+#define MQTTUBLISHED 15*1000
 
 #define SDCARDLOGEN TRUE
 

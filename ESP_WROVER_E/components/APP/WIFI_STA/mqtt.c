@@ -19,6 +19,7 @@
 #include "wifi_ap.h"
 #include "meter_DLT645.h"
 #include "sensor_task.h"
+#include "app_config.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -416,7 +417,7 @@ void my_task(void *pvParameters)
                 login_status= true;
                 send_ctrlacl("设备上线");
             }
-            if(tickOut(&tims,15*1000))
+            if(tickOut(&tims,MQTTUBLISHED))
             {
                 tickOut(&tims,0);
                 tickOut(&tims2,0);
