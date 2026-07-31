@@ -10,6 +10,8 @@
 #include "shell.h"
 #include "parameter.h"
 #include <sys/time.h>
+#include <dirent.h>
+#include <unistd.h>
 
 static const char *TAG = "shell";
 
@@ -146,6 +148,103 @@ stShellCmd_t stSellCmdClearData =
     .pFunction  = "功能:清理NVS中未使用的参数键值对",
     .pRemarks   = "备注: parm - 根据parameter.h中的定义清理未使用的键值对",
     .pFunc      = sShellClearData,
+};
+
+
+
+/**********************************************************************************************
+* Description       :     shell-清理日志文件
+* Author            :     AutoGen
+* modified Date     :     2026-07-30
+* notice            :     clearlog          - 删除除当天外的所有日志
+*                         clearlog <file>   - 删除指定日志文件
+*                         clearlog all      - 删除所有日志文件
+***********************************************************************************************/
+bool sShellClearLog(const stShellPkt_t *pkg)
+{
+    time_t now = time(NULL);
+    struct tm tm_now;
+    localtime_r(&now, &tm_now);
+
+    char today_name[32];
+    snprintf(today_name, sizeof(today_name), "%04d-%02d-%02d.log",
+             tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday);
+
+    bool keep_today = false;     /* 是否跳过当天文件 */
+    const char *target = NULL;   /* 指定要删除的文件名 */
+
+    if (pkg->paraNum == 0) {
+        /* clearlog (无参数): 删除除当天外的所有日志 */
+        keep_today = true;
+    } else if (strcmp(pkg->para[0], "all") == 0) {
+        /* clearlog all: 删除所有日志 */
+        keep_today = false;
+    } else {
+        /* clearlog <filename>: 删除指定文件 */
+        target = pkg->para[0];
+    }
+
+    int deleted = 0;
+    DIR* dir = opendir("/sdcard");
+    if (!dir) {
+        printf("错误: 无法打开SD卡目录\r\n");
+        return(false);
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        const char* name = entry->d_name;
+        size_t len = strlen(name);
+
+        if (len <= 4 || strcmp(name + len - 4, ".log") != 0) {
+            continue;  /* 跳过非 .log 文件 */
+        }
+
+        bool should_delete = false;
+
+        if (target != NULL) {
+            /* 模式1: 删除指定文件 */
+            if (strcmp(name, target) == 0) {
+                should_delete = true;
+            }
+        } else if (keep_today && strcmp(name, today_name) == 0) {
+            /* 模式2: 跳过当天文件 */
+            should_delete = false;
+        } else {
+            /* 模式2/3: 删除其余所有 */
+            should_delete = true;
+        }
+
+        if (should_delete) {
+            char filepath[128];
+            snprintf(filepath, sizeof(filepath), "/sdcard/%s", name);
+            if (unlink(filepath) == 0) {
+                printf("已删除: %s\r\n", name);
+                deleted++;
+            } else {
+                printf("删除失败: %s\r\n", name);
+            }
+        }
+    }
+    closedir(dir);
+
+    if (target != NULL && deleted == 0) {
+        printf("未找到文件: %s\r\n", target);
+    } else {
+        printf("日志清理完成: 共删除 %d 个文件\r\n", deleted);
+    }
+    return(true);
+}
+
+
+
+stShellCmd_t stSellCmdClearLog =
+{
+    .pCmd       = "clearlog",
+    .pFormat    = "格式:clearlog [<filename>|all]",
+    .pFunction  = "功能:删除SD卡上的日志文件",
+    .pRemarks   = "备注: 无参数=删除除当天外所有, all=删除全部, <file>=删除指定文件",
+    .pFunc      = sShellClearLog,
 };
 
 
@@ -556,6 +655,7 @@ bool sShellInit(void)
     bRst &= sShellCmdRegister(&stSellCmdDebugOffCmd);
     bRst &= sShellCmdRegister(&stSellCmdClearData);
     bRst &= sShellCmdRegister(&stSellCmdSetTime);
+    bRst &= sShellCmdRegister(&stSellCmdClearLog);
     // bRst &= sShellCmdRegister(&stSellCmdListCmd);
     // bRst &= sShellCmdRegister(&stSellCmdRebootCmd);
     // bRst &= sShellCmdRegister(&stSellCmdSetrtcCmd);

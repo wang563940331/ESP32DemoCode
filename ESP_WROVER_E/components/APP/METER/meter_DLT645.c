@@ -438,17 +438,15 @@ void dlt645_update_power_peaks(float current_power)
     // 辅助宏: 检查并更新单个窗口
 #define UPDATE_WINDOW(win, duration_sec) do { \
     if ((win).peak_time == 0 || now - (win).peak_time > (duration_sec)) { \
-        /* 未初始化或窗口已过期，重置峰值，刷新窗口起始时间 */ \
         (win).peak_power = current_power; \
+        ESP_LOGW(TAG, "Window %s reset: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         updated = true; \
-        ESP_LOGI(TAG, "Window %s reset: %.1f time=%d", #win, (win).peak_power, (win).peak_time); \
     } else if (current_power > (win).peak_power) { \
-        /* 当前功率更高，仅更新峰值（不改变窗口起始时间，保持各窗口独立过期） */ \
         (win).peak_power = current_power; \
+        ESP_LOGW(TAG, "Window %s updated: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         updated = true; \
-        ESP_LOGI(TAG, "Window %s updated: %.1f time=%d", #win, (win).peak_power, (win).peak_time); \
     } \
 } while(0)
 

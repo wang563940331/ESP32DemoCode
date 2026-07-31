@@ -321,7 +321,7 @@ i32 sNvsParamCheckObj(cJSON *pDefObj, cJSON *pNvsObj,int depth)
         else if(depth != 0)
         {
             // 递归检查子对象，深度减 1
-            EN_SLOGI(TAG, "第%d级子对象%s检查完成",depth,pNvsParentObj->string);
+            EN_SLOGD(TAG, "第%d级子对象%s检查完成",depth,pNvsParentObj->string);
             i32Rst |= sNvsParamCheckObj(pDefParentObj, pNvsParentObj, depth - 1);
         }
         pDefChildObj = pDefChildObj->next;//通过 pChildObj->next 移动到下一个子节点
