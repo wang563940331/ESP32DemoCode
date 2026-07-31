@@ -245,7 +245,7 @@ static portMUX_TYPE dht11_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // 检测DHT11应答信号（调用者持有自旋锁）
 static esp_err_t dht11_detect_response(int gpio_num) {
-    uint32_t start_time;
+    int64_t start_time;
 
     // 1. 等待 DHT11 拉低总线（应答开始，在释放总线后20-40us内应发生）
     start_time = esp_timer_get_time();
@@ -276,7 +276,7 @@ static esp_err_t dht11_detect_response(int gpio_num) {
 
 // 读取单个位（调用者持有自旋锁）
 static uint8_t dht11_read_bit_locked(int gpio_num) {
-    uint32_t start_time;
+    int64_t start_time;
 
     // 等待低→高跳变（DHT11每个数据位以50us低电平开始）
     start_time = esp_timer_get_time();

@@ -36,6 +36,9 @@ static const one_wire_device_t *s_sensor = NULL;
 // 传感器读取间隔 (ms)
 #define SENSOR_READ_INTERVAL 3000
 
+// 重新初始化失败后的冷却时间 (ms) — 硬件故障时避免日志洪水
+#define SENSOR_REINIT_COOLDOWN 30000
+
 /*
  * @brief 传感器采集主任务
  *        - 根据 NVS 中 tmpMode 配置选择传感器类型
@@ -122,7 +125,9 @@ static void sensor_task(void *pvParameters)
                         s_sensor->Reset(GPIO_NUM_27);
                         esp_err_t ret = s_sensor->Init(GPIO_NUM_27);
                         if (ret != ESP_OK) {
-                            ESP_LOGE(TAG, "传感器重新初始化失败");
+                            ESP_LOGE(TAG, "传感器重新初始化失败，冷却 %d 秒后重试", SENSOR_REINIT_COOLDOWN / 1000);
+                            // 硬件故障时延长等待，避免日志洪水
+                            vTaskDelay(pdMS_TO_TICKS(SENSOR_REINIT_COOLDOWN));
                         } else {
                             ESP_LOGI(TAG, "传感器重新初始化成功");
                         }
