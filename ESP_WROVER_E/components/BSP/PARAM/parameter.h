@@ -38,7 +38,6 @@
 #include "my_log.h"
 #include "sdkconfig.h"
 #include "nvs_flash.h"
-#include "json.h"
 #include "cJSON.h"
 
 #define cNvsName                        "nvs_file"                              //NVS 参数区 :name

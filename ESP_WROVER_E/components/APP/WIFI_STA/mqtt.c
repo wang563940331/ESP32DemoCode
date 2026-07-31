@@ -15,10 +15,10 @@
 #include <sys/time.h>  // 用于gettimeofday函数
 #include "utility.h"
 #include "parameterSet.h"
-#include "one_wire_bsp.h"
 #include "esp_heap_caps.h"
 #include "wifi_ap.h"
 #include "meter_DLT645.h"
+#include "sensor_task.h"
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -251,7 +251,7 @@ void send_ctrlacl(const char *data) {
  * @brief 发送包含设备信息和时间戳的JSON数据到MQTT服务器
  * @param data 要发送的headid数据指针
  */
-void send_head(const char *data,float temperature, float humidity) {
+void send_head(const char *data) {
     time_t now;                    // 存储当前时间的变量
     struct tm timeinfo;            // 存储格式化后的时间信息
     time(&now);                    // 获取当前时间
@@ -273,14 +273,14 @@ void send_head(const char *data,float temperature, float humidity) {
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
     // 添加字段：temperature（精确到1位小数）
-    if (temperature != -200) {
-        snprintf(str, sizeof(str), "%.2f", temperature);
+    if (g_sensor_data.temperature != -200) {
+        snprintf(str, sizeof(str), "%.2f", g_sensor_data.temperature);
         cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
     }
     // 添加字段：humidity（仅在有效时添加）
-    if (humidity >= 0) {
+    if (g_sensor_data.humidity >= 0) {
         memset(str, 0, sizeof(str));
-        snprintf(str, sizeof(str), "%.2f", humidity);
+        snprintf(str, sizeof(str), "%.2f", g_sensor_data.humidity);
         cJSON_AddItemToObject(root, "humidity", cJSON_CreateString(str));
     }
     if (g_meter_data.VolageA != 0) {
@@ -383,11 +383,9 @@ esp_err_t mqtt_reinit(void) {
  * @brief 自定义任务函数，用于处理MQTT网络服务
  * @param pvParameters 任务参数（在此函数中未使用）
  */
-void my_task(void *pvParameters) 
+void my_task(void *pvParameters)
 {
-    int errnmber = 0;
     static bool login_status = false; // 登录状态标志，初始为未登录
-    const one_wire_device_t* sensor=NULL;
     // 静态变量count，用于计数发布的消息数量
     static int count = 0;
     // 静态变量tims，用于记录时间戳
@@ -397,38 +395,6 @@ void my_task(void *pvParameters)
     char mqtt_pub_buff[64]={0};
     // 事件位变量，用于存储WiFi事件
     EventBits_t ev = 0;
-
-    char buf[20] = {0};
-    sStorageGwGet(cStorageApCmdTmpMode,sizeof(buf),(u8 *)buf);
- 
-    if (memcmp(buf, "OFF", sizeof("OFF")) == 0) {
-        ESP_LOGI(TAG, "单总线传感器模式为OFF，不初始化传感器");
-    }else
-    {
-        do
-        {
-            errnmber++;
-            sensor = one_wire_factory_get_device(GPIO_NUM_27);
-            
-            if (sensor == NULL) {
-                ESP_LOGE(TAG, "单总线传感器设备获取失败，将继续运行但跳过传感器读取");
-            } else {
-                // 初始化
-                esp_err_t ret = sensor->Init(GPIO_NUM_27);
-                if (ret != ESP_OK) {
-                    ESP_LOGE(TAG, "单总线传感器初始化失败，将继续运行但跳过传感器读取");
-                    sensor = NULL;
-                }
-            }
-            if(errnmber > 30)
-            {
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(100));
-        } while (sensor == NULL);
-    }
-
-    errnmber=0;
 
     //【日志】【初始化】【MQTT】【网络服务】【】
     ESP_LOGI(TAG, "初始化MQTT网络服务...");
@@ -452,37 +418,10 @@ void my_task(void *pvParameters)
             }
             if(tickOut(&tims,15*1000))
             {
-                float temp = -200.0f;
-                float humi = -1.0f;
-                
-                if (sensor != NULL) {
-                    temp = sensor->GetTemperature(GPIO_NUM_27);
-                    humi = sensor->GetHumidity(GPIO_NUM_27);
-                    if (temp != -1000.0f) {
-                        errnmber = 0;  // 读取成功，重置连续失败计数
-                        if (humi >= 0) {
-                            // ESP_LOGI(TAG, "温度: %.2f°C, 湿度: %.2f%%", temp, humi);
-                        } else {
-                            // ESP_LOGI(TAG, "温度: %.2f°C", temp);
-                        }
-                    } else {
-                        ESP_LOGE(TAG, "读取传感器数据失败");
-                        errnmber++;
-                        if(errnmber > 3)
-                        {
-                            //复位
-                            esp_restart();
-                            break;
-                        }
-                        temp = -200.0f;
-                        humi = -1.0f;
-                    }
-                }
-                
                 tickOut(&tims,0);
                 tickOut(&tims2,0);
                 snprintf(mqtt_pub_buff,64,"%d",count++);
-                send_head(mqtt_pub_buff, temp, humi);
+                send_head(mqtt_pub_buff);
             }
         }
         else

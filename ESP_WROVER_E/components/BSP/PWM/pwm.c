@@ -29,8 +29,17 @@
 #include "pwm.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
-#include "mqtt.h"
 #include "utility.h"
+
+// Forward declarations from mqtt.h (moved to APP component)
+typedef enum {
+    POWERON = 0,
+    POWEROF = 1,
+    REBOOT = 2,
+} eControl;
+eControl getStart_once(void);
+void setStart_once(eControl data);
+void send_ctrlacl(const char *data);
 
 TaskHandle_t motor_TaskHandle = NULL;
 static const char*TAG = "pwm";

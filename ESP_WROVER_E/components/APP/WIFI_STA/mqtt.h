@@ -51,6 +51,6 @@ void setStart_once(eControl data);
 bool gets_is_mqtt_connected();
 void send_ctrlacl(const char *data);
 esp_err_t mqtt_reinit(void);
-void send_head(const char *data, float temperature, float humidity);
+void send_head(const char *data);
 
 #endif

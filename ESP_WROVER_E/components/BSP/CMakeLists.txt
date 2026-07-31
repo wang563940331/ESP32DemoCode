@@ -1,29 +1,23 @@
-set(src_dirs        
+set(src_dirs
         EXIT
         LED
         PWM
-        WIFI_STA
-        WIFI_AP
         UTILITY
         PARAM
         UART
         GPIO_OUTPUT
         ONE_WIRE
-        SD_FAT
         )
 
 set(include_dirs
         EXIT
         LED
         PWM
-        WIFI_STA
-        WIFI_AP
         UTILITY
         PARAM
         UART
         GPIO_OUTPUT
         ONE_WIRE
-        SD_FAT
         )
 
 set(requires
@@ -35,7 +29,6 @@ set(requires
         lwip
         mqtt
         json
-        main
         fatfs
         sdmmc
         )

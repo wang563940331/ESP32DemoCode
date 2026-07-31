@@ -5,7 +5,6 @@
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "my_log.h"
-#include "app_config.h"
 #include "parameterSet.h"
 #include "rom/ets_sys.h"
 static const char* TAG = "one_wire_bsp";

@@ -28,7 +28,7 @@
 #include "sd_fat_bsp.h"
 #include "sd_fat_ops.h"
 #include "sd_fat_log_task.h"
-#include "one_wire_bsp.h"
+#include "sensor_task.h"
 #include "app_config.h"
 #include "gpio_output_bsp.h"
 #include "meter_DLT645.h"
@@ -227,6 +227,8 @@ void app_main(void)
     mdf_mem_print_heap();
 
     meter_DLT645_init();
+
+    sensor_task_init();
 
     const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
     if(uart2 == NULL)

@@ -1,7 +1,6 @@
 #include "uart_bsp.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
-#include "mqtt.h"
 #include "utility.h"
 #include "driver/uart.h"
 

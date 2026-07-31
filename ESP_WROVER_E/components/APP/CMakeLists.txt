@@ -1,12 +1,22 @@
-set(src_dirs        
+set(src_dirs
         METER
+        SENSOR
+        WIFI_STA
+        WIFI_AP
+        SD_FAT
         )
 
 set(include_dirs
         METER
+        SENSOR
+        WIFI_STA
+        WIFI_AP
+        SD_FAT
         )
 
 set(requires
+        BSP
+        main
         driver
         nvs_flash
         esp_wifi
@@ -15,7 +25,6 @@ set(requires
         lwip
         mqtt
         json
-        main
         fatfs
         sdmmc
         )

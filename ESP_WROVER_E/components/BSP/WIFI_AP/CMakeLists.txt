@@ -1,1 +1,0 @@
-idf_component_register(SRCS "wifi_ap.c" INCLUDE_DIRS "." "../main" REQUIRES esp_wifi esp_http_server nvs_flash main)
