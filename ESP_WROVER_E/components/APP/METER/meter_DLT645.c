@@ -426,7 +426,7 @@ void dlt645_save_power_peaks(void)
 #undef SAVE_WINDOW
 
     /* 将整个 JSON 对象序列化写入 NVS (false=不打印日志) */
-    sNvsParamSet(false);
+    sNvsParamSet(true);
     sNvsParamUnlock();
 }
 
@@ -453,12 +453,12 @@ void dlt645_update_power_peaks(float current_power)
         (win).peak_power = current_power; \
         ESP_LOGW(TAG, "Window %s reset: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
-        if (&(win) != &(g_meter_data.peak_3min)) { updated = true; } \
+        if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } else if (current_power > (win).peak_power) { \
         (win).peak_power = current_power; \
         ESP_LOGW(TAG, "Window %s updated: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
-        if (&(win) != &(g_meter_data.peak_3min)) { updated = true; } \
+        if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } \
 } while(0)
 

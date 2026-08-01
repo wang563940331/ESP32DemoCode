@@ -47,6 +47,8 @@ static sdCardLog_t* sdCardbuffer = NULL;
 static volatile uint32_t dropped_log_count = 0;
 /* 系统时间是否为纪元时间标志 */
 static bool is_epoch_time = false;
+/* SD卡读取进行中标志，读取时暂停日志写入 */
+static volatile bool s_sd_read_in_progress = false;
 
 /* 内存池相关 - 使用公共内存池组件 */
 static memory_pool_t log_pool = {0};             /* 日志内存池 */
@@ -79,7 +81,10 @@ bool Shellreadsd(const stShellPkt_t *pkg)
 
     bRst  = true;
     u8Num = pkg->paraNum;
-    
+
+    /* 标记SD卡正在读取，暂停日志写入任务 */
+    s_sd_read_in_progress = true;
+
     // 强制输出到串口，不使用日志宏
     printf("readsd command executed, param count: %d\r\n", u8Num);
     
@@ -132,19 +137,22 @@ bool Shellreadsd(const stShellPkt_t *pkg)
         } else {
             printf("无法打开SD卡目录\r\n");
         }
+        s_sd_read_in_progress = false;
         return(false);
     }
-    
+
     filename = pkg->para[0];
     if(filename == NULL)
     {
         ESP_LOGE(TAG, "参数为空，请输入文件名，如: readsd 2026-05-25.log");
+        s_sd_read_in_progress = false;
         return(false);
     }
-    
+
     if(strlen(filename) > 64)
     {
         ESP_LOGE(TAG, "参数长度错误，最大支持64个字符");
+        s_sd_read_in_progress = false;
         return(false);
     }
 
@@ -152,6 +160,7 @@ bool Shellreadsd(const stShellPkt_t *pkg)
 
     if (!sd_fat_ops_is_file_exist("SD_CARD", filename)) {
         ESP_LOGE(TAG, "文件不存在: %s", filename);
+        s_sd_read_in_progress = false;
         return(false);
     }
 
@@ -159,35 +168,38 @@ bool Shellreadsd(const stShellPkt_t *pkg)
     buffer = (char*)malloc(512);
     if (!buffer) {
         ESP_LOGE(TAG, "内存分配失败");
+        s_sd_read_in_progress = false;
         return(false);
     }
 
     // 构建完整的文件路径
     char filepath[128];
     snprintf(filepath, sizeof(filepath), "/sdcard/%s", filename);
-    
+
     // 打开文件
     FILE* fp = fopen(filepath, "r");
     if (!fp) {
         ESP_LOGE(TAG, "无法打开文件: %s", filepath);
         free(buffer);
+        s_sd_read_in_progress = false;
         return(false);
     }
 
     ESP_LOGI(TAG, "文件内容:");
     ESP_LOGI(TAG, "----------------------------------------");
-    
+
     // 逐行读取文件内容
     while (fgets(buffer, 512, fp) != NULL) {
         // 移除换行符
         buffer[strcspn(buffer, "\r\n")] = '\0';
         printf("%s\r\n", buffer);
     }
-    
+
     ESP_LOGI(TAG, "----------------------------------------");
 
     fclose(fp);
     free(buffer);
+    s_sd_read_in_progress = false;
     return(bRst);
 }
 
@@ -659,6 +671,12 @@ static void sdCardLogTask(void* arg)
         /* 批量读取日志缓冲区 */
         int batch_count = 0;
         size_t total_len = 0;
+
+        /* 如果SD卡正在被读取（如readsd命令），跳过写入以避免冲突 */
+        if (s_sd_read_in_progress) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
 
         if (!en_log_write_read_mutex_lock()) {
             vTaskDelay(pdMS_TO_TICKS(10));
