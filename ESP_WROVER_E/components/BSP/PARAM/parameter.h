@@ -78,6 +78,12 @@
 #define cStorageDataNvsPk7dT             "pk7d_t"                                //7天峰值时间戳
 #define cStorageDataNvsPk1mV             "pk1m_v"                                //1月功率峰值(W)
 #define cStorageDataNvsPk1mT             "pk1m_t"                                //1月峰值时间戳
+#define cStorageDataNvsEnCnt             "en_cnt"                                //电量历史条目数(区间用电,最多30)
+#define cStorageDataNvsEnYd              "en_yd"                                 //兼容旧字段(已弃用)
+#define cStorageDataNvsEnE               "en_e"                                  //区间用电量数组(kWh)
+#define cStorageDataNvsEnT               "en_t"                                  //区间结束时间戳数组
+#define cStorageDataNvsEnBase            "en_base"                               //上次累计电量基准(kWh)
+#define cStorageDataNvsEnLts             "en_lts"                                //上次采样时间戳
 
 // #define cStorageNetAppNvsName           "netApp"                               //第一级
 // #define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
@@ -135,6 +141,12 @@ typedef enum
     cStorageApCmdPk7dT,                                                         //7天峰值时间戳
     cStorageApCmdPk1mV,                                                         //1月功率峰值
     cStorageApCmdPk1mT,                                                         //1月峰值时间戳
+    cStorageApCmdEnCnt,                                                         //电量历史条目数
+    cStorageApCmdEnYd,                                                          //兼容旧字段(已弃用)
+    cStorageApCmdEnE,                                                           //区间用电量数组
+    cStorageApCmdEnT,                                                           //区间时间戳数组
+    cStorageApCmdEnBase,                                                        //上次累计电量基准
+    cStorageApCmdEnLts,                                                         //上次采样时间戳
 
     eStorageApCmdMax
 }__attribute__((packed)) eStorageApCmd_t;
@@ -229,6 +241,7 @@ bool sNvsParamUnlock(void);
 bool sNvsParamLock(void);
 bool sNvsParamSet(bool printfen);
 cJSON *sNvsParamGet(void);
+bool sNvsParamPrint(void);
 char* generateDefaultJsonString(void);
 bool sNvsParamRestoreDefaults(void);
 bool sNvsParamCleanUnused(void);

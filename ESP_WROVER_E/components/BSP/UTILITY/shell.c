@@ -9,6 +9,7 @@
 
 #include "shell.h"
 #include "parameter.h"
+#include "esp_heap_caps.h"
 #include <sys/time.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -150,7 +151,57 @@ stShellCmd_t stSellCmdClearData =
     .pFunc      = sShellClearData,
 };
 
+/**********************************************************************************************
+* Description       :     shell-读取/打印系统数据
+* notice            :     read parm - 打印当前NVS系统参数JSON
+***********************************************************************************************/
+bool sShellRead(const stShellPkt_t *pkg)
+{
+    if (pkg->paraNum < 1) {
+        printf("用法: read <subcommand>\r\n");
+        printf("  parm - 打印当前NVS系统参数\r\n");
+        return false;
+    }
 
+    if (strcmp(pkg->para[0], "parm") == 0) {
+        if (!sNvsParamLock()) {
+            printf("错误: 获取NVS锁失败\r\n");
+            return false;
+        }
+
+        cJSON *pRoot = sNvsParamGet();
+        if (pRoot == NULL) {
+            sNvsParamUnlock();
+            printf("错误: NVS参数为空\r\n");
+            return false;
+        }
+
+        char *pJsonTxt = cJSON_Print(pRoot);
+        sNvsParamUnlock();
+
+        if (pJsonTxt == NULL) {
+            printf("错误: JSON打印失败\r\n");
+            return false;
+        }
+
+        printf("=== NVS系统参数 (%s@%s) ===\r\n%s\r\n", cNvsKeyParam, cNvsName, pJsonTxt);
+        heap_caps_free(pJsonTxt);
+        return true;
+    }
+
+    printf("未知子命令: %s\r\n", pkg->para[0]);
+    printf("用法: read parm\r\n");
+    return false;
+}
+
+stShellCmd_t stSellCmdRead =
+{
+    .pCmd       = "read",
+    .pFormat    = "格式:read parm",
+    .pFunction  = "功能:打印当前NVS系统参数",
+    .pRemarks   = "备注: parm - 输出gate/ap/data等全部NVS参数JSON",
+    .pFunc      = sShellRead,
+};
 
 /**********************************************************************************************
 * Description       :     shell-清理日志文件
@@ -306,8 +357,6 @@ stShellCmd_t stSellCmdSetTime =
     .pRemarks   = "备注: data - 10位Unix时间戳(秒), 如 settime data 1753891200",
     .pFunc      = sShellSetTime,
 };
-
-
 
 /**********************************************************************************************
 * Description       :     shell 界面 指令注册
@@ -654,6 +703,7 @@ bool sShellInit(void)
     bRst &= sShellCmdRegister(&stSellCmdDebugOnCmd);
     bRst &= sShellCmdRegister(&stSellCmdDebugOffCmd);
     bRst &= sShellCmdRegister(&stSellCmdClearData);
+    bRst &= sShellCmdRegister(&stSellCmdRead);
     bRst &= sShellCmdRegister(&stSellCmdSetTime);
     bRst &= sShellCmdRegister(&stSellCmdClearLog);
     // bRst &= sShellCmdRegister(&stSellCmdListCmd);

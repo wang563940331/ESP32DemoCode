@@ -31,23 +31,65 @@ static eControl Start_once=POWEROF;
 
 extern MeterData_t g_meter_data;
 
-// 每天00:00电量快照环形缓冲区 (仅RAM，不持久化)
-// 可通过宏 ENERGY_DAILY_MAX_DAYS 设置存储天数，范围 7~30
+// 电量区间环形缓冲区 (持久化至 NVS data 分组)
+// 每个点 = 一个采样间隔的用电量(kWh) + 区间结束时间；满30点后覆盖最旧
+// 采样间隔由宏 ENERGY_HISTORY_INTERVAL_MINUTES 配置(分钟)
+#ifndef ENERGY_HISTORY_MAX
+#define ENERGY_HISTORY_MAX 30
+#endif
+#ifndef ENERGY_HISTORY_INTERVAL_MINUTES
+#define ENERGY_HISTORY_INTERVAL_MINUTES 1440
+#endif
+/* 兼容旧宏名 */
 #ifndef ENERGY_DAILY_MAX_DAYS
-#define ENERGY_DAILY_MAX_DAYS 30
+#define ENERGY_DAILY_MAX_DAYS ENERGY_HISTORY_MAX
 #endif
 
 typedef struct {
-    float daily_energy[ENERGY_DAILY_MAX_DAYS];   // 每天00:00的累计电量快照 (kWh)
-    uint32_t timestamps[ENERGY_DAILY_MAX_DAYS];   // 对应Unix时间戳
-    uint8_t index;    // 当前写入位置
-    uint8_t count;    // 已写入条目数 (最多 ENERGY_DAILY_MAX_DAYS)
-    int last_yd;      // 上次记录的日期标识 (year*1000 + yday)，防止同一天重复记录
+    float usage_kwh[ENERGY_HISTORY_MAX];     // 区间用电量 (kWh)
+    uint32_t timestamps[ENERGY_HISTORY_MAX]; // 区间结束Unix时间戳
+    uint8_t index;           // 当前写入位置(最新)
+    uint8_t count;           // 已写入条目数 (最多 ENERGY_HISTORY_MAX)
+    float last_total;        // 上次累计电量基准，用于计算区间用电
+    uint32_t last_sample_ts; // 上次采样对齐时间戳
+    bool has_baseline;       // 是否已建立累计电量基准
 } EnergyDailyHistory_t;
 
 static EnergyDailyHistory_t g_energy_history = {0};
+static bool g_energy_history_loaded = false;
+
+/** 电量保留小数点后3位，避免 float 打印出冗长尾数 */
+static inline float energy_round3(float v)
+{
+    return roundf(v * 1000.0f) / 1000.0f;
+}
+
+/** 以精确3位小数写入 cJSON 数值(避免 CreateNumber 的浮点尾数) */
+static cJSON *energy_json_number3(float v)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.3f", energy_round3(v));
+    return cJSON_CreateRaw(buf);
+}
+
+/** 向环形缓冲压入一条区间用电记录 */
+static void energy_history_push(float usage, uint32_t ts)
+{
+    if (g_energy_history.count == 0) {
+        g_energy_history.index = 0;
+    } else {
+        g_energy_history.index = (g_energy_history.index + 1) % ENERGY_HISTORY_MAX;
+    }
+    g_energy_history.usage_kwh[g_energy_history.index] = energy_round3(usage);
+    g_energy_history.timestamps[g_energy_history.index] = ts;
+    if (g_energy_history.count < ENERGY_HISTORY_MAX) {
+        g_energy_history.count++;
+    }
+}
 
 // 前向声明
+static void energy_history_load_from_nvs(void);
+static void energy_history_save_to_nvs(void);
 static void energy_history_update(void);
 static void energy_daily_add_to_json(cJSON *root);
 
@@ -378,67 +420,279 @@ void send_head(const char *data) {
 }
 
 /**
- * @brief 更新每日电量快照
- *        每天00:00左右检测日期变化，记录当前累计电量
- *        使用 (year*1000 + yday) 作为日期标识，防止同一天重复记录
- *        首次调用自动初始化
+ * @brief 从 NVS JSON(data 分组)加载电量区间历史
+ *        新格式: en_e 为区间用电量; 旧格式(累计快照)自动迁移为区间用电
+ */
+static void energy_history_load_from_nvs(void)
+{
+    if (g_energy_history_loaded) {
+        return;
+    }
+    g_energy_history_loaded = true;
+
+    if (!sNvsParamLock()) {
+        ESP_LOGW(TAG, "Energy history load: NVS lock failed");
+        return;
+    }
+
+    cJSON *pRoot = sNvsParamGet();
+    if (pRoot == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    cJSON *pData = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
+    if (pData == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    cJSON *pCnt = cJSON_GetObjectItem(pData, cStorageDataNvsEnCnt);
+    cJSON *pE = cJSON_GetObjectItem(pData, cStorageDataNvsEnE);
+    cJSON *pT = cJSON_GetObjectItem(pData, cStorageDataNvsEnT);
+    cJSON *pBase = cJSON_GetObjectItem(pData, cStorageDataNvsEnBase);
+    cJSON *pLts = cJSON_GetObjectItem(pData, cStorageDataNvsEnLts);
+
+    memset(&g_energy_history, 0, sizeof(g_energy_history));
+
+    if (pBase != NULL && cJSON_IsNumber(pBase) && pBase->valuedouble > 0) {
+        g_energy_history.last_total = energy_round3((float)pBase->valuedouble);
+        g_energy_history.has_baseline = true;
+    }
+    if (pLts != NULL && cJSON_IsNumber(pLts) && pLts->valuedouble > 0) {
+        g_energy_history.last_sample_ts = (uint32_t)pLts->valuedouble;
+    }
+
+    if (pCnt == NULL || !cJSON_IsNumber(pCnt) ||
+        pE == NULL || !cJSON_IsArray(pE) ||
+        pT == NULL || !cJSON_IsArray(pT)) {
+        sNvsParamUnlock();
+        ESP_LOGI(TAG, "Energy history: no ring data (baseline=%d)", g_energy_history.has_baseline);
+        return;
+    }
+
+    int cnt = pCnt->valueint;
+    if (cnt <= 0 || cnt > ENERGY_HISTORY_MAX) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    int e_size = cJSON_GetArraySize(pE);
+    int t_size = cJSON_GetArraySize(pT);
+    if (e_size < cnt || t_size < cnt) {
+        sNvsParamUnlock();
+        ESP_LOGW(TAG, "Energy history: array size mismatch e=%d t=%d cnt=%d", e_size, t_size, cnt);
+        return;
+    }
+
+    float tmp_e[ENERGY_HISTORY_MAX];
+    uint32_t tmp_t[ENERGY_HISTORY_MAX];
+    for (int i = 0; i < cnt; i++) {
+        cJSON *ev = cJSON_GetArrayItem(pE, i);
+        cJSON *tv = cJSON_GetArrayItem(pT, i);
+        if (ev == NULL || !cJSON_IsNumber(ev) || tv == NULL || !cJSON_IsNumber(tv)) {
+            sNvsParamUnlock();
+            ESP_LOGW(TAG, "Energy history: invalid array item at %d", i);
+            return;
+        }
+        tmp_e[i] = energy_round3((float)ev->valuedouble);
+        tmp_t[i] = (uint32_t)tv->valuedouble;
+    }
+
+    /* 旧格式检测: 累计电量快照通常为大值且近似单调递增 */
+    bool legacy_cumulative = false;
+    if (cnt >= 2 && tmp_e[cnt - 1] > 10.0f && tmp_e[cnt - 1] >= tmp_e[0]) {
+        int mono = 0;
+        for (int i = 1; i < cnt; i++) {
+            if (tmp_e[i] + 0.0005f >= tmp_e[i - 1]) {
+                mono++;
+            }
+        }
+        if (mono >= cnt - 2) {
+            legacy_cumulative = true;
+        }
+    }
+
+    if (legacy_cumulative) {
+        /* 累计快照 → 区间用电: N个快照变成 N-1 条区间 */
+        int usage_cnt = cnt - 1;
+        for (int i = 0; i < usage_cnt; i++) {
+            float u = tmp_e[i + 1] - tmp_e[i];
+            if (u < 0) {
+                u = 0;
+            }
+            g_energy_history.usage_kwh[i] = energy_round3(u);
+            g_energy_history.timestamps[i] = tmp_t[i + 1];
+        }
+        g_energy_history.count = (uint8_t)usage_cnt;
+        g_energy_history.index = (usage_cnt > 0) ? (uint8_t)(usage_cnt - 1) : 0;
+        g_energy_history.last_total = tmp_e[cnt - 1];
+        g_energy_history.last_sample_ts = tmp_t[cnt - 1];
+        g_energy_history.has_baseline = true;
+        ESP_LOGI(TAG, "Energy history migrated from cumulative: %d -> %d slots", cnt, usage_cnt);
+    } else {
+        for (int i = 0; i < cnt; i++) {
+            g_energy_history.usage_kwh[i] = tmp_e[i];
+            g_energy_history.timestamps[i] = tmp_t[i];
+        }
+        g_energy_history.count = (uint8_t)cnt;
+        g_energy_history.index = (uint8_t)(cnt - 1);
+        if (!g_energy_history.has_baseline && cnt > 0) {
+            /* 无基准时用当前电表值，避免重启后第一段用电异常偏大 */
+            g_energy_history.last_total = energy_round3(g_meter_data.Totol_Energy);
+            g_energy_history.has_baseline = (g_energy_history.last_total > 0);
+        }
+        if (g_energy_history.last_sample_ts == 0 && cnt > 0) {
+            g_energy_history.last_sample_ts = tmp_t[cnt - 1];
+        }
+    }
+
+    sNvsParamUnlock();
+    ESP_LOGI(TAG, "Energy history loaded: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, interval=%d min",
+             g_energy_history.count,
+             (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f,
+             (unsigned long)g_energy_history.last_sample_ts,
+             g_energy_history.last_total,
+             ENERGY_HISTORY_INTERVAL_MINUTES);
+}
+
+/**
+ * @brief 将电量区间历史写入 NVS JSON(data 分组)
+ */
+static void energy_history_save_to_nvs(void)
+{
+    if (!sNvsParamLock()) {
+        ESP_LOGW(TAG, "Energy history save: NVS lock failed");
+        return;
+    }
+
+    cJSON *pRoot = sNvsParamGet();
+    if (pRoot == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    cJSON *pData = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
+    if (pData == NULL) {
+        sNvsParamUnlock();
+        return;
+    }
+
+    cJSON *e_arr = cJSON_CreateArray();
+    cJSON *t_arr = cJSON_CreateArray();
+    if (e_arr == NULL || t_arr == NULL) {
+        if (e_arr) cJSON_Delete(e_arr);
+        if (t_arr) cJSON_Delete(t_arr);
+        sNvsParamUnlock();
+        return;
+    }
+
+    uint8_t start = 0;
+    if (g_energy_history.count > 0) {
+        start = (g_energy_history.index + ENERGY_HISTORY_MAX - g_energy_history.count + 1) % ENERGY_HISTORY_MAX;
+    }
+    for (uint8_t i = 0; i < g_energy_history.count; i++) {
+        uint8_t idx = (start + i) % ENERGY_HISTORY_MAX;
+        cJSON_AddItemToArray(e_arr, energy_json_number3(g_energy_history.usage_kwh[idx]));
+        cJSON_AddItemToArray(t_arr, cJSON_CreateNumber(g_energy_history.timestamps[idx]));
+    }
+
+    cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnCnt, cJSON_CreateNumber(g_energy_history.count));
+    cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnE, e_arr);
+    cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnT, t_arr);
+    cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnBase, energy_json_number3(g_energy_history.last_total));
+    cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnLts, cJSON_CreateNumber(g_energy_history.last_sample_ts));
+
+    sNvsParamSet(false);
+    sNvsParamUnlock();
+    ESP_LOGI(TAG, "Energy history saved: count=%d/%d, ts=%lu, usage=%.3f",
+             g_energy_history.count, ENERGY_HISTORY_MAX,
+             (unsigned long)g_energy_history.last_sample_ts,
+             (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f);
+}
+
+/**
+ * @brief 按间隔更新区间用电并写入 NVS
+ *        漏采超过1个间隔时，中间时段补0以保持时间连续，用电量记在最后一段
  */
 static void energy_history_update(void)
 {
+    energy_history_load_from_nvs();
+
     time_t now;
     struct tm timeinfo;
     time(&now);
     localtime_r(&now, &timeinfo);
 
-    // SNTP未同步时跳过 (年份 < 2020)
     if (timeinfo.tm_year < (2020 - 1900)) {
         return;
     }
 
-    // 电表数据未就绪时跳过
     if (g_meter_data.Totol_Energy == 0) {
         return;
     }
 
-    // 计算日期标识: year*1000 + yday
-    int yd = (timeinfo.tm_year + 1900) * 1000 + timeinfo.tm_yday;
+#if ENERGY_HISTORY_INTERVAL_MINUTES < 1
+#error "ENERGY_HISTORY_INTERVAL_MINUTES must be >= 1"
+#endif
+    const uint32_t interval_sec = (uint32_t)ENERGY_HISTORY_INTERVAL_MINUTES * 60U;
+    float cur_total = energy_round3(g_meter_data.Totol_Energy);
 
-    // 首次调用: 初始化
-    if (g_energy_history.count == 0) {
-        g_energy_history.daily_energy[0] = g_meter_data.Totol_Energy;
-        g_energy_history.timestamps[0] = (uint32_t)now;
-        g_energy_history.index = 0;
-        g_energy_history.count = 1;
-        g_energy_history.last_yd = yd;
-        ESP_LOGI(TAG, "Daily energy init: day=%d, energy=%.2f kWh", yd, g_meter_data.Totol_Energy);
+    /* 首次: 只建立累计基准，不产生区间点 */
+    if (!g_energy_history.has_baseline) {
+        g_energy_history.last_total = cur_total;
+        g_energy_history.last_sample_ts = (uint32_t)now;
+        g_energy_history.has_baseline = true;
+        ESP_LOGI(TAG, "Energy history baseline: total=%.3f kWh, interval=%d min",
+                 cur_total, ENERGY_HISTORY_INTERVAL_MINUTES);
+        energy_history_save_to_nvs();
         return;
     }
 
-    // 日期变化: 记录新快照
-    if (yd != g_energy_history.last_yd) {
-        g_energy_history.last_yd = yd;
-        g_energy_history.index = (g_energy_history.index + 1) % ENERGY_DAILY_MAX_DAYS;
-        g_energy_history.daily_energy[g_energy_history.index] = g_meter_data.Totol_Energy;
-        g_energy_history.timestamps[g_energy_history.index] = (uint32_t)now;
-        if (g_energy_history.count < ENERGY_DAILY_MAX_DAYS) {
-            g_energy_history.count++;
-        }
-        ESP_LOGI(TAG, "Daily snapshot[%d/%d]: day=%d, energy=%.2f kWh",
-                 g_energy_history.count, ENERGY_DAILY_MAX_DAYS,
-                 yd, g_meter_data.Totol_Energy);
+    if ((uint32_t)now < g_energy_history.last_sample_ts + interval_sec) {
+        ESP_LOGD(TAG, "Energy history wait: elapsed=%lu/%lu s",
+                 (unsigned long)((uint32_t)now - g_energy_history.last_sample_ts),
+                 (unsigned long)interval_sec);
+        return;
     }
+
+    float usage = cur_total - g_energy_history.last_total;
+    if (usage < 0) {
+        usage = 0;
+    }
+    g_energy_history.last_total = cur_total;
+
+    uint32_t elapsed = (uint32_t)now - g_energy_history.last_sample_ts;
+    uint32_t steps = elapsed / interval_sec;
+    if (steps == 0) {
+        return;
+    }
+    if (steps > ENERGY_HISTORY_MAX) {
+        steps = ENERGY_HISTORY_MAX;
+    }
+
+    for (uint32_t s = 1; s <= steps; s++) {
+        uint32_t slot_ts = g_energy_history.last_sample_ts + s * interval_sec;
+        float slot_usage = (s == steps) ? usage : 0.0f;
+        energy_history_push(slot_usage, slot_ts);
+    }
+    g_energy_history.last_sample_ts += steps * interval_sec;
+
+    ESP_LOGI(TAG, "Energy slot[%d/%d]: steps=%lu, interval=%d min, usage=%.3f kWh, ts=%lu",
+             g_energy_history.count, ENERGY_HISTORY_MAX,
+             (unsigned long)steps, ENERGY_HISTORY_INTERVAL_MINUTES,
+             g_energy_history.usage_kwh[g_energy_history.index],
+             (unsigned long)g_energy_history.last_sample_ts);
+    energy_history_save_to_nvs();
 }
 
 /**
- * @brief 将每日用电量数组添加到 cJSON 对象
- *        遍历环形缓冲区，计算相邻两天的差值作为当天用电量
- *        有多少个点就上报多少个 (N个快照 → N-1个用电量)
- * @param root  目标 cJSON 根对象
+ * @brief 将区间用电量数组添加到 cJSON (最多 date_1 .. date_30)
  */
 static void energy_daily_add_to_json(cJSON *root)
 {
-    if (g_energy_history.count < 2) {
-        return;  // 数据不足，不上报
+    if (g_energy_history.count == 0) {
+        return;
     }
 
     cJSON *daily_array = cJSON_CreateArray();
@@ -446,28 +700,23 @@ static void energy_daily_add_to_json(cJSON *root)
         return;
     }
 
-    // 从最旧到最新遍历: 起始偏移 = (index - count + 1 + MAX) % MAX
-    uint8_t start = (g_energy_history.index + ENERGY_DAILY_MAX_DAYS - g_energy_history.count + 1) % ENERGY_DAILY_MAX_DAYS;
+    uint8_t start = (g_energy_history.index + ENERGY_HISTORY_MAX - g_energy_history.count + 1) % ENERGY_HISTORY_MAX;
 
-    for (uint8_t i = 0; i < g_energy_history.count - 1; i++) {
-        uint8_t idx_prev = (start + i) % ENERGY_DAILY_MAX_DAYS;
-        uint8_t idx_curr = (start + i + 1) % ENERGY_DAILY_MAX_DAYS;
+    for (uint8_t i = 0; i < g_energy_history.count; i++) {
+        uint8_t idx = (start + i) % ENERGY_HISTORY_MAX;
 
-        float usage = g_energy_history.daily_energy[idx_curr] - g_energy_history.daily_energy[idx_prev];
-        if (usage < 0) {
-            usage = 0;  // 电表归零等异常情况
-        }
-
-        // 取当天日期 (用 idx_curr 的时间戳，代表这一天的结束)
-        time_t t = (time_t)g_energy_history.timestamps[idx_curr];
+        time_t t = (time_t)g_energy_history.timestamps[idx];
         struct tm timeinfo;
         localtime_r(&t, &timeinfo);
-        char date_str[16];
-        strftime(date_str, sizeof(date_str), "%Y-%m-%d", &timeinfo);
+        char date_str[20];
+        strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M", &timeinfo);
+
+        char date_key[16];
+        snprintf(date_key, sizeof(date_key), "date_%u", (unsigned)(i + 1));
 
         cJSON *item = cJSON_CreateObject();
-        cJSON_AddItemToObject(item, "date", cJSON_CreateString(date_str));
-        cJSON_AddItemToObject(item, "kWh", cJSON_CreateNumber(usage));
+        cJSON_AddItemToObject(item, date_key, cJSON_CreateString(date_str));
+        cJSON_AddItemToObject(item, "kWh", energy_json_number3(g_energy_history.usage_kwh[idx]));
         cJSON_AddItemToArray(daily_array, item);
     }
 

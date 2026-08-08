@@ -20,6 +20,9 @@ extern "C" {
 
 #define MQTTUBLISHED 15*1000
 
+/* 电量历史采样间隔(分钟)，编译期配置，不写 NVS。最小建议1，1440=1天 */
+#define ENERGY_HISTORY_INTERVAL_MINUTES  1440
+
 #define SDCARDLOGEN TRUE
 
 #ifdef __cplusplus

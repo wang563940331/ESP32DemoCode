@@ -38,6 +38,12 @@ const stParamConfig_t g_stParamConfig[] = {
     {cStorageApCmdPk7dT,          cStorageDataNvsPk7dT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
     {cStorageApCmdPk1mV,          cStorageDataNvsPk1mV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
     {cStorageApCmdPk1mT,          cStorageDataNvsPk1mT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdEnCnt,          cStorageDataNvsEnCnt,        PARAM_TYPE_UINT8,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdEnYd,           cStorageDataNvsEnYd,         PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdEnE,            cStorageDataNvsEnE,          PARAM_TYPE_STRING, "[]",                     cStorageDataNvsName, 0},
+    {cStorageApCmdEnT,            cStorageDataNvsEnT,          PARAM_TYPE_STRING, "[]",                     cStorageDataNvsName, 0},
+    {cStorageApCmdEnBase,         cStorageDataNvsEnBase,       PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
+    {cStorageApCmdEnLts,          cStorageDataNvsEnLts,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
 };
 const int g_iParamCount = sizeof(g_stParamConfig) / sizeof(g_stParamConfig[0]);
 
