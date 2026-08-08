@@ -31,8 +31,25 @@ static eControl Start_once=POWEROF;
 
 extern MeterData_t g_meter_data;
 
+// 每天00:00电量快照环形缓冲区 (仅RAM，不持久化)
+// 可通过宏 ENERGY_DAILY_MAX_DAYS 设置存储天数，范围 7~30
+#ifndef ENERGY_DAILY_MAX_DAYS
+#define ENERGY_DAILY_MAX_DAYS 30
+#endif
 
+typedef struct {
+    float daily_energy[ENERGY_DAILY_MAX_DAYS];   // 每天00:00的累计电量快照 (kWh)
+    uint32_t timestamps[ENERGY_DAILY_MAX_DAYS];   // 对应Unix时间戳
+    uint8_t index;    // 当前写入位置
+    uint8_t count;    // 已写入条目数 (最多 ENERGY_DAILY_MAX_DAYS)
+    int last_yd;      // 上次记录的日期标识 (year*1000 + yday)，防止同一天重复记录
+} EnergyDailyHistory_t;
 
+static EnergyDailyHistory_t g_energy_history = {0};
+
+// 前向声明
+static void energy_history_update(void);
+static void energy_daily_add_to_json(cJSON *root);
 
 eControl getStart_once()
 {
@@ -304,6 +321,8 @@ void send_head(const char *data) {
         snprintf(str, sizeof(str), "%.2f", g_meter_data.Totol_Energy);
         cJSON_AddItemToObject(root, "Totol_Energy", cJSON_CreateString(str));
     }
+    // 每日用电量上报 (基于每天00:00快照)
+    energy_daily_add_to_json(root);
 
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
@@ -356,6 +375,103 @@ void send_head(const char *data) {
     EN_SLOGI(TAG,"%s",json_str);
     cJSON_Delete(root);
     heap_caps_free(json_str); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
+}
+
+/**
+ * @brief 更新每日电量快照
+ *        每天00:00左右检测日期变化，记录当前累计电量
+ *        使用 (year*1000 + yday) 作为日期标识，防止同一天重复记录
+ *        首次调用自动初始化
+ */
+static void energy_history_update(void)
+{
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
+
+    // SNTP未同步时跳过 (年份 < 2020)
+    if (timeinfo.tm_year < (2020 - 1900)) {
+        return;
+    }
+
+    // 电表数据未就绪时跳过
+    if (g_meter_data.Totol_Energy == 0) {
+        return;
+    }
+
+    // 计算日期标识: year*1000 + yday
+    int yd = (timeinfo.tm_year + 1900) * 1000 + timeinfo.tm_yday;
+
+    // 首次调用: 初始化
+    if (g_energy_history.count == 0) {
+        g_energy_history.daily_energy[0] = g_meter_data.Totol_Energy;
+        g_energy_history.timestamps[0] = (uint32_t)now;
+        g_energy_history.index = 0;
+        g_energy_history.count = 1;
+        g_energy_history.last_yd = yd;
+        ESP_LOGI(TAG, "Daily energy init: day=%d, energy=%.2f kWh", yd, g_meter_data.Totol_Energy);
+        return;
+    }
+
+    // 日期变化: 记录新快照
+    if (yd != g_energy_history.last_yd) {
+        g_energy_history.last_yd = yd;
+        g_energy_history.index = (g_energy_history.index + 1) % ENERGY_DAILY_MAX_DAYS;
+        g_energy_history.daily_energy[g_energy_history.index] = g_meter_data.Totol_Energy;
+        g_energy_history.timestamps[g_energy_history.index] = (uint32_t)now;
+        if (g_energy_history.count < ENERGY_DAILY_MAX_DAYS) {
+            g_energy_history.count++;
+        }
+        ESP_LOGI(TAG, "Daily snapshot[%d/%d]: day=%d, energy=%.2f kWh",
+                 g_energy_history.count, ENERGY_DAILY_MAX_DAYS,
+                 yd, g_meter_data.Totol_Energy);
+    }
+}
+
+/**
+ * @brief 将每日用电量数组添加到 cJSON 对象
+ *        遍历环形缓冲区，计算相邻两天的差值作为当天用电量
+ *        有多少个点就上报多少个 (N个快照 → N-1个用电量)
+ * @param root  目标 cJSON 根对象
+ */
+static void energy_daily_add_to_json(cJSON *root)
+{
+    if (g_energy_history.count < 2) {
+        return;  // 数据不足，不上报
+    }
+
+    cJSON *daily_array = cJSON_CreateArray();
+    if (daily_array == NULL) {
+        return;
+    }
+
+    // 从最旧到最新遍历: 起始偏移 = (index - count + 1 + MAX) % MAX
+    uint8_t start = (g_energy_history.index + ENERGY_DAILY_MAX_DAYS - g_energy_history.count + 1) % ENERGY_DAILY_MAX_DAYS;
+
+    for (uint8_t i = 0; i < g_energy_history.count - 1; i++) {
+        uint8_t idx_prev = (start + i) % ENERGY_DAILY_MAX_DAYS;
+        uint8_t idx_curr = (start + i + 1) % ENERGY_DAILY_MAX_DAYS;
+
+        float usage = g_energy_history.daily_energy[idx_curr] - g_energy_history.daily_energy[idx_prev];
+        if (usage < 0) {
+            usage = 0;  // 电表归零等异常情况
+        }
+
+        // 取当天日期 (用 idx_curr 的时间戳，代表这一天的结束)
+        time_t t = (time_t)g_energy_history.timestamps[idx_curr];
+        struct tm timeinfo;
+        localtime_r(&t, &timeinfo);
+        char date_str[16];
+        strftime(date_str, sizeof(date_str), "%Y-%m-%d", &timeinfo);
+
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddItemToObject(item, "date", cJSON_CreateString(date_str));
+        cJSON_AddItemToObject(item, "kWh", cJSON_CreateNumber(usage));
+        cJSON_AddItemToArray(daily_array, item);
+    }
+
+    cJSON_AddItemToObject(root, "DailyEnergy", daily_array);
 }
 
 /**
@@ -421,6 +537,7 @@ void my_task(void *pvParameters)
             {
                 tickOut(&tims,0);
                 tickOut(&tims2,0);
+                energy_history_update();
                 snprintf(mqtt_pub_buff,64,"%d",count++);
                 send_head(mqtt_pub_buff);
             }
