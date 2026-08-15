@@ -24,6 +24,7 @@
 #include "esp_err.h"
 #include "esp_wifi_types.h"
 #include "esp_smartconfig.h"
+#include "lwip/dns.h"
 #include "led.h"
 #include "exit.h"
 #include "esp_chip_info.h"
@@ -41,6 +42,32 @@
 
 
 static const char*TAG = "wifista";
+
+/**
+ * @brief 覆盖 DHCP 下发的 DNS, 改用公共 DNS, 并清空 lwIP 缓存
+ * @note  路由器/运营商 DNS 常缓存旧 A 记录(如 120.24.93.79), 导致域名连错机
+ */
+static void wifi_sta_force_public_dns(void)
+{
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif == NULL) {
+        ESP_LOGW(TAG, "未找到 WIFI_STA_DEF, 跳过DNS覆盖");
+        return;
+    }
+
+    esp_netif_dns_info_t dns_main = {0};
+    esp_netif_dns_info_t dns_backup = {0};
+    dns_main.ip.type = ESP_IPADDR_TYPE_V4;
+    dns_backup.ip.type = ESP_IPADDR_TYPE_V4;
+    // 阿里公共DNS + Google 备用
+    dns_main.ip.u_addr.ip4.addr = ipaddr_addr("223.5.5.5");
+    dns_backup.ip.u_addr.ip4.addr = ipaddr_addr("8.8.8.8");
+
+    esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns_main);
+    esp_netif_set_dns_info(netif, ESP_NETIF_DNS_BACKUP, &dns_backup);
+    dns_clear_cache();
+    ESP_LOGI(TAG, "已强制DNS: 223.5.5.5 / 8.8.8.8, 并清空DNS缓存");
+}
   
 SYSPARAM g_sysParam ={0} ;
 
@@ -438,11 +465,12 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
         switch(event_id)
         {
             case IP_EVENT_STA_GOT_IP:           //只有获取到路由器分配的IP，才认为是连上了路由器
-                    if(wifi_cb)
-                    {
-                         wifi_cb(WIFI_CONNECTED);
-                    }
-                   
+                // 先换公共DNS再通知上层启MQTT, 避免解析到运营商缓存的旧IP
+                wifi_sta_force_public_dns();
+                if(wifi_cb)
+                {
+                     wifi_cb(WIFI_CONNECTED);
+                }
                 ESP_LOGI(TAG,"获取ip地址成功");
                 break;
         }

@@ -13,6 +13,9 @@
 #include <lwip/apps/sntp.h>
 #include "esp_chip_info.h"
 #include <sys/time.h>  // 用于gettimeofday函数
+#include <netdb.h>
+#include <arpa/inet.h>
+#include "lwip/dns.h"
 #include "utility.h"
 #include "parameterSet.h"
 #include "esp_heap_caps.h"
@@ -218,6 +221,93 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
 
 
 
+/**
+ * @brief 从 mqtt URI 中取出主机名(去掉协议与可选端口)
+ * @param uri  形如 mqtt://host 或 mqtt://host:port
+ * @param host 输出缓冲区
+ * @param host_len 缓冲区长度
+ * @return true 解析成功
+ */
+static bool mqtt_extract_hostname(const char *uri, char *host, size_t host_len)
+{
+    if (!uri || !host || host_len == 0) {
+        return false;
+    }
+    const char *p = strstr(uri, "://");
+    p = p ? (p + 3) : uri;
+    // 去掉路径/查询串
+    const char *slash = strchr(p, '/');
+    size_t n = slash ? (size_t)(slash - p) : strlen(p);
+    // 去掉 URI 内嵌端口(若有), 实际端口以 NVS mqttport 为准
+    const char *colon = memchr(p, ':', n);
+    if (colon) {
+        n = (size_t)(colon - p);
+    }
+    if (n == 0 || n >= host_len) {
+        return false;
+    }
+    memcpy(host, p, n);
+    host[n] = '\0';
+    return true;
+}
+
+/**
+ * @brief 强制 IPv4 解析域名, 写入 ip_out; 已是 IP 则直接拷贝
+ * @note  避免 AF_UNSPEC 优先走 IPv6/错误记录导致 Connection reset by peer
+ */
+static bool mqtt_resolve_ipv4(const char *host, char *ip_out, size_t ip_len)
+{
+    if (!host || !ip_out || ip_len < 16) {
+        return false;
+    }
+    // 已是点分 IPv4, 无需 DNS；用 inet_ntop 规范化写入，避免 strncpy 截断告警
+    struct in_addr addr4;
+    if (inet_pton(AF_INET, host, &addr4) == 1)//将IPv4地址从文本格式转换为二进制格式 1表示转换成功
+    {
+        if (inet_ntop(AF_INET, &addr4, ip_out, ip_len) == NULL) //将二进制地址转换为文本格式
+        {
+            return false;
+        }
+        return true;
+    }
+
+    struct addrinfo hints = {0};
+    struct addrinfo *res = NULL;
+    hints.ai_family = AF_INET;// 只使用 IPv4
+    hints.ai_socktype = SOCK_STREAM;// 使用流式套接字
+
+    // 解析前清缓存, 避免沿用路由器DNS留下的旧A记录
+    dns_clear_cache();
+
+    // DHCP 刚拿到 IP 时 DNS 可能尚未就绪, 短重试几次
+    int err = EAI_FAIL;
+    for (int i = 0; i < 5; i++) {
+        err = getaddrinfo(host, NULL, &hints, &res);//获取地址信息
+        if (err == 0 && res != NULL) {
+            break;
+        }
+        ESP_LOGW(TAG, "DNS解析失败(%s) err=%d, 重试 %d/5", host, err, i + 1);
+        if (res) {
+            freeaddrinfo(res);//释放地址信息
+            res = NULL;
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    if (err != 0 || res == NULL) {
+        ESP_LOGE(TAG, "DNS无法解析: %s (getaddrinfo=%d)", host, err);
+        return false;
+    }
+
+    struct sockaddr_in *sa = (struct sockaddr_in *)res->ai_addr;//获取地址信息
+    if (inet_ntop(AF_INET, &sa->sin_addr, ip_out, ip_len) == NULL) {
+        freeaddrinfo(res);
+        return false;
+    }
+    ESP_LOGI(TAG, "DNS解析: %s -> %s", host, ip_out);
+    freeaddrinfo(res);
+    return true;
+}
+
 /** 启动mqtt连接
  * @param 无
  * @return 无
@@ -227,10 +317,13 @@ void mqtt_start(void)
     char* mac = getg_mac();
     char macbuf[50]={0};
     esp_mqtt_client_config_t mqtt_cfg = {0};
-    char MQTT_ADDRESS[32]={0};
+    char MQTT_ADDRESS[64]={0};   // 原始配置 URI (可能是域名)
+    char MQTT_URI_IP[48]={0};    // 解析后的 mqtt://x.x.x.x, 供实际连接
     char MQTT_USERNAME[32]={0};
     char MQTT_PASSWORD[32]={0};
     char MQTT_CLIENT[32]={0};
+    char hostname[64]={0};
+    char resolved_ip[16]={0};
 
     uint16_t MQTT_PORT=0;
     ESP_LOGI(TAG,"MQTT初始化!");
@@ -241,10 +334,18 @@ void mqtt_start(void)
     sStorageApGet(cStorageApCmdNvsmqttpasswd,sizeof(MQTT_PASSWORD),(u8 *)MQTT_PASSWORD);
     sStorageApGet(cStorageApCmdNvsmqttclient,sizeof(MQTT_CLIENT),(u8 *)MQTT_CLIENT);
 
-    
-    mqtt_cfg.broker.address.uri = MQTT_ADDRESS;
+    // 域名先解析成 IPv4 再连, 便于对照“IP能连、域名不能连”的问题
+    if (mqtt_extract_hostname(MQTT_ADDRESS, hostname, sizeof(hostname))
+        && mqtt_resolve_ipv4(hostname, resolved_ip, sizeof(resolved_ip))) {
+        snprintf(MQTT_URI_IP, sizeof(MQTT_URI_IP), "mqtt://%s", resolved_ip);
+        mqtt_cfg.broker.address.uri = MQTT_URI_IP;
+    } else {
+        ESP_LOGW(TAG, "域名解析失败, 回退使用原始地址: %s", MQTT_ADDRESS);
+        mqtt_cfg.broker.address.uri = MQTT_ADDRESS;
+    }
     mqtt_cfg.broker.address.port = MQTT_PORT;
-    EN_SLOGI(TAG,"MQTT服务器地址:%s,端口:%d",mqtt_cfg.broker.address.uri,mqtt_cfg.broker.address.port);
+    EN_SLOGI(TAG,"MQTT服务器地址:%s -> %s,端口:%d",
+             MQTT_ADDRESS, mqtt_cfg.broker.address.uri, mqtt_cfg.broker.address.port);
     //Client ID
     if(strlen(MQTT_CLIENT) == 0)
     {
