@@ -135,7 +135,7 @@ bool wait_sntp_sync(uint32_t timeout_ms) {
         uint32_t current_time = tv_current.tv_sec * 1000 + tv_current.tv_usec / 1000;
         
         if (current_time - start_time > timeout_ms) {
-            ESP_LOGE(TAG, "SNTP sync timeout");
+            ESP_LOGE(TAG, "SNTP 同步超时");
             return false;
         }
         
@@ -426,7 +426,7 @@ void send_head(const char *data) {
 
     cJSON *root = cJSON_CreateObject();  // 创建根对象
     if (root == NULL) {
-        ESP_LOGE(TAG, "cJSON_CreateObject failed");
+        ESP_LOGE(TAG, "cJSON_CreateObject 失败");
         return;
     }
     
@@ -493,7 +493,7 @@ void send_head(const char *data) {
     // 使用外部RAM存储JSON字符串
     char *json_str = cJSON_PrintUnformatted(root);
     if (json_str == NULL) {
-        ESP_LOGE(TAG, "cJSON_PrintUnformatted failed");
+        ESP_LOGE(TAG, "cJSON_PrintUnformatted 失败");
         cJSON_Delete(root);
         return;
     }
@@ -511,7 +511,7 @@ void send_head(const char *data) {
         heap_caps_free(mqtt_pub_buff);
     } else {
         // 如果外部RAM分配失败，使用默认分配
-        ESP_LOGW(TAG, "SPIRAM allocation failed, using internal RAM");
+        ESP_LOGW(TAG, "SPIRAM 分配失败, 使用内部RAM");
         esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
                                json_str, strlen(json_str), 1, 0);
     }
@@ -532,7 +532,7 @@ static void energy_history_load_from_nvs(void)
     g_energy_history_loaded = true;
 
     if (!sNvsParamLock()) {
-        ESP_LOGW(TAG, "Energy history load: NVS lock failed");
+        ESP_LOGW(TAG, "电量历史加载: NVS锁获取失败");
         return;
     }
 
@@ -568,7 +568,7 @@ static void energy_history_load_from_nvs(void)
         pE == NULL || !cJSON_IsArray(pE) ||
         pT == NULL || !cJSON_IsArray(pT)) {
         sNvsParamUnlock();
-        ESP_LOGI(TAG, "Energy history: no ring data (baseline=%d)", g_energy_history.has_baseline);
+        ESP_LOGI(TAG, "电量历史: 无环形数据 (baseline=%d)", g_energy_history.has_baseline);
         return;
     }
 
@@ -582,7 +582,7 @@ static void energy_history_load_from_nvs(void)
     int t_size = cJSON_GetArraySize(pT);
     if (e_size < cnt || t_size < cnt) {
         sNvsParamUnlock();
-        ESP_LOGW(TAG, "Energy history: array size mismatch e=%d t=%d cnt=%d", e_size, t_size, cnt);
+        ESP_LOGW(TAG, "电量历史: 数组长度不匹配 e=%d t=%d cnt=%d", e_size, t_size, cnt);
         return;
     }
 
@@ -593,7 +593,7 @@ static void energy_history_load_from_nvs(void)
         cJSON *tv = cJSON_GetArrayItem(pT, i);
         if (ev == NULL || !cJSON_IsNumber(ev) || tv == NULL || !cJSON_IsNumber(tv)) {
             sNvsParamUnlock();
-            ESP_LOGW(TAG, "Energy history: invalid array item at %d", i);
+            ESP_LOGW(TAG, "电量历史: 数组项无效, 索引=%d", i);
             return;
         }
         tmp_e[i] = energy_round3((float)ev->valuedouble);
@@ -630,7 +630,7 @@ static void energy_history_load_from_nvs(void)
         g_energy_history.last_total = tmp_e[cnt - 1];
         g_energy_history.last_sample_ts = tmp_t[cnt - 1];
         g_energy_history.has_baseline = true;
-        ESP_LOGI(TAG, "Energy history migrated from cumulative: %d -> %d slots", cnt, usage_cnt);
+        ESP_LOGI(TAG, "电量历史已从累计格式迁移: %d -> %d 槽位", cnt, usage_cnt);
     } else {
         for (int i = 0; i < cnt; i++) {
             g_energy_history.usage_kwh[i] = tmp_e[i];
@@ -649,7 +649,7 @@ static void energy_history_load_from_nvs(void)
     }
 
     sNvsParamUnlock();
-    ESP_LOGI(TAG, "Energy history loaded: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, interval=%d min",
+    ESP_LOGI(TAG, "电量历史已加载: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, interval=%d min",
              g_energy_history.count,
              (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f,
              (unsigned long)g_energy_history.last_sample_ts,
@@ -663,7 +663,7 @@ static void energy_history_load_from_nvs(void)
 static void energy_history_save_to_nvs(void)
 {
     if (!sNvsParamLock()) {
-        ESP_LOGW(TAG, "Energy history save: NVS lock failed");
+        ESP_LOGW(TAG, "电量历史保存: NVS锁获取失败");
         return;
     }
 
@@ -706,7 +706,7 @@ static void energy_history_save_to_nvs(void)
 
     sNvsParamSet(false);
     sNvsParamUnlock();
-    ESP_LOGI(TAG, "Energy history saved: count=%d/%d, ts=%lu, usage=%.3f",
+    ESP_LOGI(TAG, "电量历史已保存: count=%d/%d, ts=%lu, usage=%.3f",
              g_energy_history.count, ENERGY_HISTORY_MAX,
              (unsigned long)g_energy_history.last_sample_ts,
              (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f);
@@ -744,14 +744,14 @@ static void energy_history_update(void)
         g_energy_history.last_total = cur_total;
         g_energy_history.last_sample_ts = (uint32_t)now;
         g_energy_history.has_baseline = true;
-        ESP_LOGI(TAG, "Energy history baseline: total=%.3f kWh, interval=%d min",
+        ESP_LOGI(TAG, "电量历史基准: total=%.3f kWh, interval=%d min",
                  cur_total, ENERGY_HISTORY_INTERVAL_MINUTES);
         energy_history_save_to_nvs();
         return;
     }
 
     if ((uint32_t)now < g_energy_history.last_sample_ts + interval_sec) {
-        ESP_LOGD(TAG, "Energy history wait: elapsed=%lu/%lu s",
+        ESP_LOGD(TAG, "电量历史等待: elapsed=%lu/%lu s",
                  (unsigned long)((uint32_t)now - g_energy_history.last_sample_ts),
                  (unsigned long)interval_sec);
         return;
@@ -779,7 +779,7 @@ static void energy_history_update(void)
     }
     g_energy_history.last_sample_ts += steps * interval_sec;
 
-    ESP_LOGI(TAG, "Energy slot[%d/%d]: steps=%lu, interval=%d min, usage=%.3f kWh, ts=%lu",
+    ESP_LOGI(TAG, "电量槽位[%d/%d]: steps=%lu, interval=%d min, usage=%.3f kWh, ts=%lu",
              g_energy_history.count, ENERGY_HISTORY_MAX,
              (unsigned long)steps, ENERGY_HISTORY_INTERVAL_MINUTES,
              g_energy_history.usage_kwh[g_energy_history.index],
@@ -829,11 +829,11 @@ static void energy_daily_add_to_json(cJSON *root)
  * @return ESP_OK on success, ESP_FAIL on failure
  */
 esp_err_t mqtt_reinit(void) {
-    ESP_LOGI(TAG, "Reinitializing MQTT connection...");
+    ESP_LOGI(TAG, "正在重新初始化MQTT连接...");
     
     // Stop and destroy existing MQTT client if it exists
     if (s_mqtt_client) {
-        ESP_LOGI(TAG, "Stopping existing MQTT client...");
+        ESP_LOGI(TAG, "正在停止现有MQTT客户端...");
         esp_mqtt_client_stop(s_mqtt_client);
         esp_mqtt_client_destroy(s_mqtt_client);
         s_mqtt_client = NULL;
@@ -921,7 +921,7 @@ int init_mqtt(void)
     xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 10, &myTaskHandle, 0);
     if(!myTaskHandle)
     {
-         ESP_LOGI(TAG,"Task created failed!\n");
+         ESP_LOGI(TAG,"任务创建失败!\n");
         return 0;
     }
     return 1;

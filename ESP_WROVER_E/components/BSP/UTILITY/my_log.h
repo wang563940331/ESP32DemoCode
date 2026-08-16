@@ -64,6 +64,7 @@ void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int l
 #define LOG_COLOR_I "\x1b[36m"  // 青色（信息）
 #define LOG_COLOR_D "\x1b[34m"  // 蓝色（调试）
 #define LOG_COLOR_V "\x1b[35m"  // 紫色（详细）
+#define LOG_COLOR_FILE "\x1b[35m"  // 紫色（文件名:行号）
 
 
 // 获取当前时间的年月日时分秒格式
@@ -186,9 +187,10 @@ static inline void sd_fat_log_buffer_hex(int level, const char* tag, const uint8
     ESP_LOGV((tag), "%s", _hex_buf); \
 } while(0)
 
-// 先undef原始的宏，然后重新定义
+// letter+时间戳用级别颜色; [文件:行号] 用紫色; 正文再恢复级别颜色
 #undef LOG_FORMAT
-#define LOG_FORMAT(letter, format) LOG_COLOR_ ## letter #letter " (%s) [%s:%d]: " format LOG_RESET_COLOR "\n"
+#define LOG_FORMAT(letter, format) \
+    LOG_COLOR_ ## letter #letter " (%s) " LOG_COLOR_FILE "[%s:%d]" LOG_RESET_COLOR LOG_COLOR_ ## letter ": " format LOG_RESET_COLOR "\n"
 
 #undef ESP_LOGE
 #define ESP_LOGE(tag, format, ...) do { \

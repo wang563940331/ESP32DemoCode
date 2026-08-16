@@ -164,20 +164,20 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
 
     // 帧最小长度: FE*4 + 68 + 6字节地址 + 68 + 控制码 + 长度 + 校验 + 16 = 15字节
     if (len < 13) {
-        ESP_LOGE(TAG, "DLT645 response too short (%d)", len);
+        ESP_LOGE(TAG, "DLT645 响应过短 (%d)", len);
         return false;
     }
 
     // 校验帧头: FE FE FE FE 68
     if (!(response[0] == 0xFE && response[1] == 0xFE &&
           response[2] == 0xFE && response[3] == 0xFE && response[4] == 0x68)) {
-        ESP_LOGE(TAG, "DLT645 invalid frame header");
+        ESP_LOGE(TAG, "DLT645 帧头无效");
         return false;
     }
 
     // 校验帧头重复: 地址域后应为0x68
     if (response[11] != 0x68) {
-        ESP_LOGE(TAG, "DLT645 invalid frame header repeat");
+        ESP_LOGE(TAG, "DLT645 帧头重复无效");
         return false;
     }
 
@@ -187,7 +187,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
 
     // 数据长度合理性检查
     if (data_length > 100 || len < 14 + data_length + 1) {
-        ESP_LOGE(TAG, "DLT645 invalid data length: %d", data_length);
+        ESP_LOGE(TAG, "DLT645 数据长度无效: %d", data_length);
         return false;
     }
 
@@ -198,7 +198,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
     uint8_t checksum_calculated = dlt645_calculate_checksum(response + cs_start, cs_end - cs_start);
 
     if (checksum_received != checksum_calculated) {
-        ESP_LOGE(TAG, "DLT645 checksum invalid: %02X != %02X", checksum_received, checksum_calculated);
+        ESP_LOGE(TAG, "DLT645 校验和无效: %02X != %02X", checksum_received, checksum_calculated);
         return false;
     }
 
@@ -226,7 +226,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
                              (uint32_t)decoded_data[3];
         }
 
-        ESP_LOGD(TAG, "Data ID: 0x%08X", data_id_value);
+        ESP_LOGD(TAG, "数据标识: 0x%08X", data_id_value);
 
         // 根据数据标识路由到不同解析逻辑
         switch (data_id_value) {
@@ -282,7 +282,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
             }
             break;
         default:
-            ESP_LOGW(TAG, "Data ID: Unknown (0x%08X)", data_id_value);
+            ESP_LOGW(TAG, "数据标识未知 (0x%08X)", data_id_value);
             break;
         }
     }
@@ -320,7 +320,7 @@ static void dlt645_send_read(uint32_t addr_di)
     frame_len = dlt645_build_frame(address, DLT645_READ, data_field, 4, frame);
 
     // 调试输出: 打印发送的原始十六进制帧
-    ESP_LOGD(TAG, "TX (%d bytes):", frame_len);
+    ESP_LOGD(TAG, "发送 (%d 字节):", frame_len);
     EN_SLOGD_HEX(TAG, frame, frame_len);
 
     // 发送到串口
@@ -373,7 +373,7 @@ void dlt645_load_power_peaks(void)
 #undef LOAD_WINDOW
 
     sNvsParamUnlock();
-    ESP_LOGI(TAG, "Power peaks loaded from NVS: 3min=%.1f, 1h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
+    ESP_LOGI(TAG, "从NVS加载功率峰值: 3min=%.1f, 1h=%.1f, 1d=%.1f, 7d=%.1f, 1m=%.1f",
              g_meter_data.peak_3min.peak_power,
              g_meter_data.peak_1hour.peak_power,
              g_meter_data.peak_1day.peak_power,
@@ -451,12 +451,12 @@ void dlt645_update_power_peaks(float current_power)
 #define UPDATE_WINDOW(win, duration_sec) do { \
     if ((win).peak_time == 0 || now - (win).peak_time > (duration_sec)) { \
         (win).peak_power = current_power; \
-        ESP_LOGW(TAG, "Window %s reset: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
+        ESP_LOGW(TAG, "窗口 %s 重置: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } else if (current_power > (win).peak_power) { \
         (win).peak_power = current_power; \
-        ESP_LOGW(TAG, "Window %s updated: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
+        ESP_LOGW(TAG, "窗口 %s 已更新: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } \
@@ -512,7 +512,7 @@ void dlt645_task(void *pvParameters)
                 // 收到应答，取消超时计时
                 s_timeout_active = false;
                 // 调试输出: 打印接收到的原始十六进制帧
-                ESP_LOGD(TAG, "RX (%d bytes):", read_len);
+                ESP_LOGD(TAG, "接收 (%d 字节):", read_len);
                 EN_SLOGD_HEX(TAG, s_rx_buffer, read_len);
                 // 解析响应并打印解析后的物理量
                 dlt645_parse_response(s_rx_buffer, (uint16_t)read_len);
@@ -578,7 +578,7 @@ void meter_DLT645_init(void)
     // 创建任务: 4KB栈，优先级10，绑定到Core 0
     xTaskCreatePinnedToCore(dlt645_task, "meter_DLT645", 4096, uart1, 10, &dlt645TaskHandle, 0);
     if (!dlt645TaskHandle) {
-        ESP_LOGE(TAG, "Task created failed!\n");
+        ESP_LOGE(TAG, "任务创建失败!\n");
         return;
     }
     return;

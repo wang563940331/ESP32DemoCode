@@ -64,7 +64,7 @@ esp_err_t sd_fat_ops_init(const char* device_name) {
                 if (ret == ESP_OK && card != NULL) {
                     ESP_LOGI(TAG, "SD卡信息:");
                     ESP_LOGI(TAG, "  容量: %.2f MB", (float)card->csd.capacity * card->csd.sector_size / 1024 / 1024);
-                    ESP_LOGI(TAG, "  块大小: %d bytes", card->csd.sector_size);
+                    ESP_LOGI(TAG, "  块大小: %d 字节", card->csd.sector_size);
 
                     /* 通过 FatFs f_getfree 获取剩余/已用空间 */
                     FATFS *fs = NULL;
@@ -93,7 +93,7 @@ esp_err_t sd_fat_ops_init(const char* device_name) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    ESP_LOGI(TAG, "SD FAT ops initialized successfully");
+    ESP_LOGI(TAG, "SD FAT 操作初始化成功");
     return ESP_OK;
 }
 
@@ -110,12 +110,12 @@ esp_err_t sd_fat_ops_deinit(const char* device_name) {
 
     esp_err_t ret = s_sd_device->Unmount(device_name);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SD device unmount failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "SD卡卸载失败: %s", esp_err_to_name(ret));
         return ret;
     }
 
     s_sd_device = NULL;
-    ESP_LOGI(TAG, "SD FAT ops deinitialized");
+    ESP_LOGI(TAG, "SD FAT 操作已反初始化");
     return ESP_OK;
 }
 
@@ -135,9 +135,9 @@ esp_err_t sd_fat_ops_write_file(const char* device_name, const char* path, const
 
     esp_err_t ret = s_sd_device->WriteFile(device_name, path, data, len);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Write file failed: %s, path: %s", esp_err_to_name(ret), path);
+        ESP_LOGE(TAG, "写入文件失败: %s, 路径: %s", esp_err_to_name(ret), path);
     } else {
-        ESP_LOGI(TAG, "Write file success: %s, size: %u bytes", path, (unsigned int)len);
+        ESP_LOGI(TAG, "写入文件成功: %s, 大小: %u 字节", path, (unsigned int)len);
     }
 
     return ret;
@@ -159,9 +159,9 @@ esp_err_t sd_fat_ops_read_file(const char* device_name, const char* path, char* 
 
     esp_err_t ret = s_sd_device->ReadFile(device_name, path, buffer, len);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Read file failed: %s, path: %s", esp_err_to_name(ret), path);
+        ESP_LOGE(TAG, "读取文件失败: %s, 路径: %s", esp_err_to_name(ret), path);
     } else {
-        ESP_LOGI(TAG, "Read file success: %s, size: %d bytes", path, (unsigned int)*len);
+        ESP_LOGI(TAG, "读取文件成功: %s, 大小: %d 字节", path, (unsigned int)*len);
     }
 
     return ret;
@@ -179,7 +179,7 @@ esp_err_t sd_fat_ops_list_dir(const char* device_name, const char* path) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Listing directory: %s", path ? path : "/");
+    ESP_LOGI(TAG, "列出目录: %s", path ? path : "/");
     return s_sd_device->ListDir(device_name, path);
 }
 
@@ -204,11 +204,11 @@ esp_err_t sd_fat_ops_create_dir(const char* device_name, const char* path) {
     snprintf(full_path, sizeof(full_path), "%s/%s", mount_point, path);
 
     if (mkdir(full_path, 0755) != 0) {
-        ESP_LOGE(TAG, "Create directory failed: %s", path);
+        ESP_LOGE(TAG, "创建目录失败: %s", path);
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "Create directory success: %s", path);
+    ESP_LOGI(TAG, "创建目录成功: %s", path);
     return ESP_OK;
 }
 
@@ -233,11 +233,11 @@ esp_err_t sd_fat_ops_delete_file(const char* device_name, const char* path) {
     snprintf(full_path, sizeof(full_path), "%s/%s", mount_point, path);
 
     if (unlink(full_path) != 0) {
-        ESP_LOGE(TAG, "Delete file failed: %s", path);
+        ESP_LOGE(TAG, "删除文件失败: %s", path);
         return ESP_ERR_NOT_FOUND;
     }
 
-    ESP_LOGI(TAG, "Delete file success: %s", path);
+    ESP_LOGI(TAG, "删除文件成功: %s", path);
     return ESP_OK;
 }
 
@@ -262,11 +262,11 @@ esp_err_t sd_fat_ops_delete_dir(const char* device_name, const char* path) {
     snprintf(full_path, sizeof(full_path), "%s/%s", mount_point, path);
 
     if (rmdir(full_path) != 0) {
-        ESP_LOGE(TAG, "Delete directory failed: %s", path);
+        ESP_LOGE(TAG, "删除目录失败: %s", path);
         return ESP_ERR_NOT_FOUND;
     }
 
-    ESP_LOGI(TAG, "Delete directory success: %s", path);
+    ESP_LOGI(TAG, "删除目录成功: %s", path);
     return ESP_OK;
 }
 
@@ -294,7 +294,7 @@ esp_err_t sd_fat_ops_append_file(const char* device_name, const char* path, cons
 
     FILE* f = fopen(full_path, "a");//追加模式打开文件
     if (!f) {
-        ESP_LOGE(TAG, "Open file for append failed: %s", full_path);
+        ESP_LOGE(TAG, "以追加模式打开文件失败: %s", full_path);
         return ESP_ERR_NO_MEM;
     }
 
@@ -302,7 +302,7 @@ esp_err_t sd_fat_ops_append_file(const char* device_name, const char* path, cons
     fclose(f);
 
     if (bytes_written != len) {
-        ESP_LOGE(TAG, "Append file failed: %s", path);
+        ESP_LOGE(TAG, "追加文件失败: %s", path);
         return ESP_ERR_NO_MEM;
     }
 
@@ -381,7 +381,7 @@ esp_err_t sd_fat_ops_get_card_info(const char* device_name, sd_card_info_t* info
     sdmmc_card_t* card = NULL;
     esp_err_t ret = s_sd_device->GetCardHandle(device_name, &card);
     if (ret != ESP_OK || !card) {
-        ESP_LOGE(TAG, "Get card handle failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "获取SD卡句柄失败: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -389,7 +389,7 @@ esp_err_t sd_fat_ops_get_card_info(const char* device_name, sd_card_info_t* info
     info->sector_size = card->csd.sector_size;
     info->is_mounted = true;
 
-    ESP_LOGI(TAG, "Card info - Capacity: %.2f MB, Sector Size: %d bytes", 
+    ESP_LOGI(TAG, "SD卡信息 - 容量: %.2f MB, 扇区大小: %d 字节", 
              info->capacity_mb, info->sector_size);
 
     return ESP_OK;

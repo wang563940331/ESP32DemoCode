@@ -18,6 +18,7 @@ bool sStorageApSetPassword(char *data);
 bool sStorageApSetPassword(char *data);
 bool sStorageApSetNvsmqttIp(char *data);
 bool sStorageApSetNvsmqttport(u16 data);
+bool sStorageApSetNvslogDays(u16 data);
 bool sStorageApSetNvsmqttclient(char *data);
 bool sStorageApSetNvsmqttuser(char *data);
 bool sStorageApSetNvsmqttpasswd(char *data);

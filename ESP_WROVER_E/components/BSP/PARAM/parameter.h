@@ -66,6 +66,7 @@
 #define cStorageApNvsmqttclient         "mqttclient"                          //WEB登录密码有效时间(必须U32)
 #define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
 #define cStorageApNvsmqttpasswd         "mqttpasswd"
+#define cStorageApNvslogDays            "logDays"                                //SD日志保留天数(1~90)
 
 #define cStorageDataNvsName               "data"                                    //第一级
 #define cStorageDataNvsPk1hV             "pk1h_v"                                //1小时功率峰值(W)
@@ -129,6 +130,7 @@ typedef enum
     cStorageApCmdNvsmqttclient,                                                  //WEB密码有效时间(4个字节时间戳)
     cStorageApCmdNvsmqttuser,                                                       //WEB申请码
     cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
+    cStorageApCmdNvslogDays,                                                      //SD日志保留天数
   
 
     cStorageApCmdPk1hV,                                                         //1小时功率峰值

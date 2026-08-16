@@ -48,12 +48,12 @@ bool sShellDebugOff(const stShellPkt_t *pkg)
 {
     if(!esp_log_print_status())
     {
-        EN_SLOGI(TAG,"[shell] debug has off....\r\n");
+        EN_SLOGI(TAG,"[shell] 调试已关闭....\r\n");
         return(false);
     }
     
     esp_log_print_set(false);
-    EN_SLOGI(TAG,"super password verify successful...\n");
+    EN_SLOGI(TAG,"超级密码验证成功...\n");
     return(true);
 }
 
@@ -77,12 +77,12 @@ bool sShellDebugOn(const stShellPkt_t *pkg)
 {
     if(esp_log_print_status())
     {
-        EN_SLOGI(TAG, "[shell] debug has on....\r\n");
+        EN_SLOGI(TAG, "[shell] 调试已开启....\r\n");
         return(false);
     }
     if (pkg->paraNum < 1)
     {
-        EN_SLOGI(TAG, "[shell] usage: debugon  111111\n");
+        EN_SLOGI(TAG, "[shell] 用法: debugon  111111\n");
         return(false);
     }
 
@@ -314,7 +314,6 @@ bool sShellSetTime(const stShellPkt_t *pkg)
         printf("  data - Unix时间戳(秒)\r\n");
         return(false);
     }
-
     /* 解析时间戳 */
     char *endptr = NULL;
     time_t timestamp = (time_t)strtoll(pkg->para[0], &endptr, 10);
@@ -584,7 +583,7 @@ void sShellComRecvTask(void *pvParam)
 {
     uart_event_t event;
     
-    EN_SLOGI(TAG, "sShellCom RecvTask RUN in:%d!", xPortGetCoreID());
+    EN_SLOGI(TAG, "Shell接收任务运行在核心:%d!", xPortGetCoreID());
     
     while(1)
     {
@@ -599,27 +598,27 @@ void sShellComRecvTask(void *pvParam)
                     break;
                 //Event of HW FIFO overflow detected
                 case UART_FIFO_OVF:
-                    EN_SLOGI(TAG, "hw fifo overflow");
+                    EN_SLOGI(TAG, "硬件FIFO溢出");
                     // uart_flush_input(cShellComUartNum);
                     // xQueueReset(stShellCache.hUartQueue);
                     break;
                 //Event of UART ring buffer full
                 case UART_BUFFER_FULL:
-                    EN_SLOGI(TAG, "ring buffer full");
+                    EN_SLOGI(TAG, "环形缓冲区已满");
                     // uart_flush_input(cShellComUartNum);
                     // xQueueReset(stShellCache.hUartQueue);
                     break;
                 //Event of UART RX break detected
                 case UART_BREAK:
-                    EN_SLOGI(TAG, "uart rx break");
+                    EN_SLOGI(TAG, "UART接收中断");
                     break;
                 //Event of UART parity check error
                 case UART_PARITY_ERR:
-                    EN_SLOGI(TAG, "uart parity error");
+                    EN_SLOGI(TAG, "UART奇偶校验错误");
                     break;
                 //Event of UART frame error
                 case UART_FRAME_ERR:
-                    EN_SLOGI(TAG, "uart frame error");
+                    EN_SLOGI(TAG, "UART帧错误");
                     break;
                 //UART_PATTERN_DET
                 case UART_PATTERN_DET:
@@ -627,7 +626,7 @@ void sShellComRecvTask(void *pvParam)
                     break;
                 //Others
                 default:
-                    EN_SLOGI(TAG, "uart event type: %d", event.type);
+                    EN_SLOGI(TAG, "UART事件类型: %d", event.type);
                     break;
             }
         }

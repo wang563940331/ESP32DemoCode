@@ -20,7 +20,7 @@ void cjson_init_spiram(void) {
         .free_fn = heap_caps_free
     };
     cJSON_InitHooks(&hooks);
-    ESP_LOGI(TAG, "cJSON configured to use SPIRAM");
+    ESP_LOGI(TAG, "cJSON已配置使用SPIRAM");
 }
 /*
 {   
@@ -41,14 +41,14 @@ void parse_json(const char *json_string,void *Start_once)
     int int_value = 0;
     if(json_string == NULL || strlen(json_string) == 0)  // 1. 输入验证
     {
-        ESP_LOGE(TAG, "Invalid JSON string");
+        ESP_LOGE(TAG, "JSON字符串无效");
         return;
     }
 
     cJSON *root = cJSON_Parse(json_string); //用于将 JSON 字符串解析为 cJSON 结构体指针（根节点）
     if (root == NULL) 
     {
-        ESP_LOGI(TAG, "JSON string: %s\r\n", json_string);  // 3. 错误处理
+        ESP_LOGI(TAG, "JSON字符串: %s\r\n", json_string);  // 3. 错误处理
         ESP_LOG_BUFFER_HEXDUMP(TAG, json_string, strlen(json_string), ESP_LOG_INFO);
 
         const char *error_ptr = cJSON_GetErrorPtr();
@@ -57,7 +57,7 @@ void parse_json(const char *json_string,void *Start_once)
             ESP_LOGE("JSON", "解析错误位置: %s", error_ptr);
         }
         return;
-}
+    }
 
     cJSON *deviceid = cJSON_GetObjectItemCaseSensitive(root, "id");//然后从 level 中获取 "value" 键
     if(deviceid != NULL)
@@ -65,12 +65,12 @@ void parse_json(const char *json_string,void *Start_once)
         if (cJSON_IsString(deviceid)) //查是否为数字
         {
             const char *deviceid_value = deviceid->valuestring;
-            ESP_LOGI(TAG, "deviceid: %s", deviceid_value);
+            ESP_LOGI(TAG, "设备ID: %s", deviceid_value);
             char sn[20] = {0};
             sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
             if (strcmp(deviceid_value, sn) != 0) 
             {
-                ESP_LOGI(TAG, "deviceid err: %s", deviceid_value);
+                ESP_LOGI(TAG, "设备ID错误: %s", deviceid_value);
             } 
             else
             {
@@ -86,7 +86,7 @@ void parse_json(const char *json_string,void *Start_once)
                         {// 5. 数值获取
                             int_value = value->valueint; // 整型值
                             double double_value = value->valuedouble; // 浮点型值
-                            ESP_LOGI(TAG, "Value: %d (int), %f (double)", int_value, double_value);
+                            ESP_LOGI(TAG, "数值: %d (整型), %f (浮点)", int_value, double_value);
                             //*((float*)Start_once) = (float)double_value;
                         }
 
@@ -96,17 +96,17 @@ void parse_json(const char *json_string,void *Start_once)
                             const char *cmd_value = cmd->valuestring;
                             if (strcmp(cmd_value, "open") == 0) 
                             {
-                                ESP_LOGI(TAG, "Command: OPEN");
+                                ESP_LOGI(TAG, "命令: OPEN");
                                 *((eControl*)Start_once) =POWERON;
                             } 
                             else if (strcmp(cmd_value, "close") == 0)
                             {
-                                ESP_LOGI(TAG, "Command: CLOSE");
+                                ESP_LOGI(TAG, "命令: CLOSE");
                                 *((eControl*)Start_once) = POWEROF;
                             } 
                             else if (strcmp(cmd_value, "reboot") == 0)
                             {
-                                ESP_LOGI(TAG, "Command: REBOOT");
+                                ESP_LOGI(TAG, "命令: REBOOT");
                                 *((eControl*)Start_once) = REBOOT;
                             }
                         }
@@ -117,7 +117,7 @@ void parse_json(const char *json_string,void *Start_once)
     }
     else
     {
-        ESP_LOGI(TAG, "no id err");
+        ESP_LOGI(TAG, "缺少id字段");
     }
 
     cJSON_Delete(root); // 6. 内存释放

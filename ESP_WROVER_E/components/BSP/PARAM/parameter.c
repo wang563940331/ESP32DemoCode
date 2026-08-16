@@ -27,6 +27,7 @@ const stParamConfig_t g_stParamConfig[] = {
     {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",                       cStorageApNvsName, 1},     // MQTT客户端ID变更重连网络
     {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",                  cStorageApNvsName, 1},     // MQTT用户名变更重连网络
     {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",                 cStorageApNvsName, 1},     // MQTT密码变更重连网络
+    {cStorageApCmdNvslogDays,       cStorageApNvslogDays,     PARAM_TYPE_UINT16,  "7",                      cStorageApNvsName, 0},     // SD日志保留天数(1~90)
 
     {cStorageApCmdPk1hV,          cStorageDataNvsPk1hV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
     {cStorageApCmdPk1hT,          cStorageDataNvsPk1hT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},
@@ -474,7 +475,7 @@ bool NVS_init(void)
 ****************************************************************************************************/
 bool sNvsParamRestoreDefaults(void)
 {
-    ESP_LOGI(TAG, "Restoring default parameters...");
+    ESP_LOGI(TAG, "正在恢复默认参数...");
     
     bool bRst = false;
     
@@ -502,21 +503,21 @@ bool sNvsParamRestoreDefaults(void)
                 bRst = sNvsParamSet(true);
                 if (bRst)
                 {
-                    ESP_LOGI(TAG, "Default parameters restored successfully");
+                    ESP_LOGI(TAG, "默认参数恢复成功");
                 }
                 else
                 {
-                    ESP_LOGE(TAG, "Failed to save default parameters");
+                    ESP_LOGE(TAG, "保存默认参数失败");
                 }
             }
             else
             {
-                ESP_LOGE(TAG, "Failed to parse default JSON");
+                ESP_LOGE(TAG, "解析默认JSON失败");
             }
         }
         else
         {
-            ESP_LOGE(TAG, "Failed to generate default JSON");
+            ESP_LOGE(TAG, "生成默认JSON失败");
         }
         
         // 释放锁
@@ -524,7 +525,7 @@ bool sNvsParamRestoreDefaults(void)
     }
     else
     {
-        ESP_LOGE(TAG, "Failed to acquire NVS lock");
+        ESP_LOGE(TAG, "获取NVS锁失败");
     }
 
     return bRst;

@@ -64,7 +64,7 @@ void init_netWork(void)
     // 初始化网络栈
     ret = esp_netif_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize netif: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "初始化netif失败: %s", esp_err_to_name(ret));
         return;
     }
     
@@ -177,7 +177,7 @@ void en_log_set(void)
 void app_main(void)
 {
 
-    ESP_LOGI(TAG, "ESP32 Running...");
+    ESP_LOGI(TAG, "ESP32 运行中...");
 
     sShellInit();
     mdf_mem_print_heap();

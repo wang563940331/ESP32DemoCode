@@ -25,7 +25,7 @@ static const gpio_output_config_t* get_gpio_config(int gpio_num) {
 static esp_err_t gpio_common_init(int gpio_num) {
     const gpio_output_config_t* config = get_gpio_config(gpio_num);
     if (!config) {
-        ESP_LOGE(TAG, "GPIO%d not configured in factory", gpio_num);
+        ESP_LOGE(TAG, "GPIO%d 未在工厂配置中注册", gpio_num);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -39,7 +39,7 @@ static esp_err_t gpio_common_init(int gpio_num) {
     gpio_config(&gpio_init_struct);
     
     gpio_set_level(gpio_num, config->initial_level);
-    ESP_LOGI(TAG, "GPIO%d (%s) initialized, active_level=%d", gpio_num, config->name, config->active_level);
+    ESP_LOGI(TAG, "GPIO%d (%s) 已初始化, active_level=%d", gpio_num, config->name, config->active_level);
     return ESP_OK;
 }
 
@@ -88,7 +88,7 @@ static const gpio_output_device_t gpio_output_device = {
 esp_err_t gpio_output_factory_init(int gpio_num) {
     const gpio_output_config_t* config = get_gpio_config(gpio_num);
     if (!config) {
-        ESP_LOGE(TAG, "GPIO%d is not configured in factory", gpio_num);
+        ESP_LOGE(TAG, "GPIO%d 未在工厂配置中注册", gpio_num);
         return ESP_ERR_NOT_FOUND;
     }
     return gpio_common_init(gpio_num);
@@ -98,7 +98,7 @@ esp_err_t gpio_output_factory_init(int gpio_num) {
 const gpio_output_device_t* gpio_output_factory_get_device(int gpio_num) {
     const gpio_output_config_t* config = get_gpio_config(gpio_num);
     if (!config) {
-        ESP_LOGE(TAG, "GPIO%d is not configured", gpio_num);
+        ESP_LOGE(TAG, "GPIO%d 未配置", gpio_num);
         return NULL;
     }
     return &gpio_output_device;

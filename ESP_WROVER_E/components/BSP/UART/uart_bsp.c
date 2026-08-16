@@ -166,7 +166,7 @@ static const uart_protocol_adapter_t* get_uart_adapter(uart_port_t uart_num) {
 // ==================== RS485 适配器实现 ====================
 static esp_err_t rs485_init(const uart_config_info_t* config) {
     if (config == NULL) {
-        ESP_LOGE(TAG, "Invalid RS485 config");
+        ESP_LOGE(TAG, "RS485 配置无效");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -195,10 +195,10 @@ static esp_err_t rs485_init(const uart_config_info_t* config) {
         };
         gpio_config(&en_pin_config);
         gpio_set_level(config->en_pin, 0);  // 默认接收模式
-        ESP_LOGI(TAG, "RS485 UART%d EN pin configured: GPIO%d", config->uart_num, config->en_pin);
+        ESP_LOGI(TAG, "RS485 UART%d EN引脚已配置: GPIO%d", config->uart_num, config->en_pin);
     }
 
-    ESP_LOGI(TAG, "RS485 UART%d initialized on TX:%d, RX:%d, Baudrate:%d",
+    ESP_LOGI(TAG, "RS485 UART%d 已初始化, TX:%d, RX:%d, 波特率:%d",
              config->uart_num, config->tx_pin, config->rx_pin, config->baudrate);
 
     return ESP_OK;
@@ -237,7 +237,7 @@ static esp_err_t rs485_deinit(uart_port_t uart_num) {
 // ==================== TTL 适配器实现 ====================
 static esp_err_t ttl_init(const uart_config_info_t* config) {
     if (config == NULL) {
-        ESP_LOGE(TAG, "Invalid TTL config");
+        ESP_LOGE(TAG, "TTL 配置无效");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -255,7 +255,7 @@ static esp_err_t ttl_init(const uart_config_info_t* config) {
     uart_driver_install(config->uart_num, config->rx_buffer_size, 
                         config->tx_buffer_size, config->event_queue_size, NULL, 0);
 
-    ESP_LOGI(TAG, "TTL UART%d initialized on TX:%d, RX:%d, Baudrate:%d",
+    ESP_LOGI(TAG, "TTL UART%d 已初始化, TX:%d, RX:%d, 波特率:%d",
              config->uart_num, config->tx_pin, config->rx_pin, config->baudrate);
 
     return ESP_OK;
@@ -274,7 +274,7 @@ static esp_err_t ttl_deinit(uart_port_t uart_num) {
 static esp_err_t uart_common_init(uart_port_t uart_num) {
     const uart_full_device_t* dev = get_uart_device(uart_num);
     if (!dev) {
-        ESP_LOGE(TAG, "UART%d is not configured in factory", uart_num);
+        ESP_LOGE(TAG, "UART%d 未在工厂配置中注册", uart_num);
         return ESP_ERR_NOT_FOUND;
     }
     return dev->adapter->Init(&dev->config);
@@ -283,7 +283,7 @@ static esp_err_t uart_common_init(uart_port_t uart_num) {
 static int uart_common_send(uart_port_t uart_num, const char* data, size_t len) {
     const uart_protocol_adapter_t* adapter = get_uart_adapter(uart_num);
     if (!adapter) {
-        ESP_LOGE(TAG, "No adapter found for UART%d", uart_num);
+        ESP_LOGE(TAG, "未找到 UART%d 的适配器", uart_num);
         return -1;
     }
     return adapter->Send(uart_num, data, len);
@@ -311,7 +311,7 @@ static size_t uart_common_get_buffered_data_len(uart_port_t uart_num) {
 static esp_err_t uart_common_deinit(uart_port_t uart_num) {
     const uart_protocol_adapter_t* adapter = get_uart_adapter(uart_num);
     if (!adapter) {
-        ESP_LOGE(TAG, "No adapter found for UART%d", uart_num);
+        ESP_LOGE(TAG, "未找到 UART%d 的适配器", uart_num);
         return ESP_ERR_NOT_FOUND;
     }
     return adapter->Deinit(uart_num);
@@ -321,7 +321,7 @@ static esp_err_t uart_common_deinit(uart_port_t uart_num) {
 const uart_device_t* uart_factory_get_device(uart_port_t uart_num) {
     const uart_full_device_t* dev = get_uart_device(uart_num);
     if (!dev) {
-        ESP_LOGE(TAG, "Invalid UART number: %d", uart_num);
+        ESP_LOGE(TAG, "无效的UART编号: %d", uart_num);
         return NULL;
     }
     return &dev->device;

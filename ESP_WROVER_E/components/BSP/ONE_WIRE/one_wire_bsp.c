@@ -134,7 +134,7 @@ static uint8_t ds18b20_read_byte(int gpio_num) {
 static esp_err_t ds18b20_init(int gpio_num) {
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config || config->type != ONE_WIRE_TYPE_DS18B20) {
-        ESP_LOGE(TAG, "DS18B20 GPIO%d not configured", gpio_num);
+        ESP_LOGE(TAG, "DS18B20 GPIO%d 未配置", gpio_num);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -150,7 +150,7 @@ static esp_err_t ds18b20_init(int gpio_num) {
 
     esp_err_t ret = ds18b20_reset(gpio_num);
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "DS18B20 (%s) initialized on GPIO%d", config->name, gpio_num);
+        ESP_LOGI(TAG, "DS18B20 (%s) 已在 GPIO%d 初始化", config->name, gpio_num);
         
         ds18b20_reset(gpio_num);
         ds18b20_write_byte(gpio_num, DS18B20_CMD_SKIP_ROM);
@@ -164,7 +164,7 @@ static esp_err_t ds18b20_init(int gpio_num) {
                             (resolution == 11) ? 0x5F : 0x7F;
         ds18b20_write_byte(gpio_num, config_reg);
     } else {
-        ESP_LOGE(TAG, "DS18B20 (%s) not found on GPIO%d", config->name, gpio_num);
+        ESP_LOGE(TAG, "DS18B20 (%s) 在 GPIO%d 未找到", config->name, gpio_num);
     }
 
     return ret;
@@ -214,10 +214,10 @@ static esp_err_t ds18b20_read_data(int gpio_num, one_wire_data_t* data) {
             return ESP_OK;
         }
         
-        ESP_LOGE(TAG, "DS18B20 CRC error, retry %d/%d", retry + 1, max_retries);
+        ESP_LOGE(TAG, "DS18B20 CRC错误, 重试 %d/%d", retry + 1, max_retries);
     }
     
-    ESP_LOGE(TAG, "DS18B20 CRC error");
+    ESP_LOGE(TAG, "DS18B20 CRC错误");
     return ESP_ERR_INVALID_CRC;
 }
 
@@ -348,7 +348,7 @@ static uint8_t dht11_read_byte(int gpio_num) {
 static esp_err_t dht11_init(int gpio_num) {
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config || config->type != ONE_WIRE_TYPE_DHT11) {
-        ESP_LOGE(TAG, "DHT11 GPIO%d not configured", gpio_num);
+        ESP_LOGE(TAG, "DHT11 GPIO%d 未配置", gpio_num);
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -363,9 +363,9 @@ static esp_err_t dht11_init(int gpio_num) {
     gpio_set_level(gpio_num, 1);
     esp_err_t ret = dht11_reset(gpio_num);
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "DHT11 (%s) initialized on GPIO%d", config->name, gpio_num);
+        ESP_LOGI(TAG, "DHT11 (%s) 已在 GPIO%d 初始化", config->name, gpio_num);
     } else {
-        ESP_LOGE(TAG, "DHT11 (%s) not found on GPIO%d", config->name, gpio_num);
+        ESP_LOGE(TAG, "DHT11 (%s) 在 GPIO%d 未找到", config->name, gpio_num);
     }
 
     return ret;
@@ -397,7 +397,7 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
         ret = dht11_detect_response(gpio_num);
         if (ret != ESP_OK) {
             taskEXIT_CRITICAL(&dht11_spinlock);
-            ESP_LOGE(TAG, "DHT11 reset failed=%d, retry %d/%d", ret, retry + 1, max_retries);
+            ESP_LOGE(TAG, "DHT11 复位失败=%d, 重试 %d/%d", ret, retry + 1, max_retries);
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
@@ -414,7 +414,7 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
         // 检测全零数据：DHT11未响应时总线保持高电平，读到的全是0
         // 全零的校验和虽然"通过"(0=0)，但这是假合法数据，必须拒绝
         if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 && buffer[3] == 0 && buffer[4] == 0) {
-            ESP_LOGE(TAG, "DHT11 all-zero (sensor not responding), retry %d/%d", retry + 1, max_retries);
+            ESP_LOGE(TAG, "DHT11 全零数据(传感器无响应), 重试 %d/%d", retry + 1, max_retries);
             vTaskDelay(pdMS_TO_TICKS(1000));  // 给传感器更长的恢复时间
             continue;
         }
@@ -427,11 +427,11 @@ static esp_err_t dht11_read_data(int gpio_num, one_wire_data_t* data) {
             return ESP_OK;
         }
 
-        ESP_LOGE(TAG, "DHT11 checksum error, retry %d/%d", retry + 1, max_retries);
+        ESP_LOGE(TAG, "DHT11 校验和错误, 重试 %d/%d", retry + 1, max_retries);
         vTaskDelay(pdMS_TO_TICKS(1000));  // DHT11至少需要1秒恢复时间
     }
     
-    ESP_LOGE(TAG, "DHT11 checksum error");
+    ESP_LOGE(TAG, "DHT11 校验和错误");
     return ESP_ERR_INVALID_CRC;
 }
 
@@ -477,7 +477,7 @@ static const one_wire_device_t dht11_device = {
 esp_err_t one_wire_factory_init(int gpio_num) {
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config) {
-        ESP_LOGE(TAG, "OneWire GPIO%d is not configured", gpio_num);
+        ESP_LOGE(TAG, "OneWire GPIO%d 未配置", gpio_num);
         return ESP_ERR_NOT_FOUND;
     }
     
@@ -494,7 +494,7 @@ esp_err_t one_wire_factory_init(int gpio_num) {
 const one_wire_device_t* one_wire_factory_get_device(int gpio_num) {
     const one_wire_config_t* config = get_one_wire_config(gpio_num);
     if (!config) {
-        ESP_LOGE(TAG, "OneWire GPIO%d is not configured", gpio_num);
+        ESP_LOGE(TAG, "OneWire GPIO%d 未配置", gpio_num);
         return NULL;
     }
     

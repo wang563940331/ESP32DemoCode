@@ -27,10 +27,10 @@ const char *app_get_version_full(void)
 void app_print_version_info(void)
 {
     ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "Application Version Information:");
-    ESP_LOGI(TAG, "  Git Hash:     %s", app_get_version_hash());
-    ESP_LOGI(TAG, "  Tag Version:  %s", app_get_version_tag());
-    ESP_LOGI(TAG, "  Commit Date:  %s", app_get_version_date());
-    ESP_LOGI(TAG, "  Full Version: %s", app_get_version_full());
+    ESP_LOGI(TAG, "应用程序版本信息:");
+    ESP_LOGI(TAG, "  Git哈希:     %s", app_get_version_hash());
+    ESP_LOGI(TAG, "  标签版本:    %s", app_get_version_tag());
+    ESP_LOGI(TAG, "  提交日期:    %s", app_get_version_date());
+    ESP_LOGI(TAG, "  完整版本:    %s", app_get_version_full());
     ESP_LOGI(TAG, "========================================");
 }

@@ -127,20 +127,20 @@ CJSON_PUBLIC(cJSON_bool)   cJSON_GetStringEx(const cJSON *root, const char* key,
     
     if(!root || !key || !value)
     {
-        EN_SLOGE(TAG, "key root value 为空");
+        EN_SLOGE(TAG, "键、根对象或值为空");
         return false;
     }
     
     item = cJSON_GetObjectItem(root, key);
     if(!item)
     {
-        EN_SLOGE(TAG, "key");
+        EN_SLOGE(TAG, "键不存在");
         return false;
     }
     
     if (!cJSON_IsString(item))
     {
-        EN_SLOGE(TAG, "key is not string");
+        EN_SLOGE(TAG, "键值不是字符串");
         return false;
     }
     
@@ -252,6 +252,9 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
                     break;  
                 case cStorageApCmdNvsmqttpasswd:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttpasswd, (const char *)pData);
+                    break;
+                case cStorageApCmdNvslogDays:
+                    bRst = cJSON_SetIntEx(pObj , cStorageApNvslogDays, (*(u16 *)pData));
                     break;
 
                 default:
@@ -455,6 +458,15 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     break;
+                case cStorageApCmdNvslogDays:
+                    if(!cJSON_GetIntEx(pObj, cStorageApNvslogDays, &i32Value))
+                    {
+                        EN_SLOGE(TAG, "NvslogDays 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    *((u16 *)pData) = (u16)i32Value;
+                    break;
                 default:
                     eRst = eStorageApRstParamErr;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -629,6 +641,20 @@ bool sStorageApSetNvsmqttport(u16 data)
         return(true);
     }
     return(false);
+}
+
+bool sStorageApSetNvslogDays(u16 data)
+{
+    // 日志保留天数限制在 1~90
+    if (data < 1) {
+        data = 1;
+    } else if (data > 90) {
+        data = 90;
+    }
+    if (sStorageApSet(cStorageApCmdNvslogDays, (const u8 *)&data) == eStorageApRstSuccess) {
+        return true;
+    }
+    return false;
 }
 
 bool sStorageApSetNvsmqttclient(char *data)

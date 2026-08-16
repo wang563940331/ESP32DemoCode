@@ -65,6 +65,7 @@ char g_tmpmode[20] = "";  // 温度模式（只读）
 char g_mqtt_user[64] = "";   // MQTT用户名
 char g_mqtt_passwd[64] = ""; // MQTT密码
 char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF=关闭
+uint16_t g_log_days = 7;        // SD日志保留天数(1~90)
 
 // 参数描述数组 - 集中管理所有参数
 config_param_t config_params[] = {
@@ -78,6 +79,7 @@ config_param_t config_params[] = {
     {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE, 1},
     {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE, 1},
     {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE, 2},
+    {"logdays", "日志保留天数", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_log_days), &g_log_days, 7, NULL, cStorageApCmdNvslogDays, WRITEABLE, 0},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))
 
@@ -149,9 +151,19 @@ static void generate_form_fields(char *buffer, size_t buffer_len)
                 (val == 0) ? " selected" : "");
         } else if (param->type == WIFIAP_PARAM_INT) {
             const char *input_type = "number";
-            snprintf(field_template, sizeof(field_template),
-                "<label>%s:</label>\n<input type='%s' name='%s' value='%d'%s><br>\n",
-                param->label, input_type, param->name, *(uint16_t *)param->value, readonly_attr);
+            // 日志天数增加 HTML min/max, 便于浏览器侧约束 1~90
+            if (strcmp(param->name, "logdays") == 0) {
+                snprintf(field_template, sizeof(field_template),
+                    "<label>%s(1-90):</label>\n"
+                    "<input type='%s' name='%s' value='%d' min='1' max='90'%s><br>\n",
+                    param->label, input_type, param->name,
+                    *(uint16_t *)param->value, readonly_attr);
+            } else {
+                snprintf(field_template, sizeof(field_template),
+                    "<label>%s:</label>\n<input type='%s' name='%s' value='%d'%s><br>\n",
+                    param->label, input_type, param->name,
+                    *(uint16_t *)param->value, readonly_attr);
+            }
         } else {
             const char *input_type = "text";
             snprintf(field_template, sizeof(field_template),
@@ -343,7 +355,16 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
     }
     
     if (param->type == WIFIAP_PARAM_INT && value) {
-        *(uint16_t *)param->value = atoi(value);
+        int v = atoi(value);
+        // 日志保留天数强制钳位到 1~90
+        if (strcmp(param->name, "logdays") == 0) {
+            if (v < 1) {
+                v = 1;
+            } else if (v > 90) {
+                v = 90;
+            }
+        }
+        *(uint16_t *)param->value = (uint16_t)v;
     } else if (param->type == WIFIAP_PARAM_TOGGLE && value) {
         *(uint8_t *)param->value = (uint8_t)atoi(value);
     } else if (value) {
@@ -371,6 +392,9 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
                 break;
             case cStorageApCmdNvsmqttport:
                 sStorageApSetNvsmqttport(*(uint16_t *)param->value);
+                break;
+            case cStorageApCmdNvslogDays:
+                sStorageApSetNvslogDays(*(uint16_t *)param->value);
                 break;
             case cStorageApCmdSsid:
                 sStorageApSetssid((char *)param->value);
@@ -435,7 +459,7 @@ static esp_err_t save_handler(httpd_req_t *req)
         }
     }
     buf[received] = '\0';
-    ESP_LOGI(TAG, "Received data: %s", buf);
+    ESP_LOGI(TAG, "收到数据: %s", buf);
     
     /*
      * 批量保存策略:
@@ -595,7 +619,7 @@ esp_err_t wifi_ap_init(void)
     esp_err_t ret = ESP_OK;
     char sn[20] = {0};
     sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
-    ESP_LOGI(TAG, "wifi APmode初始化");
+    ESP_LOGI(TAG, "WiFi AP模式初始化");
    // ====== 添加国家代码配置 ======
     wifi_country_t country = {
         .cc = "CN",
@@ -604,7 +628,7 @@ esp_err_t wifi_ap_init(void)
         .policy = WIFI_COUNTRY_POLICY_AUTO,
     };
     ESP_ERROR_CHECK(esp_wifi_set_country(&country));
-    ESP_LOGI(TAG, "WiFi country set to: %s", country.cc);
+    ESP_LOGI(TAG, "WiFi国家代码已设置为: %s", country.cc);
     
 
     // 注册事件处理程序
@@ -631,7 +655,7 @@ esp_err_t wifi_ap_init(void)
     // 应用WiFi配置
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     
-    ESP_LOGI(TAG, "wifi APmod SSID: %s, password: %s", sn, AP_PASS);
+    ESP_LOGI(TAG, "WiFi AP SSID: %s, 密码: %s", sn, AP_PASS);
     
     // 启动web服务器
     start_webserver();

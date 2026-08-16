@@ -314,14 +314,14 @@ void print_device_info(void) {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
     
-    EN_SLOGI(TAG,"=== ESP32 Device Info ===");
-    EN_SLOGI(TAG,"MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", 
+    EN_SLOGI(TAG,"=== ESP32 设备信息 ===");
+    EN_SLOGI(TAG,"MAC地址: %02X:%02X:%02X:%02X:%02X:%02X", 
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    EN_SLOGI(TAG,"Unique ID: %02X%02X%02X%02X%02X%02X", 
+    EN_SLOGI(TAG,"唯一ID: %02X%02X%02X%02X%02X%02X", 
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    EN_SLOGI(TAG,"Chip Model: ESP32");
-    EN_SLOGI(TAG,"Cores: %d", chip_info.cores);
-    EN_SLOGI(TAG,"Revision: %d", chip_info.revision);
+    EN_SLOGI(TAG,"芯片型号: ESP32");
+    EN_SLOGI(TAG,"核心数: %d", chip_info.cores);
+    EN_SLOGI(TAG,"修订版本: %d", chip_info.revision);
     
     // 将MAC地址存储到全局结构体
     setg_mac((char*)mac);
@@ -553,7 +553,7 @@ static void smartconfig_example_task(void * parm)
     while (1) {
         uxBits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECT_BIT | ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY);
         if(uxBits & WIFI_CONNECT_BIT) {
-            ESP_LOGI(TAG, "WiFi Connected to ap");
+            ESP_LOGI(TAG, "WiFi已连接AP");
         }
         if(uxBits & ESPTOUCH_DONE_BIT) {    //收到smartconfig配网完成通知
             ESP_LOGI(TAG, "收到smartconfig配网完成通知");
@@ -747,7 +747,7 @@ esp_err_t wifi_sta_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );   //设置wifi配置
     ESP_ERROR_CHECK(esp_wifi_start() );                         //启动WIFI
     
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
+    ESP_LOGI(TAG, "wifi STA 初始化流程完成");
     return ESP_OK;
 }
 #endif
@@ -845,13 +845,13 @@ int simple_init(void)
     bRst = bRst & sShellCmdRegister(&setMQTT);
     bRst = bRst & sShellCmdRegister(&setMQTTUser);
     bRst = bRst & sShellCmdRegister(&setMQTTclient);
-    ESP_LOGI(TAG, "simple_init AT CMD bRst: %d", bRst);
+    ESP_LOGI(TAG, "simple_init AT命令注册结果: %d", bRst);
 
     TaskHandle_t TaskHandle = NULL;
     xTaskCreatePinnedToCore(simple_task,"my_simple",4096,NULL,5,&TaskHandle,0);
     if(!TaskHandle)
     {
-         ESP_LOGI(TAG,"Task created failed!\n");
+         ESP_LOGI(TAG,"任务创建失败!\n");
         return 0;
     }
     return 1;

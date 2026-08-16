@@ -100,11 +100,11 @@ void motorStateMachine()
         if(expressionlod == POWERON)
         {
             send_ctrlacl("开机执行");
-            ESP_LOGI(TAG, "POWERON");
+            ESP_LOGI(TAG, "开机");
         }
         else if(expressionlod == POWEROF)
         {
-            ESP_LOGI(TAG, "POWEROF");
+            ESP_LOGI(TAG, "关机");
         }
     }
 
@@ -199,7 +199,7 @@ int pwm_init(void)
     xTaskCreatePinnedToCore(motor_task,"my_pwm", 4096,NULL,5,&motor_TaskHandle,0);
     if(!motor_TaskHandle)
     {
-         ESP_LOGI(TAG,"Task created failed!\n");
+         ESP_LOGI(TAG,"任务创建失败!\n");
         return 0;
     }
     return 1;

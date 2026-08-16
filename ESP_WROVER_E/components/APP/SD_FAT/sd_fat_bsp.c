@@ -250,7 +250,7 @@ static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
                     ESP_LOGI(TAG, "%s (%.2f MB)", entry->d_name, (float)size / (1024 * 1024));
                 }
             } else {
-                ESP_LOGI(TAG, "%s (size unknown)", entry->d_name);
+                ESP_LOGI(TAG, "%s (大小未知)", entry->d_name);
             }
         }
     }

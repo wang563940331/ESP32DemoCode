@@ -39,21 +39,21 @@ bool mp_init(memory_pool_t* pool, uint16_t size, size_t buff_size, bool use_psra
 {
     /* 参数有效性检查 */
     if (!pool || size == 0 || buff_size == 0) {
-        ESP_LOGE(TAG, "Invalid parameters: pool=%p, size=%u, buff_size=%u", 
+        ESP_LOGE(TAG, "参数无效: pool=%p, size=%u, buff_size=%u", 
                  (void*)pool, size, (unsigned int)buff_size);
         return false;
     }
 
     /* 检查是否已初始化 */
     if (pool->pool_start) {
-        ESP_LOGW(TAG, "Memory pool already initialized");
+        ESP_LOGW(TAG, "内存池已初始化");
         return true;
     }
 
     /* 创建互斥锁，保证线程安全 */
     pool->mutex = xSemaphoreCreateMutex();
     if (!pool->mutex) {
-        ESP_LOGE(TAG, "Failed to create mutex");
+        ESP_LOGE(TAG, "创建互斥锁失败");
         return false;
     }
 
@@ -63,8 +63,8 @@ bool mp_init(memory_pool_t* pool, uint16_t size, size_t buff_size, bool use_psra
     /* 分配节点数组 */
     pool->pool_start = (mp_node_t*)heap_caps_malloc(size * sizeof(mp_node_t), caps);
     if (!pool->pool_start) {
-        ESP_LOGE(TAG, "Failed to allocate memory pool %s", 
-                 use_psram ? "from PSRAM" : "from internal RAM");
+        ESP_LOGE(TAG, "内存池分配失败 %s", 
+                 use_psram ? "(PSRAM)" : "(内部RAM)");
         vSemaphoreDelete((SemaphoreHandle_t)pool->mutex);
         return false;
     }
@@ -85,8 +85,8 @@ bool mp_init(memory_pool_t* pool, uint16_t size, size_t buff_size, bool use_psra
     pool->pool_size = size;
     pool->used_count = 0;
 
-    ESP_LOGI(TAG, "Memory pool initialized with %u nodes, buff size: %u, %s", 
-             size, (unsigned int)buff_size, use_psram ? "PSRAM" : "internal RAM");
+    ESP_LOGI(TAG, "内存池已初始化: %u 个节点, 缓冲区大小: %u, %s", 
+             size, (unsigned int)buff_size, use_psram ? "PSRAM" : "内部RAM");
     return true;
 }
 
@@ -104,13 +104,13 @@ mp_node_t* mp_alloc(memory_pool_t* pool, size_t data_size)
 {
     /* 参数有效性检查 */
     if (!pool || !pool->mutex || !pool->pool_start) {
-        ESP_LOGW(TAG, "Memory pool not initialized");
+        ESP_LOGW(TAG, "内存池未初始化");
         return NULL;
     }
 
     /* 获取互斥锁 */
     if (xSemaphoreTake((SemaphoreHandle_t)pool->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to take mutex");
+        ESP_LOGW(TAG, "获取互斥锁失败");
         return NULL;
     }
 
@@ -128,7 +128,7 @@ mp_node_t* mp_alloc(memory_pool_t* pool, size_t data_size)
             memset(node->buff, 0, node->buff_size);
         } else if (data_size > node->buff_size) {
             /* 数据大小超过缓冲区容量，放回节点并返回NULL */
-            ESP_LOGW(TAG, "Data size %u exceeds buffer size %u", 
+            ESP_LOGW(TAG, "数据大小 %u 超过缓冲区大小 %u", 
                      (unsigned int)data_size, (unsigned int)node->buff_size);
             pool->free_list = node;
             pool->used_count--;
@@ -159,7 +159,7 @@ void mp_free(memory_pool_t* pool, mp_node_t* node)
 
     /* 获取互斥锁 */
     if (xSemaphoreTake((SemaphoreHandle_t)pool->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to take mutex");
+        ESP_LOGW(TAG, "获取互斥锁失败");
         return;
     }
 
@@ -194,7 +194,7 @@ void mp_destroy(memory_pool_t* pool)
 
     /* 获取互斥锁 */
     if (xSemaphoreTake((SemaphoreHandle_t)pool->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to take mutex");
+        ESP_LOGW(TAG, "获取互斥锁失败");
         return;
     }
 
@@ -218,7 +218,7 @@ void mp_destroy(memory_pool_t* pool)
     vSemaphoreDelete((SemaphoreHandle_t)pool->mutex);
     pool->mutex = NULL;
 
-    ESP_LOGI(TAG, "Memory pool destroyed");
+    ESP_LOGI(TAG, "内存池已销毁");
 }
 
 /**

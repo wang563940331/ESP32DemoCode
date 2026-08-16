@@ -72,11 +72,11 @@ static void sensor_task(void *pvParameters)
         retry++;
         s_sensor = one_wire_factory_get_device(GPIO_NUM_27);
         if (s_sensor == NULL) {
-            ESP_LOGE(TAG, "传感器设备获取失败 (retry %d/30)", retry);
+            ESP_LOGE(TAG, "传感器设备获取失败 (重试 %d/30)", retry);
         } else {
             esp_err_t ret = s_sensor->Init(GPIO_NUM_27);
             if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "传感器初始化失败 (retry %d/30)", retry);
+                ESP_LOGE(TAG, "传感器初始化失败 (重试 %d/30)", retry);
                 s_sensor = NULL;
             }
         }

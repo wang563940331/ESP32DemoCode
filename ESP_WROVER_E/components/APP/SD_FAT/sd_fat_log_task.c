@@ -30,8 +30,27 @@ static const char* TAG = "sd_fat_log_task";
 #define EPOCH_YEAR 1970
 /* SD卡挂载路径 */
 #define SD_MOUNT_POINT "/sdcard"
-/* 日志文件最大保留数量 */
-#define MAX_LOG_FILES 7
+/* 日志保留天数默认值及合法范围 */
+#define LOG_DAYS_DEFAULT 7
+#define LOG_DAYS_MIN     1
+#define LOG_DAYS_MAX     90
+
+/**
+ * @brief 读取系统参数中的日志保留天数, 并钳位到 1~90
+ */
+static int get_max_log_files(void)
+{
+    uint16_t days = LOG_DAYS_DEFAULT;
+    if (sStorageApGet(cStorageApCmdNvslogDays, sizeof(days), (u8 *)&days) != eStorageApRstSuccess) {
+        days = LOG_DAYS_DEFAULT;
+    }
+    if (days < LOG_DAYS_MIN) {
+        days = LOG_DAYS_MIN;
+    } else if (days > LOG_DAYS_MAX) {
+        days = LOG_DAYS_MAX;
+    }
+    return (int)days;
+}
 
 /* 日志缓冲区读写互斥锁 */
 static SemaphoreHandle_t WriteLogBuffMutex = NULL;
@@ -341,7 +360,7 @@ static bool find_latest_log_file(char* path, size_t path_size)
     
     DIR* dir = opendir(SD_MOUNT_POINT);
     if (!dir) {
-        ESP_LOGW(TAG, "Failed to open SD card directory: %s", SD_MOUNT_POINT);
+        ESP_LOGW(TAG, "无法打开SD卡目录: %s", SD_MOUNT_POINT);
         return false;
     }
 
@@ -355,7 +374,7 @@ static bool find_latest_log_file(char* path, size_t path_size)
             uint8_t mon = 0, day = 0;
             
             if (parse_log_filename(name, &year, &mon, &day)) {
-                ESP_LOGD(TAG, "Found log file: %s -> %u-%02u-%02u", name, year, mon, day);
+                ESP_LOGD(TAG, "找到日志文件: %s -> %u-%02u-%02u", name, year, mon, day);
                 
                 if (year > latest_year || 
                     (year == latest_year && mon > latest_mon) ||
@@ -364,7 +383,7 @@ static bool find_latest_log_file(char* path, size_t path_size)
                     latest_mon = mon;
                     latest_day = day;
                     strlcpy(latest_file, name, sizeof(latest_file));
-                    ESP_LOGD(TAG, "Update latest: %s", latest_file);
+                    ESP_LOGD(TAG, "更新最新日志文件: %s", latest_file);
                 }
             }
         }
@@ -377,12 +396,12 @@ static bool find_latest_log_file(char* path, size_t path_size)
         return true;
     }
 
-    ESP_LOGI(TAG, "No existing log file found with date in name");
+    ESP_LOGI(TAG, "没有找到日期在文件名中的日志文件");
     return false;
 }
 
 /**
- * @brief 限制日志文件数量，超过 MAX_LOG_FILES 则删除最早的文件
+ * @brief 限制日志文件数量，超过系统参数 logDays 则删除最早的文件
  *
  * @param pending_new 即将创建的新文件数量(跨天切换时传1, 用于预留位置)
  *
@@ -392,7 +411,11 @@ static bool find_latest_log_file(char* path, size_t path_size)
 static void enforce_max_log_files(int pending_new)
 {
     int deleted = 0;
-    int target_max = MAX_LOG_FILES - pending_new;  /* 为新文件预留位置 */
+    /* 每次清理都重新从 NVS 读取 APmod 配置的 logDays */
+    int max_files = get_max_log_files();
+    int target_max = max_files - pending_new;  /* 为新文件预留位置 */
+
+    ESP_LOGI(TAG, "日志保留检查: 保留天数=%d, 预留位置=%d", max_files, pending_new);
 
     if (target_max < 0) {
         target_max = 0;
@@ -441,13 +464,15 @@ static void enforce_max_log_files(int pending_new)
 
         /* 删除最早的文件，然后继续检查 */
         if (oldest_file[0] != '\0') {
-            ESP_LOGI(TAG, "Log files: %d > target %d (max %d, pending %d), deleting oldest: %s",
-                     file_count, target_max, MAX_LOG_FILES, pending_new, oldest_file);
+            ESP_LOGI(TAG, "日志文件: %d > 目标 %d (最大 %d, 预留 %d), 删除最早的: %s",
+                     file_count, target_max, max_files, pending_new, oldest_file);
             if (s_sd_fat_ops && s_sd_fat_ops->delete_file("SD_CARD", oldest_file) == ESP_OK) {
                 deleted++;
-                ESP_LOGI(TAG, "Oldest log file deleted: %s", oldest_file);
+                ESP_LOGI(TAG, "删除最早的日志文件: %s", oldest_file);
+                /* 大文件删除较慢, 让出CPU避免触发任务看门狗 */
+                vTaskDelay(pdMS_TO_TICKS(50));
             } else {
-                ESP_LOGW(TAG, "Failed to delete oldest log file: %s", oldest_file);
+                ESP_LOGW(TAG, "无法删除最早的日志文件: %s", oldest_file);
                 break;
             }
         } else {
@@ -456,7 +481,7 @@ static void enforce_max_log_files(int pending_new)
     }
 
     if (deleted > 0) {
-        ESP_LOGI(TAG, "Log rotation complete: %d file(s) deleted", deleted);
+        ESP_LOGI(TAG, "日志清理完成: %d 个文件被删除, 保留天数=%d", deleted, max_files);
     }
 }
 
@@ -622,7 +647,7 @@ static void sdCardLogTask(void* arg)
             if (year == EPOCH_YEAR) {
                 /* 系统时间未同步，使用epoch时间 */
                 is_epoch_time = true;
-                ESP_LOGW(TAG, "系统时间是epoch (1970)，正在搜索最新日志文件");
+                ESP_LOGW(TAG, "系统时间为1970-01-01，正在搜索最新日志文件");
                 
                 if (find_latest_log_file(path, sizeof(path))) {
                     if (parse_log_filename(path, &last_year, &last_mon, &last_day)) {
@@ -630,7 +655,7 @@ static void sdCardLogTask(void* arg)
                                  path, last_year, last_mon, last_day);
                     }
                 } else {
-                    ESP_LOGI(TAG, "No existing log file found, creating new file with epoch date");
+                    ESP_LOGI(TAG, "没有找到日期在文件名中的日志文件, 创建新的文件");
                     snprintf(path, sizeof(path), "%04d-%02d-%02d.log", year, mon, tm_now.tm_mday);
                     last_day = tm_now.tm_mday;
                     last_mon = mon;
@@ -655,6 +680,7 @@ static void sdCardLogTask(void* arg)
             last_day = tm_now.tm_mday;
             last_mon = mon;
             last_year = year;
+            /* 重新读取 APmod/NVS 的 logDays 后清理超限文件 */
             enforce_max_log_files(0);
         } else if (!is_epoch_time && ((last_day != tm_now.tm_mday) || (last_mon != mon) || (last_year != year))) {
             /* 日期变更，切换到新日志文件 */
@@ -664,7 +690,7 @@ static void sdCardLogTask(void* arg)
             last_mon = mon;
             last_year = year;
            
-            /* 限制日志文件数量，超过MAX_LOG_FILES则删除最早的 */
+            /* 跨天时重新获取 logDays 参数并清理超限旧日志 */
             enforce_max_log_files(1);
         }
 
@@ -715,13 +741,13 @@ static void sdCardLogTask(void* arg)
         if (batch_count > 0 && total_len > 0) {
             esp_err_t ret = s_sd_fat_ops->append_file("SD_CARD", path, batch_buffer, total_len);
             if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to append to file %s", path);
+                ESP_LOGE(TAG, "无法追加日志到文件: %s", path);
             }else {
                 uint16_t pool_total = mp_get_pool_size(&log_pool);
                 uint16_t pool_used = mp_get_used_count(&log_pool);
                 if(pool_used>=2)
                 {
-                    ESP_LOGW(TAG, "Append file success: %s, size: %u bytes, pool: %u/%u (used/total)", 
+                    ESP_LOGW(TAG, "追加日志到文件: %s, 大小: %u 字节, 内存池: %u/%u (已用/总数)", 
                     path, (unsigned int)total_len, pool_used, pool_total);
                 }
   
@@ -735,7 +761,7 @@ static void sdCardLogTask(void* arg)
             uint32_t dropped_count = sd_fat_log_get_dropped_count();
             uint32_t dropped_since_last = dropped_count - last_dropped_count;
             if (dropped_since_last > 0) {
-                ESP_LOGW(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
+                ESP_LOGE(TAG, "丢弃日志: %u 次, 总计: %u 次", dropped_since_last, dropped_count);
             } else {
                 // ESP_LOGI(TAG, "Log dropped: %u since last check, total: %u", dropped_since_last, dropped_count);
             }
@@ -752,7 +778,7 @@ static void sdCardLogTask(void* arg)
             if (usage_rate > 0.8) {
                 // 高水位：内存池使用超过80%，立即写入，不延迟
                 delay_ms = 0;
-                ESP_LOGW(TAG, "High pool usage: %u/%u (%.0f%%), forcing immediate write", 
+                ESP_LOGW(TAG, "内存池使用率过高: %u/%u (%.0f%%), 强制立即写入", 
                          pool_used, pool_total, usage_rate * 100);
             } else if (usage_rate > 0.5) {
                 // 中水位：内存池使用超过50%，缩短延迟
@@ -784,14 +810,14 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
 {
     bool bRst= false;
     if (!config || !ops) {
-        ESP_LOGE(TAG, "Invalid config or ops parameter");
+        ESP_LOGE(TAG, "参数无效");
         return ESP_ERR_INVALID_ARG;
     }
 
     /* 创建日志缓冲区读写互斥锁 */
     WriteLogBuffMutex = xSemaphoreCreateMutex();
     if (!WriteLogBuffMutex) {
-        ESP_LOGE(TAG, "Failed to create mutex");
+        ESP_LOGE(TAG, "无法创建互斥锁");
         return ESP_FAIL;
     }
 
@@ -801,14 +827,14 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
 
     /* 初始化内存池（使用队列大小作为池大小） */
     if (!sd_fat_log_pool_init(config->queue_size)) {
-        ESP_LOGE(TAG, "Failed to initialize memory pool");
+        ESP_LOGE(TAG, "无法初始化内存池");
         vSemaphoreDelete(WriteLogBuffMutex);
         return ESP_FAIL;
     }
 
     /* 初始化SD卡日志缓冲区 */
     if (!sdCardBuffInit()) {
-        ESP_LOGE(TAG, "Failed to initialize SD card buffer");
+        ESP_LOGE(TAG, "无法初始化SD卡缓冲区");
         vSemaphoreDelete(WriteLogBuffMutex);
         return ESP_FAIL;
     }
@@ -816,7 +842,7 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
     /* 创建SD卡日志任务 */
     if (xTaskCreate(sdCardLogTask, "sdCardLogTask", config->task_stack_size, NULL,
                     config->task_priority, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create sdCardLogTask");
+        ESP_LOGE(TAG, "无法创建SD卡日志任务");
         vSemaphoreDelete(WriteLogBuffMutex);
         free(sdCardbuffer);
         return ESP_FAIL;
@@ -827,6 +853,6 @@ esp_err_t sd_fat_log_task_init(const sd_fat_log_config_t* config, const sd_fat_o
 
 
     bRst &= sShellCmdRegister(&readsd);
-    ESP_LOGI(TAG, " SHELL AT CMD 注册结果: %d", bRst);
+    ESP_LOGI(TAG, "SHELL AT命令注册结果: %d", bRst);
     return ESP_OK;
 }
