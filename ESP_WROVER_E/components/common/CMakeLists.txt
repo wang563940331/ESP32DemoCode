@@ -1,4 +1,4 @@
-# common：编译期配置与版本信息，供 main/APP/BSP 共享，避免 main↔APP 循环依赖
+# common：编译期配置与版本信息，供 main/APP 共享（无运行时基础设施）
 set(srcs
         version.c
         )

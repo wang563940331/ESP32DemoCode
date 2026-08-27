@@ -13,6 +13,9 @@ include(${CMAKE_CURRENT_LIST_DIR}/WIFI_AP/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/SD_FAT/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/LED/CMakeLists.txt)
 
+# APP 直接使用 UTILITY 头文件（event_bus、utility 等）
+list(APPEND APP_REQUIRES UTILITY)
+
 # 合并各子模块 REQUIRES 并去重
 list(REMOVE_DUPLICATES APP_REQUIRES)
 

@@ -1,0 +1,9 @@
+# EVENT_BUS 子模块：全局发布-订阅（观察者模式）
+list(APPEND UTILITY_SRCS
+    ${CMAKE_CURRENT_LIST_DIR}/event_bus.c
+)
+list(APPEND UTILITY_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})
+list(APPEND UTILITY_REQUIRES
+    freertos
+    log
+)

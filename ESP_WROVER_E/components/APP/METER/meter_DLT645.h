@@ -22,7 +22,9 @@
 #include "esp_wifi_types.h"
 #include "esp_smartconfig.h"
 #include "mqtt_client.h"
+#include "meter_DLT645.h"
 #include "driver/uart.h"
+#include "event_payloads.h"
 
 #define ENERGE_DI       0x00000000
 #define VOLT_A_DI       0x00010102
@@ -43,28 +45,6 @@
 
 // 时间戳有效性阈值: 1000000000 ≈ 2001-09-09, 用于判断SNTP是否已同步
 #define PEAK_TIME_VALID_MIN  1000000000
-
-typedef struct {
-    float peak_power;       // 窗口内最大瞬时功率 (W)
-    uint32_t peak_time;     // 峰值记录时的Unix时间戳
-} PowerPeakWindow_t;
-
-typedef struct {
-    float Totol_Energy;
-    float VolageA;
-    float VolageEVEN;
-    float CurrentA;
-    float CurrentEVEN;
-    float PowerPA;
-    float PowerEVEN;
-    float Frequency;
-    // 各时间窗口瞬时功率峰值
-    PowerPeakWindow_t peak_3min;
-    PowerPeakWindow_t peak_1hour;
-    PowerPeakWindow_t peak_1day;
-    PowerPeakWindow_t peak_7day;
-    PowerPeakWindow_t peak_1month;
-} MeterData_t;
 
 extern MeterData_t g_meter_data;
 

@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include "esp_err.h"
 #include "sd_fat_ops.h"
-#include "shell.h"
 
 #define FILE_FIRMWARE_UPDATE_PATH			"/sdcard/update"
 
@@ -153,5 +153,18 @@ void sd_fat_log_write(sd_fat_log_level_t level, const char* tag, const char* for
  * @param ... 可变参数
  */
 void sd_fat_log_buffer_write(int level, const char* tag, const char* file, int line, const char* format, ...);
+
+/**
+ * @brief 设置 SD 卡 Shell 读文件进行中标志（readsd 时暂停日志写入）
+ * @param in_progress true 正在读取，false 读取结束
+ * @return 无
+ */
+void sd_fat_log_set_read_in_progress(bool in_progress);
+
+/**
+ * @brief 查询是否正在通过 Shell 读取 SD 卡文件
+ * @return true 读取中，false 空闲
+ */
+bool sd_fat_log_is_read_in_progress(void);
 
 #endif

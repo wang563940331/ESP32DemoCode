@@ -8,11 +8,13 @@ set(BSP_REQUIRES "")
 # 按模块 include 子目录 CMake 片段（顺序不影响编译，便于阅读）
 include(${CMAKE_CURRENT_LIST_DIR}/EXIT/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/PWM/CMakeLists.txt)
-include(${CMAKE_CURRENT_LIST_DIR}/UTILITY/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/PARAM/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/UART/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/GPIO_OUTPUT/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/ONE_WIRE/CMakeLists.txt)
+
+# BSP 依赖全局工具组件 UTILITY（utility/event_bus/shell/my_log）
+list(APPEND BSP_REQUIRES UTILITY common)
 
 # APP 层 HTTP/SD 等仍通过 BSP 间接使用，保留原有公共依赖
 list(APPEND BSP_REQUIRES

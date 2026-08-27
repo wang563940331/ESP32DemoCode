@@ -1,0 +1,9 @@
+# MEMORY_POOL 子模块：PSRAM/内部 RAM 预分配内存池
+list(APPEND UTILITY_SRCS
+    ${CMAKE_CURRENT_LIST_DIR}/memory_pool.c
+)
+list(APPEND UTILITY_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})
+list(APPEND UTILITY_REQUIRES
+    freertos
+    log
+)

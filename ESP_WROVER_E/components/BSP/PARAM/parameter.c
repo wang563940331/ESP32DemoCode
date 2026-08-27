@@ -2,6 +2,7 @@
 #include "parameter.h"
 #include "utility.h"
 #include "esp_heap_caps.h"
+#include "shell_cmd_param.h"
 static const char *TAG = "parameter";
 
 stNvsCache_t stNvsCache;
@@ -463,6 +464,8 @@ bool NVS_init(void)
 
     //7:检查参数
     sNvsParamCheck();
+
+    shell_cmd_param_register();
 
     return bRst;
 }

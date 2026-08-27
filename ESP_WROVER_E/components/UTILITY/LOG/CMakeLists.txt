@@ -1,0 +1,2 @@
+# LOG 子模块：自定义日志宏头文件（无 .c 源文件）
+list(APPEND UTILITY_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})

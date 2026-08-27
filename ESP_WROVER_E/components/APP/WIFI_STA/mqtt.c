@@ -20,9 +20,10 @@
 #include "parameterSet.h"
 #include "esp_heap_caps.h"
 #include "wifi_ap.h"
-#include "meter_DLT645.h"
-#include "sensor_task.h"
 #include "app_config.h"
+#include "event_bus.h"
+#include "event_payloads.h"
+#include <string.h>
 TaskHandle_t myTaskHandle = NULL;
 static const char*TAG = "mqtt";
 //MQTT客户端操作句柄
@@ -30,9 +31,14 @@ static esp_mqtt_client_handle_t     s_mqtt_client = NULL;
 //MQTT连接标志
 static bool   s_is_mqtt_connected = false;
 
-static eControl Start_once=POWEROF;
+/** 观察者模式：MQTT 本地缓存，由 Event Bus 回调更新 */
+static SensorData_t s_sensor_cache = {
+    .temperature = -200.0f,
+    .humidity = -1.0f,
+};
+static MeterData_t s_meter_cache = {0};
 
-extern MeterData_t g_meter_data;
+static eControl Start_once=POWEROF;
 
 // 电量区间环形缓冲区 (持久化至 NVS data 分组)
 // 每个点 = 一个采样间隔的用电量(kWh) + 区间结束时间；满30点后覆盖最旧
@@ -188,12 +194,14 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
             initialize_sntp();
             ESP_LOGI(TAG, "MQTT 连接成功");
             s_is_mqtt_connected = true;
+            event_publish(EVENT_MQTT_CONNECTED, NULL, 0);
             //连接成功后，订阅测试主题
             esp_mqtt_client_subscribe_single(s_mqtt_client,MQTT_SUBSCRIBE_TOPIC,1);
             break;
         case MQTT_EVENT_DISCONNECTED://连接断开
             ESP_LOGI(TAG, "MQTT 连接断开");
             s_is_mqtt_connected = false;
+            event_publish(EVENT_MQTT_DISCONNECTED, NULL, 0);
             break;
         case MQTT_EVENT_SUBSCRIBED://收到订阅消息ACK
             ESP_LOGI(TAG, "MQTT 订阅确认, msg_id=%d", event->msg_id);
@@ -434,34 +442,34 @@ void send_head(const char *data) {
     // 添加字段：headid
     cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
     // 添加字段：temperature（精确到1位小数）
-    if (g_sensor_data.temperature != -200) {
-        snprintf(str, sizeof(str), "%.2f", g_sensor_data.temperature);
+    if (s_sensor_cache.temperature != -200) {
+        snprintf(str, sizeof(str), "%.2f", s_sensor_cache.temperature);
         cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
     }
     // 添加字段：humidity（仅在有效时添加）
-    if (g_sensor_data.humidity >= 0) {
+    if (s_sensor_cache.humidity >= 0) {
         memset(str, 0, sizeof(str));
-        snprintf(str, sizeof(str), "%.2f", g_sensor_data.humidity);
+        snprintf(str, sizeof(str), "%.2f", s_sensor_cache.humidity);
         cJSON_AddItemToObject(root, "humidity", cJSON_CreateString(str));
     }
-    if (g_meter_data.VolageA != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.VolageA);
+    if (s_meter_cache.VolageA != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.VolageA);
         cJSON_AddItemToObject(root, "VolageA", cJSON_CreateString(str));
     }
-    if (g_meter_data.CurrentA != 0) {
-        snprintf(str, sizeof(str), "%.3f", g_meter_data.CurrentA);
+    if (s_meter_cache.CurrentA != 0) {
+        snprintf(str, sizeof(str), "%.3f", s_meter_cache.CurrentA);
         cJSON_AddItemToObject(root, "CurrentA", cJSON_CreateString(str));
     }
-    if (g_meter_data.PowerPA != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.PowerPA);
+    if (s_meter_cache.PowerPA != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.PowerPA);
         cJSON_AddItemToObject(root, "PowerPA", cJSON_CreateString(str));
     }
-    if (g_meter_data.Frequency != 0) {
-        snprintf(str, sizeof(str), "%.2f", g_meter_data.Frequency);
+    if (s_meter_cache.Frequency != 0) {
+        snprintf(str, sizeof(str), "%.2f", s_meter_cache.Frequency);
         cJSON_AddItemToObject(root, "Frequency", cJSON_CreateString(str));
     }   
-    if (g_meter_data.Totol_Energy != 0) {
-        snprintf(str, sizeof(str), "%.2f", g_meter_data.Totol_Energy);
+    if (s_meter_cache.Totol_Energy != 0) {
+        snprintf(str, sizeof(str), "%.2f", s_meter_cache.Totol_Energy);
         cJSON_AddItemToObject(root, "Totol_Energy", cJSON_CreateString(str));
     }
     // 每日用电量上报 (基于每天00:00快照)
@@ -470,24 +478,24 @@ void send_head(const char *data) {
     // 添加字段：time
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
     // 各时间窗口瞬时功率峰值
-    if (g_meter_data.peak_3min.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_3min.peak_power);
+    if (s_meter_cache.peak_3min.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_3min.peak_power);
         cJSON_AddItemToObject(root, "PowerPeak_3min", cJSON_CreateString(str));
     }
-    if (g_meter_data.peak_1hour.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1hour.peak_power);
+    if (s_meter_cache.peak_1hour.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1hour.peak_power);
         cJSON_AddItemToObject(root, "PowerPeak_1h", cJSON_CreateString(str));
     }
-    if (g_meter_data.peak_1day.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1day.peak_power);
+    if (s_meter_cache.peak_1day.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1day.peak_power);
         cJSON_AddItemToObject(root, "PowerPeak_1d", cJSON_CreateString(str));
     }
-    if (g_meter_data.peak_7day.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_7day.peak_power);
+    if (s_meter_cache.peak_7day.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_7day.peak_power);
         cJSON_AddItemToObject(root, "PowerPeak_7d", cJSON_CreateString(str));
     }
-    if (g_meter_data.peak_1month.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", g_meter_data.peak_1month.peak_power);
+    if (s_meter_cache.peak_1month.peak_power != 0) {
+        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1month.peak_power);
         cJSON_AddItemToObject(root, "PowerPeak_1m", cJSON_CreateString(str));
     }
     // 使用外部RAM存储JSON字符串
@@ -640,7 +648,7 @@ static void energy_history_load_from_nvs(void)
         g_energy_history.index = (uint8_t)(cnt - 1);
         if (!g_energy_history.has_baseline && cnt > 0) {
             /* 无基准时用当前电表值，避免重启后第一段用电异常偏大 */
-            g_energy_history.last_total = energy_round3(g_meter_data.Totol_Energy);
+            g_energy_history.last_total = energy_round3(s_meter_cache.Totol_Energy);
             g_energy_history.has_baseline = (g_energy_history.last_total > 0);
         }
         if (g_energy_history.last_sample_ts == 0 && cnt > 0) {
@@ -729,7 +737,7 @@ static void energy_history_update(void)
         return;
     }
 
-    if (g_meter_data.Totol_Energy == 0) {
+    if (s_meter_cache.Totol_Energy == 0) {
         return;
     }
 
@@ -737,7 +745,7 @@ static void energy_history_update(void)
 #error "ENERGY_HISTORY_INTERVAL_MINUTES must be >= 1"
 #endif
     const uint32_t interval_sec = (uint32_t)ENERGY_HISTORY_INTERVAL_MINUTES * 60U;
-    float cur_total = energy_round3(g_meter_data.Totol_Energy);
+    float cur_total = energy_round3(s_meter_cache.Totol_Energy);
 
     /* 首次: 只建立累计基准，不产生区间点 */
     if (!g_energy_history.has_baseline) {
@@ -847,6 +855,46 @@ esp_err_t mqtt_reinit(void) {
 }
 
 /**
+ * @brief 传感器数据更新观察者：写入 MQTT 本地缓存
+ * @param type 事件类型
+ * @param data 载荷指针（SensorData_t）
+ * @param len 载荷长度
+ * @return 无
+ */
+static void mqtt_on_sensor_updated(event_type_t type, const void *data, size_t len)
+{
+    (void)type;
+    if (data != NULL && len >= sizeof(SensorData_t)) {
+        memcpy(&s_sensor_cache, data, sizeof(SensorData_t));
+    }
+}
+
+/**
+ * @brief 电表数据更新观察者：写入 MQTT 本地缓存
+ * @param type 事件类型
+ * @param data 载荷指针（MeterData_t）
+ * @param len 载荷长度
+ * @return 无
+ */
+static void mqtt_on_meter_updated(event_type_t type, const void *data, size_t len)
+{
+    (void)type;
+    if (data != NULL && len >= sizeof(MeterData_t)) {
+        memcpy(&s_meter_cache, data, sizeof(MeterData_t));
+    }
+}
+
+/**
+ * @brief 注册 MQTT 对传感器/电表事件的订阅（观察者绑定）
+ * @return 无
+ */
+static void mqtt_event_observers_register(void)
+{
+    event_subscribe(EVENT_SENSOR_UPDATED, mqtt_on_sensor_updated);
+    event_subscribe(EVENT_METER_UPDATED, mqtt_on_meter_updated);
+}
+
+/**
  * @brief 自定义任务函数，用于处理MQTT网络服务
  * @param pvParameters 任务参数（在此函数中未使用）
  */
@@ -916,6 +964,7 @@ void my_task(void *pvParameters)
 
 int init_mqtt(void)
 {
+    mqtt_event_observers_register();//注册MQTT对传感器/电表事件的订阅（观察者绑定）
     // xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
      // 使用外部RAM创建任务栈
     xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 10, &myTaskHandle, 0);

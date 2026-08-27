@@ -13,6 +13,7 @@
 #include "parameterSet.h"
 #include "json.h"
 #include "cJSON.h"
+#include "event_bus.h"
 
 static const char*TAG = "meter_DLT645";
 TaskHandle_t dlt645TaskHandle = NULL;
@@ -285,6 +286,8 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
             ESP_LOGW(TAG, "数据标识未知 (0x%08X)", data_id_value);
             break;
         }
+        /* 解析成功后发布完整电表快照，供 MQTT 等观察者更新缓存 */
+        event_publish(EVENT_METER_UPDATED, &g_meter_data, sizeof(g_meter_data));
     }
     return true;
 }

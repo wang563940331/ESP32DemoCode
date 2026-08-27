@@ -9,13 +9,13 @@
 #include "uart_bsp.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
-#include "mqtt.h"
 #include "utility.h"
 #include "driver/uart.h"
 #include "parameterSet.h"
 #include "json.h"
 #include "cJSON.h"
 #include "one_wire_bsp.h"
+#include "event_bus.h"
 static const char *TAG = "sensor_task";
 
 // 传感器任务句柄
@@ -114,6 +114,8 @@ static void sensor_task(void *pvParameters)
                 } else {
                     ESP_LOGD(TAG, "温度: %.2f°C", temp);
                 }
+                /* 通知观察者（如 MQTT）传感器数据已更新 */
+                event_publish(EVENT_SENSOR_UPDATED, &g_sensor_data, sizeof(g_sensor_data));
             } else {
                 // 读取失败
                 ESP_LOGE(TAG, "读取传感器数据失败 (连续 %d/%d)", err_number + 1, SENSOR_MAX_FAILURES);
@@ -135,6 +137,8 @@ static void sensor_task(void *pvParameters)
                 }
                 g_sensor_data.temperature = -200.0f;
                 g_sensor_data.humidity = -1.0f;
+                /* 读取失败也发布，便于订阅方同步无效状态 */
+                event_publish(EVENT_SENSOR_UPDATED, &g_sensor_data, sizeof(g_sensor_data));
             }
         }
         vTaskDelay(pdMS_TO_TICKS(100));

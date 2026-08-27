@@ -3,6 +3,7 @@ list(APPEND APP_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/sd_fat_bsp.c
     ${CMAKE_CURRENT_LIST_DIR}/sd_fat_ops.c
     ${CMAKE_CURRENT_LIST_DIR}/sd_fat_log_task.c
+    ${CMAKE_CURRENT_LIST_DIR}/shell_cmd_log.c
 )
 list(APPEND APP_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})
 list(APPEND APP_REQUIRES
