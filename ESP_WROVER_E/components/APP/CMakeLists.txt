@@ -1,36 +1,26 @@
-set(src_dirs
-        METER
-        SENSOR
-        WIFI_STA
-        WIFI_AP
-        SD_FAT
-        LED
-        )
+# APP 根 CMake：汇总各子目录配置，注册为单一 ESP-IDF 组件
+# 各子模块在对应目录下的 CMakeLists.txt 中维护源文件与依赖
 
-set(include_dirs
-        METER
-        SENSOR
-        WIFI_STA
-        WIFI_AP
-        SD_FAT
-        LED
-        )
+set(APP_SRCS "")
+set(APP_INCLUDE_DIRS "")
+set(APP_REQUIRES "")
 
-set(requires
-        BSP
-        main
-        driver
-        nvs_flash
-        esp_wifi
-        esp_event
-        esp_http_server
-        lwip
-        mqtt
-        json
-        fatfs
-        sdmmc
-        )
+# 按模块 include 子目录 CMake 片段
+include(${CMAKE_CURRENT_LIST_DIR}/METER/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/SENSOR/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/WIFI_STA/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/WIFI_AP/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/SD_FAT/CMakeLists.txt)
+include(${CMAKE_CURRENT_LIST_DIR}/LED/CMakeLists.txt)
 
-idf_component_register(SRC_DIRS ${src_dirs} INCLUDE_DIRS ${include_dirs} REQUIRES ${requires})
-# component_compile_options(-ffast-math -O3 -Wno-error=format=-Wno-format)
+# 合并各子模块 REQUIRES 并去重
+list(REMOVE_DUPLICATES APP_REQUIRES)
+
+idf_component_register(
+    SRCS ${APP_SRCS}
+    INCLUDE_DIRS ${APP_INCLUDE_DIRS}
+    REQUIRES ${APP_REQUIRES}
+)
+
+# 与 BSP 组件保持一致的编译优化选项
 component_compile_options(-ffast-math -O3 -Wno-error=format -Wno-format -Wno-error=unused-variable)

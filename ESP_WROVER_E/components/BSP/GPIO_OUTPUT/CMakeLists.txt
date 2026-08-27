@@ -1,0 +1,6 @@
+# GPIO_OUTPUT 子模块：GPIO 输出设备工厂（LED/蜂鸣器等）
+list(APPEND BSP_SRCS
+    ${CMAKE_CURRENT_LIST_DIR}/gpio_output_bsp.c
+)
+list(APPEND BSP_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR})
+list(APPEND BSP_REQUIRES driver)
