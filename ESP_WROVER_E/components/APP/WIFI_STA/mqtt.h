@@ -53,4 +53,11 @@ void send_ctrlacl(const char *data);
 esp_err_t mqtt_reinit(void);
 void send_head(const char *data);
 
+/**
+ * @brief 向 MQTT 发布主题发送原始 JSON/文本载荷
+ * @param payload 已序列化的字符串，不可为 NULL
+ * @return ESP_OK 成功，ESP_FAIL 未连接或发布失败
+ */
+esp_err_t mqtt_publish_payload(const char *payload);
+
 #endif

@@ -180,7 +180,7 @@ void app_main(void)
     ESP_LOGI(TAG, "ESP32 运行中...");
 
     sShellInit();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 #if (SDCARDLOGEN == TRUE)
     const sd_fat_ops_t* ops = sd_fat_get_ops();
     if(ESP_OK == ops->init("SD_CARD"))
@@ -188,18 +188,18 @@ void app_main(void)
         sd_fat_log_config_t log_config = SD_FAT_LOG_DEFAULT_CONFIG();
         sd_fat_log_task_init(&log_config, ops);
     }
-    vTaskDelay(pdMS_TO_TICKS(1000));
+     vTaskDelay(pdMS_TO_TICKS(1000));
+
+#endif  
     app_print_version_info();
-#endif
-    mdf_mem_print_heap();
     NVS_init();
-    mdf_mem_print_heap();
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    // mdf_mem_print_heap();
+     vTaskDelay(pdMS_TO_TICKS(1000));
     en_log_set();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
     // 初始化基本硬件
     led_init();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 
     gpio_output_factory_init(BEEP_GPIO_PIN);   
     const gpio_output_device_t* dev = gpio_output_factory_get_device(BEEP_GPIO_PIN);
@@ -214,17 +214,17 @@ void app_main(void)
     }
 
     pwm_init();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 
     init_netWork();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 
     // 初始化其他网络服务
     simple_init();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 
     init_mqtt();
-    mdf_mem_print_heap();
+    // mdf_mem_print_heap();
 
     meter_DLT645_init();
 

@@ -214,7 +214,7 @@ static void aliot_mqtt_event_handler(void* event_handler_arg,
         case MQTT_EVENT_DATA:
             EN_SLOGI(TAG,"topic=%.*s", event->topic_len, event->topic);       //收到Pub消息直接打印出来
             EN_SLOGI(TAG,"data=%.*s\r\n", event->data_len, event->data);
-            parse_json(event->data,&Start_once);
+            json_dispatch(event->data); /* 按 Type 查表分发 */
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGE(TAG, "MQTT 错误: type=%d, connect_code=%d",
@@ -388,144 +388,39 @@ void mqtt_start(void)
 }
 
 
-void send_ctrlacl(const char *data) {
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    char sn[20] = {0};
-    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
-
-    char time_str[32];
-    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
-
-    cJSON *root = cJSON_CreateObject();  // 创建根对象
-    cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
-    // 添加字段：headid
-    cJSON_AddItemToObject(root, "ctrlacl", cJSON_CreateString(data));
-    // 添加字段：time
-    cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
-    // 转为 JSON 字符串（压缩格式，适合MQTT发送）
-    char *mqtt_pub_buff = cJSON_PrintUnformatted(root);
-
-    esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-                           mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
-    cJSON_Delete(root);
-    EN_SLOGI(TAG,"%s",mqtt_pub_buff);
-    heap_caps_free(mqtt_pub_buff); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
-    mqtt_pub_buff = NULL;
+/**
+ * @brief 向 MQTT 发布主题发送原始载荷
+ * @param payload 已序列化字符串
+ * @return ESP_OK 成功，ESP_FAIL 未连接或参数无效
+ */
+esp_err_t mqtt_publish_payload(const char *payload)
+{
+    if (payload == NULL || s_mqtt_client == NULL || !s_is_mqtt_connected) {
+        return ESP_FAIL;
+    }
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
+                                         payload, (int)strlen(payload), 1, 0);
+    return (msg_id >= 0) ? ESP_OK : ESP_FAIL;
 }
 
 /**
- * @brief 发送包含设备信息和时间戳的JSON数据到MQTT服务器
- * @param data 要发送的headid数据指针
+ * @brief 状态变更上行：组包在 json，本函数仅转发
+ * @param data 状态描述字符串
+ * @return 无
  */
-void send_head(const char *data) {
-    time_t now;                    // 存储当前时间的变量
-    struct tm timeinfo;            // 存储格式化后的时间信息
-    time(&now);                    // 获取当前时间
-    localtime_r(&now, &timeinfo); // 将时间转换为本地时间，线程安全版本
-    char sn[20] = {0};
-    sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
-    char time_str[32];
-    char str[10];
-    // 将时间格式化为"YYYY-MM-DD HH:MM:SS"格式
-    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
+void send_ctrlacl(const char *data)
+{
+    json_send_ctrlacl(data);
+}
 
-    cJSON *root = cJSON_CreateObject();  // 创建根对象
-    if (root == NULL) {
-        ESP_LOGE(TAG, "cJSON_CreateObject 失败");
-        return;
-    }
-    
-    cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
-    // 添加字段：headid
-    cJSON_AddItemToObject(root, "headid", cJSON_CreateString(data));
-    // 添加字段：temperature（精确到1位小数）
-    if (s_sensor_cache.temperature != -200) {
-        snprintf(str, sizeof(str), "%.2f", s_sensor_cache.temperature);
-        cJSON_AddItemToObject(root, "temperature", cJSON_CreateString(str));
-    }
-    // 添加字段：humidity（仅在有效时添加）
-    if (s_sensor_cache.humidity >= 0) {
-        memset(str, 0, sizeof(str));
-        snprintf(str, sizeof(str), "%.2f", s_sensor_cache.humidity);
-        cJSON_AddItemToObject(root, "humidity", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.VolageA != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.VolageA);
-        cJSON_AddItemToObject(root, "VolageA", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.CurrentA != 0) {
-        snprintf(str, sizeof(str), "%.3f", s_meter_cache.CurrentA);
-        cJSON_AddItemToObject(root, "CurrentA", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.PowerPA != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.PowerPA);
-        cJSON_AddItemToObject(root, "PowerPA", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.Frequency != 0) {
-        snprintf(str, sizeof(str), "%.2f", s_meter_cache.Frequency);
-        cJSON_AddItemToObject(root, "Frequency", cJSON_CreateString(str));
-    }   
-    if (s_meter_cache.Totol_Energy != 0) {
-        snprintf(str, sizeof(str), "%.2f", s_meter_cache.Totol_Energy);
-        cJSON_AddItemToObject(root, "Totol_Energy", cJSON_CreateString(str));
-    }
-    // 每日用电量上报 (基于每天00:00快照)
-    energy_daily_add_to_json(root);
-
-    // 添加字段：time
-    cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
-    // 各时间窗口瞬时功率峰值
-    if (s_meter_cache.peak_3min.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_3min.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_3min", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.peak_1hour.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1hour.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_1h", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.peak_1day.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1day.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_1d", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.peak_7day.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_7day.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_7d", cJSON_CreateString(str));
-    }
-    if (s_meter_cache.peak_1month.peak_power != 0) {
-        snprintf(str, sizeof(str), "%.1f", s_meter_cache.peak_1month.peak_power);
-        cJSON_AddItemToObject(root, "PowerPeak_1m", cJSON_CreateString(str));
-    }
-    // 使用外部RAM存储JSON字符串
-    char *json_str = cJSON_PrintUnformatted(root);
-    if (json_str == NULL) {
-        ESP_LOGE(TAG, "cJSON_PrintUnformatted 失败");
-        cJSON_Delete(root);
-        return;
-    }
-    
-    size_t json_len = strlen(json_str);
-    
-    // 使用外部RAM分配MQTT发布缓冲区
-    char *mqtt_pub_buff = heap_caps_malloc(json_len + 1, MALLOC_CAP_SPIRAM);
-    if (mqtt_pub_buff != NULL) {
-        memcpy(mqtt_pub_buff, json_str, json_len + 1);
-        
-        esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-                               mqtt_pub_buff, strlen(mqtt_pub_buff), 1, 0);
-        
-        heap_caps_free(mqtt_pub_buff);
-    } else {
-        // 如果外部RAM分配失败，使用默认分配
-        ESP_LOGW(TAG, "SPIRAM 分配失败, 使用内部RAM");
-        esp_mqtt_client_publish(s_mqtt_client, MQTT_PUBLIC_TOPIC,
-                               json_str, strlen(json_str), 1, 0);
-    }
-    EN_SLOGI(TAG,"%s",json_str);
-    cJSON_Delete(root);
-    heap_caps_free(json_str); // 释放cJSON_PrintUnformatted返回的内存（使用SPIRAM）
+/**
+ * @brief 电表/传感器快照上行：组包在 json，本函数注入缓存与电量历史
+ * @param data headid 字符串
+ * @return 无
+ */
+void send_head(const char *data)
+{
+    json_send_head(data, &s_sensor_cache, &s_meter_cache, energy_daily_add_to_json);
 }
 
 /**
@@ -964,13 +859,12 @@ void my_task(void *pvParameters)
 
 int init_mqtt(void)
 {
-    mqtt_event_observers_register();//注册MQTT对传感器/电表事件的订阅（观察者绑定）
-    // xTaskCreate(my_task,"MyTask",4096,NULL,5,&myTaskHandle);
-     // 使用外部RAM创建任务栈
+    /* JSON 上行组包通过回调发布，避免 json 直接依赖 mqtt client */
+    json_set_publish_fn(mqtt_publish_payload);//
+    mqtt_event_observers_register();
     xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 10, &myTaskHandle, 0);
-    if(!myTaskHandle)
-    {
-         ESP_LOGI(TAG,"任务创建失败!\n");
+    if (!myTaskHandle) {
+        ESP_LOGI(TAG, "任务创建失败!\n");
         return 0;
     }
     return 1;

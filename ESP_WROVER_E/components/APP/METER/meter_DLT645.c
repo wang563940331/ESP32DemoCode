@@ -3,6 +3,7 @@
  * @Date: 2026-06-14
  * @Description: DLT645 电表协议解析 (Qt -> ESP32 移植版)
  */
+#include "my_log.h"
 #include "uart_bsp.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
@@ -173,6 +174,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
     if (!(response[0] == 0xFE && response[1] == 0xFE &&
           response[2] == 0xFE && response[3] == 0xFE && response[4] == 0x68)) {
         ESP_LOGE(TAG, "DLT645 帧头无效");
+        ESP_LOGE_HEX(TAG, response, len);
         return false;
     }
 
