@@ -33,13 +33,6 @@ typedef struct {
 typedef esp_err_t (*json_publish_fn)(const char *payload);
 
 /**
- * @brief 组包时追加额外字段（如电量历史），可为 NULL
- * @param root 正在构建的 JSON 根对象
- * @return 无
- */
-typedef void (*json_fill_extra_fn)(cJSON *root);
-
-/**
  * @brief 注册上行发布回调（通常在 init_mqtt 里传入 mqtt_publish_payload）
  * @param fn 发布函数，NULL 表示取消
  * @return 无
@@ -75,16 +68,14 @@ void parse_json(const char *json_string, void *Start_once);
 void json_send_ctrlacl(const char *ctrl);
 
 /**
- * @brief 组包并发布电表/传感器快照（原 send_head 主包）
+ * @brief 组包并发布电表/传感器快照（含 DailyEnergy）
  * @param headid 序号或 head 标识
  * @param sensor 传感器快照，不可为 NULL
  * @param meter 电表快照，不可为 NULL
- * @param fill_extra 追加字段回调（如 DailyEnergy），可为 NULL
  * @return 无
  */
 void json_send_head(const char *headid,
                     const SensorData_t *sensor,
-                    const MeterData_t *meter,
-                    json_fill_extra_fn fill_extra);
+                    const MeterData_t *meter);
 
 #endif

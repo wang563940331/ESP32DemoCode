@@ -332,6 +332,18 @@ EventGroupHandle_t get_s_wifi_ev(void)
     return s_wifi_ev;
 }
 
+/**
+ * @brief 查询 STA 是否已获取 IP
+ * @return true 已获 IP，false 未就绪或事件组未创建
+ */
+bool wifi_sta_is_got_ip(void)
+{
+    if (s_wifi_ev == NULL) {
+        return false;
+    }
+    return (xEventGroupGetBits(s_wifi_ev) & WIFI_CONNECT_BIT) != 0;
+}
+
 bool gets_is_smartconfig(void)
 {
     return s_is_smartconfig;
@@ -454,6 +466,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
             break;
         case WIFI_EVENT_STA_DISCONNECTED:   //WIFI从路由器断开连接后触发此事件
             esp_wifi_connect();             //继续重连
+            if (s_wifi_ev != NULL) {
+                xEventGroupClearBits(s_wifi_ev, WIFI_CONNECT_BIT); // 通知上层网络不可用
+            }
             ESP_LOGE(TAG,"wifi sta 连接断开");
             break;
         default:
@@ -472,6 +487,12 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
                      wifi_cb(WIFI_CONNECTED);
                 }
                 ESP_LOGI(TAG,"获取ip地址成功");
+                break;
+            case IP_EVENT_STA_LOST_IP:
+                if (s_wifi_ev != NULL) {
+                    xEventGroupClearBits(s_wifi_ev, WIFI_CONNECT_BIT);
+                }
+                ESP_LOGW(TAG, "STA IP 丢失");
                 break;
         }
     }

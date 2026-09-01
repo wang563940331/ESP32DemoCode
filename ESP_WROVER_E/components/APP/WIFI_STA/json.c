@@ -4,6 +4,7 @@
 
 #include "json.h"
 #include "mqtt.h"
+#include "energy_history.h"
 #include "parameterSet.h"
 #include "esp_heap_caps.h"
 #include "my_log.h"
@@ -210,8 +211,7 @@ void json_send_ctrlacl(const char *ctrl)
 
 void json_send_head(const char *headid,
                     const SensorData_t *sensor,
-                    const MeterData_t *meter,
-                    json_fill_extra_fn fill_extra)
+                    const MeterData_t *meter)
 {
     if (headid == NULL || sensor == NULL || meter == NULL) {
         return;
@@ -262,10 +262,8 @@ void json_send_head(const char *headid,
         cJSON_AddItemToObject(root, "Totol_Energy", cJSON_CreateString(str));
     }
 
-    /* 电量历史等由调用方通过回调追加，避免 json 依赖 mqtt 内部状态 */
-    if (fill_extra != NULL) {
-        fill_extra(root);
-    }
+    /* DailyEnergy 由电量历史模块追加 */
+    energy_history_add_to_json(root);
 
     cJSON_AddItemToObject(root, "time", cJSON_CreateString(time_str));
 

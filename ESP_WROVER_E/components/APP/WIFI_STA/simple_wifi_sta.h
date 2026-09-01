@@ -69,4 +69,11 @@ extern void print_device_info(void);
 extern void setg_mac(char* mac);
 extern char* getg_mac(void);
 extern bool upwificonfig(void);
+
+/**
+ * @brief 查询 STA 是否已获取 IP（WIFI_CONNECT_BIT 置位）
+ * @return true 已获 IP，false 未就绪
+ */
+bool wifi_sta_is_got_ip(void);
+
 #endif
