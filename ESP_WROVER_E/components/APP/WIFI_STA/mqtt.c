@@ -9,7 +9,6 @@
 
 #include "mqtt.h"
 #include "json.h"
-#include "energy_history.h"
 #include "simple_wifi_sta.h"
 #include <lwip/apps/sntp.h>
 #include "esp_chip_info.h"
@@ -112,9 +111,9 @@ void initialize_sntp() {
     tzset(); // 更新时区设置
     // 配置SNTP
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
+    sntp_setservername(2, "pool.ntp.org");
     sntp_setservername(1, "time.nist.gov"); // 添加备用服务器
-    sntp_setservername(2, "ntp.aliyun.com"); // 添加国内服务器
+    sntp_setservername(0, "ntp.aliyun.com"); // 添加国内服务器
     sntp_init();
     // 等待SNTP同步完成（超时3秒）
     sntp_initialized = true;
@@ -474,7 +473,6 @@ void my_task(void *pvParameters)
 
             if (tickOut(&tims, MQTTUBLISHED)) {
                 tickOut(&tims, 0);
-                energy_history_update(s_ctx.meter_cache.Totol_Energy);
                 snprintf(mqtt_pub_buff, sizeof(mqtt_pub_buff), "%d", count++);
                 send_head(mqtt_pub_buff);
             }
@@ -483,7 +481,7 @@ void my_task(void *pvParameters)
 
             /* WiFi 已获 IP 但 MQTT 断开：约 5 秒重建一次（auto_reconnect 已关闭） */
             if (wifi_sta_is_got_ip()) {
-                if (tickOut(&tims_reconnect, 5 * 1000)) {
+                if (tickOut(&tims_reconnect, 30 * 1000)) {
                     ESP_LOGW(TAG, "WiFi已就绪但MQTT未连接，尝试重建...");
                     mqtt_reinit();
                     tickOut(&tims_reconnect, 0);

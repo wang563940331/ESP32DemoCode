@@ -20,8 +20,19 @@ extern "C" {
 
 #define MQTTUBLISHED 15*1000
 
-/* 电量历史采样间隔(分钟)，编译期配置，不写 NVS。最小建议1，1440=1天 */
+/*
+ * 电量历史采样模式
+ * 1: 每日定点更新（默认），时刻由 NVS en_hm + Shell setEnergyTime HH:MM 配置
+ * 0: 固定间隔更新，间隔见 ENERGY_HISTORY_INTERVAL_MINUTES
+ */
+#ifndef ENERGY_HISTORY_DAILY_SCHEDULE
+#define ENERGY_HISTORY_DAILY_SCHEDULE  1
+#endif
+
+/* 间隔模式采样间隔(分钟)，仅 ENERGY_HISTORY_DAILY_SCHEDULE==0 时生效；1440=1天 */
+#ifndef ENERGY_HISTORY_INTERVAL_MINUTES
 #define ENERGY_HISTORY_INTERVAL_MINUTES  1440
+#endif
 
 #define SDCARDLOGEN 1
 

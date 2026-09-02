@@ -7,12 +7,11 @@
 #include "uart_bsp.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
-#include "mqtt.h"
 #include "utility.h"
 #include "driver/uart.h"
 #include "meter_DLT645.h"
+#include "energy_history.h"
 #include "parameterSet.h"
-#include "json.h"
 #include "cJSON.h"
 #include "event_bus.h"
 
@@ -146,7 +145,7 @@ uint16_t dlt645_build_frame(const uint8_t *address, uint8_t control_code,
 
 /*
  * @brief 解析DLT645响应帧并提取物理量
- * 帧结构: FE FE FE FE | 68 | A0-A5 | 68 | 控制码 | 数据长度 | 数据域(已+0x33) | 校验和 | 16
+ * 帧结构: [可选 FE FE FE FE] | 68 | A0-A5 | 68 | 控制码 | 数据长度 | 数据域(已+0x33) | 校验和 | 16
  * 数据域前4字节为数据标识(DI)，后续为BCD编码的数值
  * @param response  响应帧起始指针
  * @param len       响应帧长度
@@ -164,44 +163,74 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
     static float PowerPA_ALL = 0.0f;   // 功率累计和
     uint8_t decoded_data[200];
 
-    // 帧最小长度: FE*4 + 68 + 6字节地址 + 68 + 控制码 + 长度 + 校验 + 16 = 15字节
-    if (len < 13) {
+    /* 无前导最短: 68+地址6+68+控+长+校验+16 = 12；有 FE*4 则再加 4 */
+    if (len < 12) {
         ESP_LOGE(TAG, "DLT645 响应过短 (%d)", len);
         return false;
     }
 
-    // 校验帧头: FE FE FE FE 68
-    if (!(response[0] == 0xFE && response[1] == 0xFE &&
-          response[2] == 0xFE && response[3] == 0xFE && response[4] == 0x68)) {
-        ESP_LOGE(TAG, "DLT645 帧头无效");
+    /* 定位首个帧起始 0x68：兼容有/无 FE FE FE FE 前导 */
+    uint16_t off = 0;
+    if (len >= 5 &&
+        response[0] == 0xFE && response[1] == 0xFE &&
+        response[2] == 0xFE && response[3] == 0xFE && response[4] == 0x68) {
+        off = 4; /* FE×4 之后是 68 */
+    } else if (response[0] == 0x68) {
+        off = 0; /* 无前导，直接从 68 开始 */
+        ESP_LOGW(TAG, "DLT645 响应无前导");
+    } else {
+        /* 缓冲中可能夹杂噪声，滑动查找 68 ... 68 形态 */
+        bool found = false;
+        for (uint16_t i = 0; i + 11 < len; i++) {
+            if (response[i] == 0x68 && response[i + 7] == 0x68) {
+                off = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            ESP_LOGE(TAG, "DLT645 帧头无效");
+            ESP_LOGE_HEX(TAG, response, len);
+            return false;
+        }
+    }
+
+    /* 从首个 68 起至少还需 12 字节完整最小帧 */
+    if (len < off + 12) {
+        ESP_LOGE(TAG, "DLT645 响应过短 (%d), off=%u", len, (unsigned)off);
+        return false;
+    }
+
+    /* 地址域后第二帧头 */
+    if (response[off + 7] != 0x68) {
+        ESP_LOGE(TAG, "DLT645 帧头重复无效");
         ESP_LOGE_HEX(TAG, response, len);
         return false;
     }
 
-    // 校验帧头重复: 地址域后应为0x68
-    if (response[11] != 0x68) {
-        ESP_LOGE(TAG, "DLT645 帧头重复无效");
-        return false;
-    }
+    uint8_t control_code = response[off + 8];
+    uint8_t data_length = response[off + 9];
 
-    // 提取控制码(索引12)和数据长度(索引13)
-    uint8_t control_code = response[12];
-    uint8_t data_length = response[13];
-
-    // 数据长度合理性检查
-    if (data_length > 100 || len < 14 + data_length + 1) {
+    /* 数据长度 + 校验 + 结束符 */
+    if (data_length > 100 || len < (uint16_t)(off + 10 + data_length + 2)) {
         ESP_LOGE(TAG, "DLT645 数据长度无效: %d", data_length);
         return false;
     }
 
-    // 校验和验证: 校验和紧跟数据域后
-    uint16_t checksum_received = response[14 + data_length];
-    uint16_t cs_start = 4;
-    uint16_t cs_end = 14 + data_length;
+    uint16_t checksum_pos = (uint16_t)(off + 10 + data_length);
+    uint16_t checksum_received = response[checksum_pos];
+    /* 校验范围: 从首个 68 到数据域末尾（不含校验字节） */
+    uint16_t cs_start = off;
+    uint16_t cs_end = checksum_pos;
     uint8_t checksum_calculated = dlt645_calculate_checksum(response + cs_start, cs_end - cs_start);
 
     if (checksum_received != checksum_calculated) {
         ESP_LOGE(TAG, "DLT645 校验和无效: %02X != %02X", checksum_received, checksum_calculated);
+        return false;
+    }
+
+    if (response[checksum_pos + 1] != 0x16) {
+        ESP_LOGE(TAG, "DLT645 结束符无效: %02X", response[checksum_pos + 1]);
         return false;
     }
 
@@ -217,7 +246,7 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
     if (function_code == (DLT645_READ & 0x1F)) {
         // 数据域解码: 每个字节 -0x33
         for (uint8_t i = 0; i < data_length; i++) {
-            decoded_data[i] = response[14 + i] - 0x33;
+            decoded_data[i] = response[off + 10 + i] - 0x33;
         }
 
         // 提取数据标识(DI): 数据域前4字节，大端序
@@ -236,7 +265,8 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
         case ENERGE_DI:     // 有功总电能 (kWh)，数据域: [4字节DI][4字节BCD值]
             if (data_length >= 8) {
                 g_meter_data.Totol_Energy = Bcd4ToHexUint32(&decoded_data[4]) * 0.01f;
-                // ESP_LOGI(TAG, "Energy: %.2f kWh", g_meter_data.Totol_Energy);
+                /* 电量历史与 MQTT 无关，在读到累计电量时直接更新/持久化 */
+                energy_history_update(g_meter_data.Totol_Energy);
             }
             break;
         case VOLT_A_DI:     // A相电压 (V)，数据域: [4字节DI][2字节BCD值]
@@ -456,12 +486,12 @@ void dlt645_update_power_peaks(float current_power)
 #define UPDATE_WINDOW(win, duration_sec) do { \
     if ((win).peak_time == 0 || now - (win).peak_time > (duration_sec)) { \
         (win).peak_power = current_power; \
-        ESP_LOGW(TAG, "窗口 %s 重置: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
+        ESP_LOGI(TAG, "窗口 %s 重置: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } else if (current_power > (win).peak_power) { \
         (win).peak_power = current_power; \
-        ESP_LOGW(TAG, "窗口 %s 已更新: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
+        ESP_LOGI(TAG, "窗口 %s 已更新: %.1f time=%d oldtime=%d aes=%d", #win, (win).peak_power,now, (win).peak_time,now - (win).peak_time); \
         (win).peak_time = now; \
         if ((&(win) != &(g_meter_data.peak_3min)) && (&(win) != &(g_meter_data.peak_1hour))) { updated = true; } \
     } \
@@ -541,6 +571,9 @@ void dlt645_task(void *pvParameters)
  */
 void meter_DLT645_init(void)
 {
+    /* 电量历史 Shell 与电表模式无关，始终注册 */
+    energy_history_shell_register();
+
     // 检查485电表模式: DLT645=开启, OFF=关闭
     // 兼容旧版NVS中uint8数值(1=开启)，自动迁移为字符串
     char meter_mode[20] = {0};

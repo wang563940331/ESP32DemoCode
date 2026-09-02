@@ -85,6 +85,7 @@
 #define cStorageDataNvsEnT               "en_t"                                  //区间结束时间戳数组
 #define cStorageDataNvsEnBase            "en_base"                               //上次累计电量基准(kWh)
 #define cStorageDataNvsEnLts             "en_lts"                                //上次采样时间戳
+#define cStorageDataNvsEnHm              "en_hm"                                 //每日电量采样时刻(分钟,0~1439,默认0=00:00)
 
 // #define cStorageNetAppNvsName           "netApp"                               //第一级
 // #define cStorageNetAppNvsConnHost       "connHost"                             //连接主机
@@ -149,6 +150,7 @@ typedef enum
     cStorageApCmdEnT,                                                           //区间时间戳数组
     cStorageApCmdEnBase,                                                        //上次累计电量基准
     cStorageApCmdEnLts,                                                         //上次采样时间戳
+    cStorageApCmdEnHm,                                                          //每日采样时刻(HH*60+MM)
 
     eStorageApCmdMax
 }__attribute__((packed)) eStorageApCmd_t;
