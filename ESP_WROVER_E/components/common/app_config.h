@@ -22,7 +22,7 @@ extern "C" {
 
 /*
  * 电量历史采样模式
- * 1: 每日定点更新（默认），时刻由 NVS en_hm + Shell setEnergyTime HH:MM 配置
+ * 1: 每日 00:00（24:00）固定更新（默认）
  * 0: 固定间隔更新，间隔见 ENERGY_HISTORY_INTERVAL_MINUTES
  */
 #ifndef ENERGY_HISTORY_DAILY_SCHEDULE

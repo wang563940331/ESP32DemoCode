@@ -571,9 +571,6 @@ void dlt645_task(void *pvParameters)
  */
 void meter_DLT645_init(void)
 {
-    /* 电量历史 Shell 与电表模式无关，始终注册 */
-    energy_history_shell_register();
-
     // 检查485电表模式: DLT645=开启, OFF=关闭
     // 兼容旧版NVS中uint8数值(1=开启)，自动迁移为字符串
     char meter_mode[20] = {0};

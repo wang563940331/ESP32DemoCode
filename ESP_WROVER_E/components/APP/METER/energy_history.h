@@ -5,7 +5,7 @@
 
 /**
  * @brief 更新区间用电历史（含 NVS 持久化）
- * @note 模式由 ENERGY_HISTORY_DAILY_SCHEDULE 决定：1=每日定点，0=固定间隔
+ * @note 模式由 ENERGY_HISTORY_DAILY_SCHEDULE 决定：1=每日 00:00，0=固定间隔
  * @param meter_total_kwh 当前电表累计电量 (kWh)
  * @return 无
  */
@@ -17,11 +17,5 @@ void energy_history_update(float meter_total_kwh);
  * @return 无
  */
 void energy_history_add_to_json(cJSON *root);
-
-/**
- * @brief 注册电量历史相关 Shell 命令（setEnergyTime）
- * @return 无
- */
-void energy_history_shell_register(void);
 
 #endif

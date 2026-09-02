@@ -1,18 +1,16 @@
 /*
  * @Description: 电量区间环形缓冲与 NVS 持久化、JSON 追加
- *               支持每日定点(默认)与固定间隔两种采样模式
+ *               支持每日 00:00(24:00) 定点与固定间隔两种采样模式
  */
 
 #include "energy_history.h"
 #include "parameterSet.h"
 #include "parameter.h"
 #include "app_config.h"
-#include "shell.h"
 #include "my_log.h"
 
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -35,8 +33,6 @@ typedef struct {
 
 static EnergyDailyHistory_t g_energy_history = {0};
 static bool g_energy_history_loaded = false;
-/** 每日采样时刻：距 00:00 的分钟数(0~1439)，默认 00:00 */
-static uint16_t g_trigger_hm = 0;
 
 /**
  * @brief 电量保留 3 位小数
@@ -81,59 +77,23 @@ static void energy_history_push(float usage, uint32_t ts)
 }
 
 /**
- * @brief 校验并写入每日采样时刻(分钟)
- * @param hm 距 00:00 的分钟数，须在 0~1439
- * @return true 合法并已写入，false 非法
- */
-static bool energy_history_set_hm(uint16_t hm)
-{
-    if (hm > 1439) {
-        return false;
-    }
-    g_trigger_hm = hm;
-    return true;
-}
-
-/**
- * @brief 在 data 对象中写入或替换 uint16 字段
- * @param pData data JSON 对象
- * @param key 字段名
- * @param val 数值
- * @return 无
- */
-static void energy_history_nvs_put_u16(cJSON *pData, const char *key, uint16_t val)
-{
-    cJSON *item = cJSON_CreateNumber(val);
-    if (item == NULL) {
-        return;
-    }
-    /* 已存在则替换，否则新增，保证旧固件升级后也能写入 en_hm */
-    if (cJSON_GetObjectItem(pData, key) != NULL) {
-        cJSON_ReplaceItemInObject(pData, key, item);
-    } else {
-        cJSON_AddItemToObject(pData, key, item);
-    }
-}
-
-/**
- * @brief 计算 after_ts 之后的下一个每日定点时刻
+ * @brief 计算 after_ts 之后的下一个日界(00:00 / 24:00)时刻
  * @param after_ts 参考时间戳(通常为上次采样点)
- * @return 下一个 HH:MM 对应的 Unix 时间戳
+ * @return 下一个 00:00 对应的 Unix 时间戳
  */
-static time_t energy_history_next_daily_slot(time_t after_ts)
+static time_t energy_history_next_midnight(time_t after_ts)
 {
-    uint8_t hour = (uint8_t)(g_trigger_hm / 60U);
-    uint8_t min = (uint8_t)(g_trigger_hm % 60U);
     struct tm tm_slot;
 
     localtime_r(&after_ts, &tm_slot);
-    tm_slot.tm_hour = hour;
-    tm_slot.tm_min = min;
+    /* 固定每天 00:00（即前一日 24:00）落点 */
+    tm_slot.tm_hour = 0;
+    tm_slot.tm_min = 0;
     tm_slot.tm_sec = 0;
     tm_slot.tm_isdst = -1;
     time_t slot = mktime(&tm_slot);
 
-    /* 当日定点已过或恰好等于参考点，则推到次日同一时刻 */
+    /* 当日 00:00 已过或恰好等于参考点，则推到次日 00:00 */
     if (slot <= after_ts) {
         tm_slot.tm_mday += 1;
         tm_slot.tm_isdst = -1;
@@ -143,7 +103,7 @@ static time_t energy_history_next_daily_slot(time_t after_ts)
 }
 
 /**
- * @brief 从 NVS 加载电量区间历史与采样时刻
+ * @brief 从 NVS 加载电量区间历史
  * @param meter_fallback 无基准时的电表累计 fallback (kWh)
  * @return 无
  */
@@ -171,15 +131,6 @@ static void energy_history_load_from_nvs(float meter_fallback)
         return;
     }
 
-    /* 先读每日时刻，再加载环形缓冲 */
-    cJSON *pHm = cJSON_GetObjectItem(pData, cStorageDataNvsEnHm);
-    if (pHm != NULL && cJSON_IsNumber(pHm)) {
-        uint16_t hm = (uint16_t)pHm->valuedouble;
-        if (hm <= 1439) {
-            g_trigger_hm = hm;
-        }
-    }
-
     cJSON *pCnt = cJSON_GetObjectItem(pData, cStorageDataNvsEnCnt);
     cJSON *pE = cJSON_GetObjectItem(pData, cStorageDataNvsEnE);
     cJSON *pT = cJSON_GetObjectItem(pData, cStorageDataNvsEnT);
@@ -200,9 +151,7 @@ static void energy_history_load_from_nvs(float meter_fallback)
         pE == NULL || !cJSON_IsArray(pE) ||
         pT == NULL || !cJSON_IsArray(pT)) {
         sNvsParamUnlock();
-        ESP_LOGI(TAG, "电量历史: 无环形数据 (baseline=%d, hm=%u=%02u:%02u)",
-                 g_energy_history.has_baseline, (unsigned)g_trigger_hm,
-                 (unsigned)(g_trigger_hm / 60U), (unsigned)(g_trigger_hm % 60U));
+        ESP_LOGI(TAG, "电量历史: 无环形数据 (baseline=%d)", g_energy_history.has_baseline);
         return;
     }
 
@@ -281,12 +230,11 @@ static void energy_history_load_from_nvs(float meter_fallback)
 
     sNvsParamUnlock();
 #if ENERGY_HISTORY_DAILY_SCHEDULE
-    ESP_LOGI(TAG, "电量历史已加载: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, daily=%02u:%02u",
+    ESP_LOGI(TAG, "电量历史已加载: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, daily=00:00",
              g_energy_history.count,
              (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f,
              (unsigned long)g_energy_history.last_sample_ts,
-             g_energy_history.last_total,
-             (unsigned)(g_trigger_hm / 60U), (unsigned)(g_trigger_hm % 60U));
+             g_energy_history.last_total);
 #else
     ESP_LOGI(TAG, "电量历史已加载: count=%d, latest_usage=%.3f kWh, ts=%lu, base=%.3f, interval=%d min",
              g_energy_history.count,
@@ -298,7 +246,7 @@ static void energy_history_load_from_nvs(float meter_fallback)
 }
 
 /**
- * @brief 将电量区间历史与采样时刻写入 NVS
+ * @brief 将电量区间历史写入 NVS
  * @return 无
  */
 static void energy_history_save_to_nvs(void)
@@ -348,48 +296,18 @@ static void energy_history_save_to_nvs(void)
     cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnT, t_arr);
     cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnBase, energy_json_number3(g_energy_history.last_total));
     cJSON_ReplaceItemInObject(pData, cStorageDataNvsEnLts, cJSON_CreateNumber(g_energy_history.last_sample_ts));
-    energy_history_nvs_put_u16(pData, cStorageDataNvsEnHm, g_trigger_hm);
 
     sNvsParamSet(false);
     sNvsParamUnlock();
-    ESP_LOGI(TAG, "电量历史已保存: count=%d/%d, ts=%lu, usage=%.3f, hm=%02u:%02u",
+    ESP_LOGI(TAG, "电量历史已保存: count=%d/%d, ts=%lu, usage=%.3f",
              g_energy_history.count, ENERGY_HISTORY_MAX,
              (unsigned long)g_energy_history.last_sample_ts,
-             (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f,
-             (unsigned)(g_trigger_hm / 60U), (unsigned)(g_trigger_hm % 60U));
-}
-
-/**
- * @brief 仅将采样时刻 en_hm 写入 NVS（Shell 设置时调用）
- * @return 无
- */
-static void energy_history_save_hm_to_nvs(void)
-{
-    if (!sNvsParamLock()) {
-        ESP_LOGW(TAG, "采样时刻保存: NVS锁获取失败");
-        return;
-    }
-
-    cJSON *pRoot = sNvsParamGet();
-    if (pRoot == NULL) {
-        sNvsParamUnlock();
-        return;
-    }
-
-    cJSON *pData = cJSON_GetObjectItem(pRoot, cStorageDataNvsName);
-    if (pData == NULL) {
-        sNvsParamUnlock();
-        return;
-    }
-
-    energy_history_nvs_put_u16(pData, cStorageDataNvsEnHm, g_trigger_hm);
-    sNvsParamSet(false);
-    sNvsParamUnlock();
+             (g_energy_history.count > 0) ? g_energy_history.usage_kwh[g_energy_history.index] : 0.0f);
 }
 
 #if ENERGY_HISTORY_DAILY_SCHEDULE
 /**
- * @brief 按每日定点时刻推进区间用电槽位
+ * @brief 按每日 00:00 定点推进区间用电槽位
  * @param now 当前 Unix 时间
  * @param cur_total 当前累计电量(kWh)
  * @return 无
@@ -400,16 +318,14 @@ static void energy_history_update_daily(time_t now, float cur_total)
         g_energy_history.last_total = cur_total;
         g_energy_history.last_sample_ts = (uint32_t)now;
         g_energy_history.has_baseline = true;
-        ESP_LOGI(TAG, "电量历史基准: total=%.3f kWh, daily=%02u:%02u",
-                 cur_total,
-                 (unsigned)(g_trigger_hm / 60U), (unsigned)(g_trigger_hm % 60U));
+        ESP_LOGI(TAG, "电量历史基准: total=%.3f kWh, daily=00:00", cur_total);
         energy_history_save_to_nvs();
         return;
     }
 
-    time_t next_slot = energy_history_next_daily_slot((time_t)g_energy_history.last_sample_ts);
+    time_t next_slot = energy_history_next_midnight((time_t)g_energy_history.last_sample_ts);
     if (now < next_slot) {
-        ESP_LOGD(TAG, "电量历史等待定点: next=%lu, now=%lu",
+        ESP_LOGD(TAG, "电量历史等待日界: next=%lu, now=%lu",
                  (unsigned long)next_slot, (unsigned long)now);
         return;
     }
@@ -420,12 +336,12 @@ static void energy_history_update_daily(time_t now, float cur_total)
     }
     g_energy_history.last_total = cur_total;
 
-    /* 收集所有已到期的每日定点槽；中间天记 0，末日槽记真实用电 */
+    /* 收集所有已到期的日界槽；中间天记 0，末日槽记真实用电 */
     time_t slots[ENERGY_HISTORY_MAX];
     uint32_t steps = 0;
     while (next_slot <= now && steps < ENERGY_HISTORY_MAX) {
         slots[steps++] = next_slot;
-        next_slot = energy_history_next_daily_slot(next_slot);
+        next_slot = energy_history_next_midnight(next_slot);
     }
     if (steps == 0) {
         return;
@@ -437,10 +353,9 @@ static void energy_history_update_daily(time_t now, float cur_total)
     }
     g_energy_history.last_sample_ts = (uint32_t)slots[steps - 1];
 
-    ESP_LOGI(TAG, "电量槽位[%d/%d]: steps=%lu, daily=%02u:%02u, usage=%.3f kWh, ts=%lu",
+    ESP_LOGI(TAG, "电量槽位[%d/%d]: steps=%lu, daily=00:00, usage=%.3f kWh, ts=%lu",
              g_energy_history.count, ENERGY_HISTORY_MAX,
              (unsigned long)steps,
-             (unsigned)(g_trigger_hm / 60U), (unsigned)(g_trigger_hm % 60U),
              g_energy_history.usage_kwh[g_energy_history.index],
              (unsigned long)g_energy_history.last_sample_ts);
     energy_history_save_to_nvs();
@@ -563,58 +478,4 @@ void energy_history_add_to_json(cJSON *root)
     }
 
     cJSON_AddItemToObject(root, "DailyEnergy", daily_array);
-}
-
-/**
- * @brief Shell: setEnergyTime HH:MM — 设置每日电量采样时刻
- * @param pkg Shell 数据包，para[0] 为 "HH:MM"
- * @return true 成功，false 参数错误
- */
-static bool ShellsetEnergyTime(const stShellPkt_t *pkg)
-{
-    if (pkg == NULL || pkg->paraNum != 1 || pkg->para[0] == NULL) {
-        EN_SLOGE(TAG, "执行出错,格式:setEnergyTime HH:MM");
-        return false;
-    }
-
-    int hour = -1;
-    int min = -1;
-    /* 解析单一参数 "HH:MM" */
-    if (sscanf(pkg->para[0], "%d:%d", &hour, &min) != 2) {
-        EN_SLOGE(TAG, "执行出错,时刻格式错误,应为 HH:MM, 收到:%s", pkg->para[0]);
-        return false;
-    }
-    if (hour < 0 || hour > 23 || min < 0 || min > 59) {
-        EN_SLOGE(TAG, "执行出错,时刻越界: %02d:%02d", hour, min);
-        return false;
-    }
-
-    uint16_t hm = (uint16_t)(hour * 60 + min);
-    /* 先加载历史状态，再覆盖时刻，避免 load 把新值冲掉 */
-    energy_history_load_from_nvs(0);
-    if (!energy_history_set_hm(hm)) {
-        return false;
-    }
-    energy_history_save_hm_to_nvs();
-
-    EN_SLOGI(TAG, "每日电量采样时刻已设为 %02d:%02d (en_hm=%u)", hour, min, (unsigned)hm);
-#if !ENERGY_HISTORY_DAILY_SCHEDULE
-    EN_SLOGW(TAG, "当前为间隔模式(ENERGY_HISTORY_DAILY_SCHEDULE=0), 定点时刻暂不生效");
-#endif
-    return true;
-}
-
-static stShellCmd_t setEnergyTime = {
-    .pCmd = "setEnergyTime",
-    .pFormat = "格式:setEnergyTime HH:MM",
-    .pFunction = "功能:设置每日电量历史采样时刻",
-    .pRemarks = "备注:setEnergyTime 00:00 / setEnergyTime 08:30",
-    .pFunc = ShellsetEnergyTime,
-};
-
-void energy_history_shell_register(void)
-{
-    if (!sShellCmdRegister(&setEnergyTime)) {
-        ESP_LOGW(TAG, "setEnergyTime 注册失败");
-    }
 }
