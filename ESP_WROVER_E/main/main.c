@@ -32,6 +32,8 @@
 #include "app_config.h"
 #include "gpio_output_bsp.h"
 #include "meter_DLT645.h"
+#include <stdlib.h>
+#include <time.h>
 // 定义日志标签
 static const char*TAG = "main";
 
@@ -196,6 +198,9 @@ void app_main(void)
     // mdf_mem_print_heap();
      vTaskDelay(pdMS_TO_TICKS(1000));
     en_log_set();
+    /* 尽早设置东八区，避免电表历史在 MQTT/SNTP 之前按 UTC 把午夜记成 08:00 */
+    setenv("TZ", "CST-8", 1);
+    tzset();
     // mdf_mem_print_heap();
     // 初始化基本硬件
     led_init();

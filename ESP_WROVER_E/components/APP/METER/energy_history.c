@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -307,6 +308,37 @@ static void energy_history_save_to_nvs(void)
 
 #if ENERGY_HISTORY_DAILY_SCHEDULE
 /**
+ * @brief 确保本地时区为 CST-8（避免未设 TZ 时按 UTC 算午夜 → 显示成 08:00）
+ * @return 无
+ */
+static void energy_history_ensure_timezone(void)
+{
+    static bool s_tz_ready = false;
+    if (s_tz_ready) {
+        return;
+    }
+    setenv("TZ", "CST-8", 1);
+    tzset();
+    s_tz_ready = true;
+}
+
+/**
+ * @brief 将时刻对齐到当天已过去的 00:00
+ * @param ts 参考 Unix 时间
+ * @return 当天 00:00 的 Unix 时间戳
+ */
+static time_t energy_history_floor_midnight(time_t ts)
+{
+    struct tm tm_slot;
+    localtime_r(&ts, &tm_slot);
+    tm_slot.tm_hour = 0;
+    tm_slot.tm_min = 0;
+    tm_slot.tm_sec = 0;
+    tm_slot.tm_isdst = -1;
+    return mktime(&tm_slot);
+}
+
+/**
  * @brief 按每日 00:00 定点推进区间用电槽位
  * @param now 当前 Unix 时间
  * @param cur_total 当前累计电量(kWh)
@@ -314,11 +346,15 @@ static void energy_history_save_to_nvs(void)
  */
 static void energy_history_update_daily(time_t now, float cur_total)
 {
+    energy_history_ensure_timezone();
+
     if (!g_energy_history.has_baseline) {
         g_energy_history.last_total = cur_total;
-        g_energy_history.last_sample_ts = (uint32_t)now;
+        /* 基准对齐到今日 00:00，避免用“当前时刻”污染日界槽 */
+        g_energy_history.last_sample_ts = (uint32_t)energy_history_floor_midnight(now);
         g_energy_history.has_baseline = true;
-        ESP_LOGI(TAG, "电量历史基准: total=%.3f kWh, daily=00:00", cur_total);
+        ESP_LOGI(TAG, "电量历史基准: total=%.3f kWh, daily=00:00, base_ts=%lu",
+                 cur_total, (unsigned long)g_energy_history.last_sample_ts);
         energy_history_save_to_nvs();
         return;
     }
