@@ -803,6 +803,11 @@ static void simple_task(void *pvParameters)
                     ESP_LOGI(TAG, "AP超时计时器启动，%d分钟后自动关闭", AP_TIMEOUT_MINUTES);
                     set_ones_smartconfig(true);
                 } else {
+                    /* 常在线时不允许 BOOT 关掉 AP */
+                    if (wifi_ap_get_always_on()) {
+                        ESP_LOGW(TAG, "AP常在线已开启，忽略 BOOT 关闭");
+                        break;
+                    }
                     // 关闭AP模式
                     ESP_LOGI(TAG, "BOOT按键按下，关闭AP模式");
                     // 停止HTTP服务器和AP
@@ -821,8 +826,8 @@ static void simple_task(void *pvParameters)
             }
         }
         
-        // AP超时检测：15分钟内没有设备连接则关闭AP模式
-        if (s_ap_mode_enabled) {
+        // AP超时检测：策略模式下，15分钟内无设备连接则关闭
+        if (s_ap_mode_enabled && !wifi_ap_get_always_on()) {
             // 使用 tick 数进行比较，避免乘法溢出
             TickType_t current_ticks = xTaskGetTickCount();
             TickType_t elapsed_ticks = current_ticks - s_ap_start_time;
@@ -851,6 +856,25 @@ static void simple_task(void *pvParameters)
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+}
+
+/**
+ * @brief 强制拉起 SoftAP（apAlways=1 时立即生效）
+ * @return 无
+ */
+void simple_ap_force_online(void)
+{
+    if (!s_ap_mode_enabled || !wifi_ap_is_web_running()) {
+        ESP_LOGI(TAG, "按 apAlways 策略拉起 AP");
+        esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (!wifi_ap_is_web_running()) {
+            wifi_ap_init();
+        }
+        esp_wifi_start();
+        s_ap_mode_enabled = true;
+    }
+    s_ap_start_time = xTaskGetTickCount();
+    ESP_LOGI(TAG, "AP 保持在线 (apAlways=%u)", (unsigned)wifi_ap_get_always_on());
 }
 
 

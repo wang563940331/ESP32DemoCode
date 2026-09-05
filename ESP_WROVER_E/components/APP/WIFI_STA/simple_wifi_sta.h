@@ -76,4 +76,10 @@ extern bool upwificonfig(void);
  */
 bool wifi_sta_is_got_ip(void);
 
+/**
+ * @brief 强制拉起 SoftAP（供 apAlways=1 或策略需要时调用）
+ * @return 无
+ */
+void simple_ap_force_online(void);
+
 #endif

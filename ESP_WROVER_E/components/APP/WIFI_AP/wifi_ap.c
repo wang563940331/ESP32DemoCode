@@ -1,4 +1,6 @@
 #include "wifi_ap.h"
+#include "wifi_ap_ws.h"
+#include "wifi_ap_web.h"
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -16,9 +18,10 @@
 #include "simple_wifi_sta.h"
 #include "parameter.h"
 #include "version.h"
+#include "cJSON.h"
 // Forward declaration
 esp_err_t mqtt_reinit(void);
-#define  HTTPServerSize 1024*8
+/* HTTP 大页缓冲已不再使用（配置改走 WS） */
 // 参数类型枚举（使用前缀避免与parameter.h冲突）
 typedef enum {
     WIFIAP_PARAM_STRING,
@@ -66,6 +69,7 @@ char g_mqtt_user[64] = "";   // MQTT用户名
 char g_mqtt_passwd[64] = ""; // MQTT密码
 char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF=关闭
 uint16_t g_log_days = 7;        // SD日志保留天数(1~90)
+uint8_t g_ap_always = 0;        // AP常在线:1一直在线,0按策略
 
 // 参数描述数组 - 集中管理所有参数
 config_param_t config_params[] = {
@@ -80,6 +84,7 @@ config_param_t config_params[] = {
     {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE, 1},
     {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE, 2},
     {"logdays", "日志保留天数", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_log_days), &g_log_days, 7, NULL, cStorageApCmdNvslogDays, WRITEABLE, 0},
+    {"apAlways", "AP常在线(1一直/0策略)", WIFIAP_PARAM_TOGGLE, STORAGE_AP, sizeof(g_ap_always), &g_ap_always, 0, NULL, cStorageApCmdApAlways, WRITEABLE, 0},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))
 
@@ -130,221 +135,17 @@ static void load_params_from_nvs(void)
     }
 }
 
-// 生成HTML表单字段
-static void generate_form_fields(char *buffer, size_t buffer_len)
-{
-    char field_template[512];
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        config_param_t *param = &config_params[i];
-        const char *readonly_attr = param->is_readonly ? " readonly" : "";
-
-        if (param->type == WIFIAP_PARAM_TOGGLE) {
-            uint8_t val = *(uint8_t *)param->value;
-            snprintf(field_template, sizeof(field_template),
-                "<label>%s:</label>\n"
-                "<select name='%s'%s>\n"
-                "  <option value='1'%s>开启</option>\n"
-                "  <option value='0'%s>关闭</option>\n"
-                "</select><br>\n",
-                param->label, param->name, readonly_attr,
-                (val == 1) ? " selected" : "",
-                (val == 0) ? " selected" : "");
-        } else if (param->type == WIFIAP_PARAM_INT) {
-            const char *input_type = "number";
-            // 日志天数增加 HTML min/max, 便于浏览器侧约束 1~90
-            if (strcmp(param->name, "logdays") == 0) {
-                snprintf(field_template, sizeof(field_template),
-                    "<label>%s(1-90):</label>\n"
-                    "<input type='%s' name='%s' value='%d' min='1' max='90'%s><br>\n",
-                    param->label, input_type, param->name,
-                    *(uint16_t *)param->value, readonly_attr);
-            } else {
-                snprintf(field_template, sizeof(field_template),
-                    "<label>%s:</label>\n<input type='%s' name='%s' value='%d'%s><br>\n",
-                    param->label, input_type, param->name,
-                    *(uint16_t *)param->value, readonly_attr);
-            }
-        } else {
-            const char *input_type = "text";
-            snprintf(field_template, sizeof(field_template),
-                "<label>%s:</label>\n<input type='%s' name='%s' value='%s'%s><br>\n",
-                param->label, input_type, param->name, (char *)param->value, readonly_attr);
-        }
-        strlcat(buffer, field_template, buffer_len);
-    }
-}
-
-// 生成当前参数显示区域
-static void generate_current_params(char *buffer, size_t buffer_len)
-{
-    char param_line[256];
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        config_param_t *param = &config_params[i];
-        if (param->type == WIFIAP_PARAM_TOGGLE) {
-            uint8_t val = *(uint8_t *)param->value;
-            snprintf(param_line, sizeof(param_line),
-                "<p>%s: %s</p>\n", param->label, (val == 1) ? "开启" : "关闭");
-        } else if (param->type == WIFIAP_PARAM_INT) {
-            snprintf(param_line, sizeof(param_line),
-                "<p>%s: %d</p>\n", param->label, *(uint16_t *)param->value);
-        } else {
-            snprintf(param_line, sizeof(param_line),
-                "<p>%s: %s</p>\n", param->label, (char *)param->value);
-        }
-        strlcat(buffer, param_line, buffer_len);
-    }
-}
-
-// 根处理程序 - 提供配置页面
+/**
+ * @brief 根路径重定向到 WS 配置页（HTTP 表单配置已停用）
+ * @param req HTTP 请求
+ * @return ESP_OK
+ */
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    char *response = heap_caps_malloc(HTTPServerSize, MALLOC_CAP_SPIRAM);
-    if (response == NULL) {
-        httpd_resp_send(req, "Memory allocation failed", 25);
-        return ESP_OK;
-    }
-    memset(response, 0, HTTPServerSize);
-    
-    // 从NVS加载所有参数
-    load_params_from_nvs();
-
-    // 创建HTML页面头部
-    strlcpy(response,
-        "<!DOCTYPE html>"
-        "<html>"
-        "<head>"
-        "    <title>ESP32 Config</title>"
-        "    <meta charset='utf-8'>"
-        "    <meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "    <meta http-equiv='Cache-Control' content='no-cache, no-store, must-revalidate'>"
-        "    <meta http-equiv='Pragma' content='no-cache'>"
-        "    <meta http-equiv='Expires' content='0'>"
-        "    <style>"
-        "        body { font-family: Arial, sans-serif; margin: 20px; }"
-        "        h1 { color: #333; }"
-        "        form { margin-top: 20px; }"
-        "        label { display: block; margin: 10px 0 5px; }"
-        "        input[type='text'], input[type='number'] { width: 300px; padding: 5px; }"
-        "        input[type='submit'] { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }"
-        "        input[type='button'] { padding: 10px 20px; background-color: #f44336; color: white; border: none; cursor: pointer; margin-left: 10px; }"
-        "        input[type='button'].restore-btn { padding: 10px 20px; background-color: #ff9800; color: white; border: none; cursor: pointer; margin-left: 10px; }"
-        "        .config { background-color: #f0f0f0; padding: 15px; margin-top: 20px; }"
-        "    </style>"
-        "</head>"
-        "<body>"
-        "    <h1>ESP32 Configuration</h1>"
-        "    <form action='/save' method='POST' enctype='application/x-www-form-urlencoded'>\n",
-        HTTPServerSize);
-    
-    // 动态生成表单字段
-    generate_form_fields(response, HTTPServerSize);
-    
-    // 添加提交按钮和当前配置显示
-    strlcat(response,
-        "        <br><input type='submit' value='保存'>"
-        "        <input type='button' value='重启设备' onclick=\"restartDevice()\">"
-        "        <input type='button' class='restore-btn' value='复位参数' onclick=\"restoreDefaults()\">"
-        "    </form>"
-        "    <script>"
-        "        function restartDevice() {"
-        "            if(confirm('确定要重启设备吗？')) {"
-        "                var xhr = new XMLHttpRequest();"
-        "                xhr.open('GET', '/restart', true);"
-        "                xhr.send();"
-        "                alert('设备即将重启，请重新连接'); "
-        "            }"
-        "        }"
-        "        function restoreDefaults() {"
-        "            if(confirm('确定要复位所有参数到默认值吗？此操作不可恢复！')) {"
-        "                var xhr = new XMLHttpRequest();"
-        "                xhr.open('GET', '/restore_defaults', true);"
-        "                xhr.onload = function() {"
-        "                    if(xhr.responseText === 'OK') {"
-        "                        alert('参数复位成功，页面将刷新');"
-        "                        location.reload();"
-        "                    } else {"
-        "                        alert('参数复位失败');"
-        "                    }"
-        "                };"
-        "                xhr.send();"
-        "            }"
-        "        }"
-        "    </script>"
-        "    <div class='config'>"
-        "        <h3>Current:</h3>\n",
-        HTTPServerSize);
-    
-    // 动态生成当前参数
-    generate_current_params(response, HTTPServerSize);
-    
-    // 添加页面尾部
-    strlcat(response,
-        "    </div>"
-        "</body>"
-        "</html>",
-        HTTPServerSize);
-    
-    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
-    heap_caps_free(response);
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", "/wsconfig");
+    httpd_resp_send(req, NULL, 0);
     return ESP_OK;
-}
-
-// URL 解码函数
-static void url_decode(char *str) {
-    char *p = str;
-    char *dec = str;
-    char hex[3];
-    while (*p != '\0') {
-        if (*p == '%' && *(p+1) != '\0' && *(p+2) != '\0') {
-            hex[0] = *(p+1);
-            hex[1] = *(p+2);
-            hex[2] = '\0';
-            *dec = (char)strtol(hex, NULL, 16);
-            p += 3;
-        } else if (*p == '+') {
-            *dec = ' ';
-            p += 1;
-        } else {
-            *dec = *p;
-            p += 1;
-        }
-        dec += 1;
-    }
-    *dec = '\0';
-}
-
-// 从表单数据中提取单个参数（不修改原始数据）
-static char *extract_param(char *data, const char *param_name, char *out_value, size_t out_max_len) {
-    size_t name_len = strlen(param_name);
-    char param_prefix[32];
-    snprintf(param_prefix, sizeof(param_prefix), "%s=", param_name);
-    
-    char *param = strstr(data, param_prefix);
-    if (param) {
-        param += name_len + 1; // 跳过 "param_name="
-        
-        // 查找参数值的结束位置（& 或字符串末尾）
-        char *end = strchr(param, '&');
-        size_t value_len;
-        
-        if (end) {
-            value_len = end - param;
-        } else {
-            // 如果是最后一个参数，找到字符串末尾
-            value_len = strlen(param);
-        }
-        
-        // 复制值到输出缓冲区
-        if (value_len >= out_max_len) {
-            value_len = out_max_len - 1;
-        }
-        strncpy(out_value, param, value_len);
-        out_value[value_len] = '\0';
-        
-        url_decode(out_value);
-        return out_value;
-    }
-    return NULL;
 }
 
 // 保存单个参数到NVS
@@ -366,7 +167,11 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
         }
         *(uint16_t *)param->value = (uint16_t)v;
     } else if (param->type == WIFIAP_PARAM_TOGGLE && value) {
-        *(uint8_t *)param->value = (uint8_t)atoi(value);
+        uint8_t v = (uint8_t)atoi(value);
+        if (strcmp(param->name, "apAlways") == 0) {
+            v = v ? 1 : 0;
+        }
+        *(uint8_t *)param->value = v;
     } else if (value) {
         strncpy((char *)param->value, value, param->max_len - 1);
         ((char *)param->value)[param->max_len - 1] = '\0';
@@ -396,6 +201,9 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
             case cStorageApCmdNvslogDays:
                 sStorageApSetNvslogDays(*(uint16_t *)param->value);
                 break;
+            case cStorageApCmdApAlways:
+                sStorageApSetApAlways(*(uint8_t *)param->value);
+                break;
             case cStorageApCmdSsid:
                 sStorageApSetssid((char *)param->value);
                 break;
@@ -423,107 +231,183 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
     }
 }
 
-// 保存处理程序 - 处理配置表单提交
-static esp_err_t save_handler(httpd_req_t *req)
+/**
+ * @brief 将单个参数当前值写入字符串
+ * @param param 参数描述
+ * @param out 输出缓冲
+ * @param out_len 缓冲长度
+ * @return 无
+ */
+static void config_param_value_to_str(const config_param_t *param, char *out, size_t out_len)
 {
-    // 使用外部RAM分配缓冲区
-    char *buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
-    if (buf == NULL) {
-        httpd_resp_send(req, "Memory allocation failed", 25);
-        return ESP_OK;
+    if (param == NULL || out == NULL || out_len == 0) {
+        return;
     }
-    
-    int ret, remaining = req->content_len;
-    int received = 0;
-    
-    // 清空缓冲区
-    memset(buf, 0, 1024);
-    
-    // 读取表单数据
-    while (remaining > 0) {
-        int chunk_size = (remaining < 1023) ? remaining : 1023;
-        ret = httpd_req_recv(req, buf + received, chunk_size);
-        if (ret <= 0) {
-            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-                httpd_resp_send_408(req);
-            }
-            heap_caps_free(buf);
-            return ESP_FAIL;
-        }
-        received += ret;
-        remaining -= ret;
-        
-        // 防止缓冲区溢出
-        if (received >= 1023) {
-            break;
-        }
+    if (param->type == WIFIAP_PARAM_INT) {
+        snprintf(out, out_len, "%d", *(uint16_t *)param->value);
+    } else if (param->type == WIFIAP_PARAM_TOGGLE) {
+        snprintf(out, out_len, "%d", *(uint8_t *)param->value);
+    } else {
+        strncpy(out, (char *)param->value, out_len - 1);
+        out[out_len - 1] = '\0';
     }
-    buf[received] = '\0';
-    ESP_LOGI(TAG, "收到数据: %s", buf);
-    
-    /*
-     * 批量保存策略:
-     *   sStorageBeginBatch  → 加锁 + 进入批量模式
-     *   逐参数: 对比新旧值 → 仅更新JSON内存缓存 (不写NVS)
-     *   sStorageEndBatch    → 一次性写NVS + 解锁
-     * 避免原来每个参数保存都触发一次完整NVS写入的问题
-     */
-    sStorageBeginBatch();
-    int max_action = 0;
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        config_param_t *param = &config_params[i];
-        char value_buf[64] = {0};
-        char *value = extract_param(buf, param->name, value_buf, sizeof(value_buf));
-        if (value) {
-            // 对比旧值判断是否实际变更 (防止未修改的参数触发不必要的重启)
-            char old_val[64] = {0};
-            int changed = 1;
-            if (param->type == WIFIAP_PARAM_INT) {
-                snprintf(old_val, sizeof(old_val), "%d", *(uint16_t *)param->value);
-            } else if (param->type == WIFIAP_PARAM_TOGGLE) {
-                snprintf(old_val, sizeof(old_val), "%d", *(uint8_t *)param->value);
-            } else {
-                strncpy(old_val, (char *)param->value, sizeof(old_val) - 1);
-            }
-            if (strcmp(old_val, value) == 0) {
-                changed = 0;
-            }
-            ESP_LOGI(TAG, "参数 %s=%s %s", param->name, value, changed ? "(变更)" : "(未变)");
-            save_param_to_nvs(param, value);
-            // 取所有变更参数中 reboot_action 的最大值
-            if (changed && param->reboot_action > max_action) {
-                max_action = param->reboot_action;
-            }
-        }
-    }
-    sStorageEndBatch();
-    ESP_LOGI(TAG, "配置批量保存完成, max_action=%d", max_action);
+}
 
-    // 根据 reboot_action 最大值决定后续行为
-    if (max_action >= 1) {
-        upwificonfig();   // 重连WiFi
-        mqtt_reinit();    // 重连MQTT
+/**
+ * @brief 应用一个参数字符串值，并累计 reboot_action
+ * @param param 参数项
+ * @param value 新值字符串
+ * @param max_action 累计最大动作
+ * @return 1 有变更，0 未变或只读
+ */
+static int config_apply_one(config_param_t *param, const char *value, int *max_action)
+{
+    if (param == NULL || value == NULL || param->is_readonly) {
+        return 0;
     }
 
-    // 重定向回根路径
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "/");
-    httpd_resp_send(req, NULL, 0);
+    char old_val[128] = {0};
+    config_param_value_to_str(param, old_val, sizeof(old_val));
+    int changed = (strcmp(old_val, value) != 0) ? 1 : 0;
+    ESP_LOGI(TAG, "参数 %s=%s %s", param->name, value, changed ? "(变更)" : "(未变)");
+    save_param_to_nvs(param, (char *)value);
+    if (changed && max_action != NULL && param->reboot_action > *max_action) {
+        *max_action = param->reboot_action;
+    }
+    return changed;
+}
 
-    ESP_LOGI(TAG, "配置保存: MqttIP=%s, MqttPort=%d, sn=%s",
-        g_domain,
-        g_port,
-        g_sn);
-
-    heap_caps_free(buf);
-
-    // max_action=2: 参数变更需要重启才能生效 (如SN/设备类型/485电表模式等)
+/**
+ * @brief 按 reboot_action 执行重启（重连已在 apply 中处理）
+ * @param max_action 最大动作值，仅处理 2=重启
+ * @param delay_ms_before_reboot 重启前延时
+ * @return 无
+ */
+static void config_reboot_if_needed(int max_action, uint32_t delay_ms_before_reboot)
+{
     if (max_action == 2) {
-        ESP_LOGI(TAG, "参数变更需重启，1.5s后重启...");
-        vTaskDelay(pdMS_TO_TICKS(1500));  // 预留时间让HTTP响应返回给客户端
+        ESP_LOGI(TAG, "参数变更需重启，%lums 后重启...", (unsigned long)delay_ms_before_reboot);
+        vTaskDelay(pdMS_TO_TICKS(delay_ms_before_reboot));
         esp_restart();
     }
-    return ESP_OK;
+}
+
+char *wifi_ap_config_export_json(void)
+{
+    load_params_from_nvs();
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *params = cJSON_CreateObject();
+    if (root == NULL || params == NULL) {
+        cJSON_Delete(root);
+        cJSON_Delete(params);
+        return NULL;
+    }
+
+    char sn[20] = {0};
+    sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8 *)sn);
+    cJSON_AddStringToObject(root, "Type", "Config");
+    cJSON_AddStringToObject(root, "device", sn);
+    cJSON_AddItemToObject(root, "params", params);
+
+    for (int i = 0; i < NUM_PARAMS; i++) {
+        config_param_t *param = &config_params[i];
+        char val[128] = {0};
+        config_param_value_to_str(param, val, sizeof(val));
+        cJSON *item = cJSON_CreateObject();
+        if (item == NULL) {
+            continue;
+        }
+        cJSON_AddStringToObject(item, "label", param->label);
+        cJSON_AddStringToObject(item, "value", val);
+        cJSON_AddBoolToObject(item, "readonly", param->is_readonly ? 1 : 0);
+        cJSON_AddItemToObject(params, param->name, item);
+    }
+
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return payload;
+}
+
+int wifi_ap_config_apply_json(const cJSON *params, int *out_max_action)
+{
+    if (params == NULL || !cJSON_IsObject(params)) {
+        return -1;
+    }
+
+    load_params_from_nvs();
+    sStorageBeginBatch();
+    int max_action = 0;
+    int changed_cnt = 0;
+
+    for (int i = 0; i < NUM_PARAMS; i++) {
+        config_param_t *param = &config_params[i];
+        cJSON *item = cJSON_GetObjectItemCaseSensitive(params, param->name);
+        if (item == NULL) {
+            continue;
+        }
+
+        char value_buf[128] = {0};
+        if (cJSON_IsString(item) && item->valuestring != NULL) {
+            strncpy(value_buf, item->valuestring, sizeof(value_buf) - 1);
+        } else if (cJSON_IsNumber(item)) {
+            snprintf(value_buf, sizeof(value_buf), "%d", item->valueint);
+        } else if (cJSON_IsObject(item)) {
+            /* 兼容 { "value": "xxx" } 结构（与 export 对称） */
+            cJSON *v = cJSON_GetObjectItemCaseSensitive(item, "value");
+            if (cJSON_IsString(v) && v->valuestring) {
+                strncpy(value_buf, v->valuestring, sizeof(value_buf) - 1);
+            } else if (cJSON_IsNumber(v)) {
+                snprintf(value_buf, sizeof(value_buf), "%d", v->valueint);
+            } else {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        changed_cnt += config_apply_one(param, value_buf, &max_action);
+    }
+
+    sStorageEndBatch();
+    ESP_LOGI(TAG, "WS/JSON 配置保存完成 changed=%d max_action=%d", changed_cnt, max_action);
+
+    if (out_max_action) {
+        *out_max_action = max_action;
+    }
+
+    if (max_action >= 1) {
+        upwificonfig();
+        mqtt_reinit();
+    }
+    /* 打开常在线时立即拉起 AP，避免还要等 BOOT */
+    if (g_ap_always) {
+        simple_ap_force_online();
+    }
+    return changed_cnt;
+}
+
+void wifi_ap_config_finish_action(int max_action)
+{
+    config_reboot_if_needed(max_action, 1500);
+}
+
+/**
+ * @brief 查询 AP 是否配置为常在线
+ * @return 1 一直在线，0 按策略
+ */
+uint8_t wifi_ap_get_always_on(void)
+{
+    return g_ap_always ? 1 : 0;
+}
+
+/**
+ * @brief HTTP 配置服务是否已启动
+ * @return 1 已启动，0 未启动
+ */
+uint8_t wifi_ap_is_web_running(void)
+{
+    return (server != NULL) ? 1 : 0;
 }
 
 // 重启处理程序
@@ -562,6 +446,16 @@ static httpd_handle_t start_webserver(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
+    /* / /restart /restore /ws + 多页面 + 日志 API，预留扩展余量 */
+    config.max_uri_handlers = 20;
+    /*
+     * 套接字预算：LWIP_MAX_SOCKETS=16，httpd 占用 max_open_sockets+3(控制口)，
+     * 还需留给 MQTT/DNS 等；满员时 LRU 踢掉最久未用连接，避免 accept(23)
+     */
+    config.max_open_sockets = 7;
+    config.lru_purge_enable = true;
+    /* 大日志下载时避免默认 5s 发送超时中断 */
+    config.send_wait_timeout = 30;
     
     // 启动服务器
     if (httpd_start(&server, &config) != ESP_OK) {
@@ -577,14 +471,8 @@ static httpd_handle_t start_webserver(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &root_uri);
-    
-    httpd_uri_t save_uri = {
-        .uri      = "/save",
-        .method   = HTTP_POST,
-        .handler  = save_handler,
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &save_uri);
+
+    /* HTTP 表单 /save 已停用，配置改走 WebSocket SetConfig */
     
     httpd_uri_t restart_uri = {
         .uri      = "/restart",
@@ -601,7 +489,15 @@ static httpd_handle_t start_webserver(void)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &restore_defaults_uri);
-    
+
+    /* WS 协议与 HTML/API 解耦注册，便于后续继续加页面 */
+    if (wifi_ap_ws_register(server) != ESP_OK) {
+        ESP_LOGE(TAG, "WebSocket 服务端注册失败");
+    }
+    if (wifi_ap_web_register(server) != ESP_OK) {
+        ESP_LOGE(TAG, "Web 页面注册失败");
+    }
+
     return server;
 }
 
@@ -618,8 +514,10 @@ esp_err_t wifi_ap_init(void)
 {
     esp_err_t ret = ESP_OK;
     char sn[20] = {0};
+    /* 加载含 apAlways 在内的配置 */
+    load_params_from_nvs();
     sStorageGwGet(cStorageApCmdGwNvsSn,sizeof(sn),(u8 *)sn);
-    ESP_LOGI(TAG, "WiFi AP模式初始化");
+    ESP_LOGI(TAG, "WiFi AP模式初始化 (apAlways=%u)", (unsigned)g_ap_always);
    // ====== 添加国家代码配置 ======
     wifi_country_t country = {
         .cc = "CN",
@@ -659,7 +557,7 @@ esp_err_t wifi_ap_init(void)
     
     // 启动web服务器
     start_webserver();
-    ESP_LOGI(TAG, "Web 地址 http://192.168.4.1");
+    ESP_LOGI(TAG, "Web: http://192.168.4.1/wsconfig | /wsmeter");
     
     return ret;
 }
@@ -667,9 +565,11 @@ esp_err_t wifi_ap_init(void)
 // 反初始化WiFi AP模式
 esp_err_t wifi_ap_deinit(void)
 {
+    wifi_ap_ws_unregister();
     // 停止web服务器
     stop_webserver(server);
-    
+    server = NULL;
+
     ESP_LOGI(TAG, "WiFi AP 模式已关闭");
     
     return ESP_OK;

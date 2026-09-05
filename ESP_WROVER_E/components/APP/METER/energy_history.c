@@ -515,3 +515,34 @@ void energy_history_add_to_json(cJSON *root)
 
     cJSON_AddItemToObject(root, "DailyEnergy", daily_array);
 }
+
+cJSON *energy_history_to_items_array(void)
+{
+    cJSON *arr = cJSON_CreateArray();
+    if (arr == NULL) {
+        return NULL;
+    }
+    if (g_energy_history.count == 0) {
+        return arr;
+    }
+
+    /* 从最旧到最新顺序导出，便于表格从上往下看 */
+    uint8_t start = (g_energy_history.index + ENERGY_HISTORY_MAX - g_energy_history.count + 1) % ENERGY_HISTORY_MAX;
+    for (uint8_t i = 0; i < g_energy_history.count; i++) {
+        uint8_t idx = (start + i) % ENERGY_HISTORY_MAX;
+        time_t t = (time_t)g_energy_history.timestamps[idx];
+        struct tm timeinfo;
+        localtime_r(&t, &timeinfo);
+        char date_str[20];
+        strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M", &timeinfo);
+
+        cJSON *item = cJSON_CreateObject();
+        if (item == NULL) {
+            continue;
+        }
+        cJSON_AddStringToObject(item, "time", date_str);
+        cJSON_AddItemToObject(item, "kWh", energy_json_number3(g_energy_history.usage_kwh[idx]));
+        cJSON_AddItemToArray(arr, item);
+    }
+    return arr;
+}

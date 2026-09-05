@@ -1,0 +1,4 @@
+# SoftAP HTTP 配置页启用 WebSocket 服务端
+CONFIG_HTTPD_WS_SUPPORT=y
+# MQTT+httpd+WS 共用套接字；默认 10 易触发 accept errno=23
+CONFIG_LWIP_MAX_SOCKETS=16
