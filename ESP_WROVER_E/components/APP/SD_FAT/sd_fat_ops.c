@@ -367,16 +367,18 @@ bool sd_fat_ops_is_dir_exist(const char* device_name, const char* path) {
 }
 
 /**
- * @brief 获取SD卡信息
- * 
- * @param device_name SD卡设备名称
- * @param info 指向sd_card_info_t结构体的指针，用于存储SD卡信息
- * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ * @brief 获取 SD 卡容量与文件系统已用/剩余空间
+ * @param device_name SD 卡设备名称
+ * @param info 输出结构体
+ * @return ESP_OK 成功，否则错误码
  */
 esp_err_t sd_fat_ops_get_card_info(const char* device_name, sd_card_info_t* info) {
     if (!s_sd_device || !info) {
         return ESP_ERR_INVALID_STATE;
     }
+
+    /* 先清零，避免调用方读到脏数据 */
+    memset(info, 0, sizeof(*info));
 
     sdmmc_card_t* card = NULL;
     esp_err_t ret = s_sd_device->GetCardHandle(device_name, &card);
@@ -385,12 +387,43 @@ esp_err_t sd_fat_ops_get_card_info(const char* device_name, sd_card_info_t* info
         return ret;
     }
 
-    info->capacity_mb = (float)card->csd.capacity * 512 / 1024 / 1024;
-    info->sector_size = card->csd.sector_size;
+    /* CSD 标称容量作兜底；扇区大小为 0 时按 512 处理 */
+    int sector_size = card->csd.sector_size > 0 ? (int)card->csd.sector_size : 512;
+    info->sector_size = sector_size;
+    info->capacity_mb = (float)card->csd.capacity * (float)sector_size / 1024.0f / 1024.0f;
     info->is_mounted = true;
 
-    ESP_LOGI(TAG, "SD卡信息 - 容量: %.2f MB, 扇区大小: %d 字节", 
-             info->capacity_mb, info->sector_size);
+    /* 以 FatFs 卷信息为准：总/剩余簇 → 字节，更贴近实际可写空间 */
+    const char *mount = sd_fat_get_mount_point(device_name);
+    if (mount == NULL || mount[0] == '\0') {
+        mount = "/sdcard";
+    }
+    FATFS *fs = NULL;
+    DWORD free_clust = 0;
+    FRESULT fres = f_getfree(mount, &free_clust, &fs);
+    if (fres == FR_OK && fs != NULL) {
+        DWORD total_sectors = (fs->n_fatent - 2) * fs->csize;
+        DWORD free_sectors = free_clust * fs->csize;
+        info->total_bytes = (uint64_t)total_sectors * (uint64_t)sector_size;
+        info->free_bytes = (uint64_t)free_sectors * (uint64_t)sector_size;
+        /* 已用 = 总量 - 空闲，避免无符号下溢出 */
+        info->used_bytes = (info->total_bytes >= info->free_bytes)
+                               ? (info->total_bytes - info->free_bytes)
+                               : 0;
+        /* 页面展示用文件系统总容量覆盖 CSD 标称值 */
+        if (info->total_bytes > 0) {
+            info->capacity_mb = (float)info->total_bytes / 1024.0f / 1024.0f;
+        }
+    } else {
+        ESP_LOGW(TAG, "f_getfree 失败 fres=%d，仅返回 CSD 容量", (int)fres);
+    }
+
+    ESP_LOGI(TAG,
+             "SD卡信息 - 总%.2fMB 已用%.2fMB 剩余%.2fMB 扇区%d",
+             info->capacity_mb,
+             (float)info->used_bytes / 1024.0f / 1024.0f,
+             (float)info->free_bytes / 1024.0f / 1024.0f,
+             info->sector_size);
 
     return ESP_OK;
 }

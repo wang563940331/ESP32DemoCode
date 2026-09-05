@@ -2,15 +2,19 @@
 #define __SD_FAT_OPS_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 /**
- * @brief SD卡信息结构体
+ * @brief SD卡信息结构体（含文件系统用量）
  */
 typedef struct {
-    float capacity_mb;   /* SD卡容量（MB） */
-    int sector_size;     /* 扇区大小（字节） */
-    bool is_mounted;     /* 是否已挂载 */
+    float capacity_mb;     /**< 容量（MB，优先取文件系统总空间） */
+    int sector_size;       /**< 扇区大小（字节） */
+    bool is_mounted;       /**< 是否已挂载 */
+    uint64_t total_bytes;  /**< 文件系统总字节数 */
+    uint64_t used_bytes;   /**< 已用字节数 */
+    uint64_t free_bytes;   /**< 剩余字节数 */
 } sd_card_info_t;
 
 /**
@@ -157,11 +161,10 @@ bool sd_fat_ops_is_file_exist(const char* device_name, const char* path);
 bool sd_fat_ops_is_dir_exist(const char* device_name, const char* path);
 
 /**
- * @brief 获取SD卡信息
- * 
- * @param device_name SD卡设备名称
- * @param info 指向sd_card_info_t结构体的指针，用于存储SD卡信息
- * @return esp_err_t ESP_OK表示成功，其他值表示失败
+ * @brief 获取 SD 卡容量与文件系统已用/剩余空间
+ * @param device_name SD 卡设备名称（如 "SD_CARD"）
+ * @param info 输出：容量、扇区大小、total/used/free 字节
+ * @return ESP_OK 成功；未挂载或参数无效时返回错误码
  */
 esp_err_t sd_fat_ops_get_card_info(const char* device_name, sd_card_info_t* info);
 

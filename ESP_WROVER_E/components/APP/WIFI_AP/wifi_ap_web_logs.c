@@ -6,6 +6,7 @@
 #include "wifi_ap_web_common.h"
 #include "wifi_ap_mem.h"
 #include "sd_fat_log_task.h"
+#include "sd_fat_ops.h"
 
 #include "esp_attr.h"
 #include "esp_log.h"
@@ -70,7 +71,7 @@ static bool wifi_ap_log_name_ok(const char *name)
 }
 
 /**
- * @brief GET /wslogs：日志列表界面（加载时请求 /api/logs；下载带进度与 ETA）
+ * @brief GET /wslogs：日志列表界面（展示 SD 容量/用量，加载时请求 /api/logs）
  * @param req HTTP 请求
  * @return ESP_OK
  */
@@ -80,6 +81,12 @@ static esp_err_t page_logs(httpd_req_t *req)
         "<div class='bar'>"
         "<button class='sec' onclick='loadList()'>刷新列表</button>"
         "<span class='st' id='st'>加载中...</span>"
+        "</div>"
+        /* SD 容量卡片：刷新列表时同步更新 */
+        "<div class='card' id='diskCard' style='margin-bottom:12px'>"
+        "<div class='k'>SD 卡存储</div>"
+        "<div class='v' id='diskTxt' style='font-size:15px;font-weight:500'>读取中...</div>"
+        "<div class='ebar' style='margin-top:10px'><div class='efill' id='diskFill' style='width:0%'></div></div>"
         "</div>"
         "<div class='dl' id='dl'>"
         "<div class='dl-name' id='dlName'></div>"
@@ -93,7 +100,8 @@ static esp_err_t page_logs(httpd_req_t *req)
         "  n=Number(n)||0;"
         "  if(n<1024)return n+' B';"
         "  if(n<1048576)return (n/1024).toFixed(1)+' KB';"
-        "  return (n/1048576).toFixed(2)+' MB';"
+        "  if(n<1073741824)return (n/1048576).toFixed(2)+' MB';"
+        "  return (n/1073741824).toFixed(2)+' GB';"
         "}"
         "function fmtEta(sec){"
         "  if(!isFinite(sec)||sec<0)return '--';"
@@ -111,13 +119,31 @@ static esp_err_t page_logs(httpd_req_t *req)
         "  if(pct!==undefined)document.getElementById('dlFill').style.width=Math.max(0,Math.min(100,pct))+'%';"
         "  if(meta!==undefined)document.getElementById('dlMeta').textContent=meta;"
         "}"
+        /* 根据 API disk 字段刷新容量文案与进度条 */
+        "function renderDisk(disk){"
+        "  var txt=document.getElementById('diskTxt');"
+        "  var fill=document.getElementById('diskFill');"
+        "  if(!disk||!disk.ok){"
+        "    txt.textContent='SD 卡不可用或未挂载';"
+        "    fill.style.width='0%'; return;"
+        "  }"
+        "  var total=Number(disk.total)||0, used=Number(disk.used)||0, free=Number(disk.free)||0;"
+        "  var pct=total>0?Math.min(100,used/total*100):0;"
+        /* 勿在 JS 的 + 后断开 C 字符串，否则会拼成 ++'x' 变成 NaN */
+        "  txt.textContent='容量 '+fmtSize(total)+' · 已用 '+fmtSize(used)"
+        "    +' · 剩余 '+fmtSize(free)+' · '+pct.toFixed(1)+'%';"
+        "  fill.style.width=pct.toFixed(1)+'%';"
+        "}"
         "function loadList(){"
         "  if(dlBusy){setSt('下载中，请稍候...');return;}"
         "  setSt('刷新中...');"
         "  fetch('/api/logs',{cache:'no-store'}).then(function(r){"
         "    if(!r.ok)throw new Error('HTTP '+r.status);"
         "    return r.json();"
-        "  }).then(function(list){"
+        "  }).then(function(data){"
+        "    /* 兼容新旧：对象 {disk,files} 或纯数组 */"
+        "    var list=Array.isArray(data)?data:(data&&data.files)||[];"
+        "    renderDisk(Array.isArray(data)?null:(data&&data.disk));"
         "    var box=document.getElementById('box');"
         "    if(!list||!list.length){"
         "      box.innerHTML='<div class=\"empty\">暂无 .log 文件</div>';"
@@ -135,6 +161,7 @@ static esp_err_t page_logs(httpd_req_t *req)
         "    setSt('共 '+list.length+' 个文件');"
         "  }).catch(function(e){"
         "    document.getElementById('box').innerHTML='<div class=\"empty\">读取失败: '+e+'</div>';"
+        "    renderDisk(null);"
         "    setSt('失败');"
         "  });"
         "}"
@@ -202,7 +229,31 @@ static esp_err_t page_logs(httpd_req_t *req)
 }
 
 /**
- * @brief GET /api/logs：返回 [{name,size},...] JSON
+ * @brief 将 SD 卡用量写入 JSON 对象 disk
+ * @param disk 已创建的 cJSON 对象
+ * @return 无
+ */
+static void wifi_ap_logs_fill_disk_json(cJSON *disk)
+{
+    if (disk == NULL) {
+        return;
+    }
+    sd_card_info_t info;
+    /* 读文件系统总/已用/剩余；失败时前端显示不可用 */
+    if (sd_fat_ops_get_card_info("SD_CARD", &info) != ESP_OK || !info.is_mounted) {
+        cJSON_AddBoolToObject(disk, "ok", false);
+        return;
+    }
+    cJSON_AddBoolToObject(disk, "ok", true);
+    /* JS Number 对 2^53 内整数精确，SD 卡容量远小于此 */
+    cJSON_AddNumberToObject(disk, "total", (double)info.total_bytes);
+    cJSON_AddNumberToObject(disk, "used", (double)info.used_bytes);
+    cJSON_AddNumberToObject(disk, "free", (double)info.free_bytes);
+    cJSON_AddNumberToObject(disk, "capacity_mb", (double)info.capacity_mb);
+}
+
+/**
+ * @brief GET /api/logs：返回 {disk:{ok,total,used,free}, files:[{name,size},...]}
  * @param req HTTP 请求
  * @return ESP_OK
  */
@@ -211,17 +262,26 @@ static esp_err_t api_logs_list(httpd_req_t *req)
     /* 读卡期间暂停异步落盘，避免与写任务抢文件 */
     sd_fat_log_set_read_in_progress(true);
 
+    cJSON *root = cJSON_CreateObject();
     cJSON *arr = cJSON_CreateArray();
-    if (arr == NULL) {
+    cJSON *disk = cJSON_CreateObject();
+    if (root == NULL || arr == NULL || disk == NULL) {
+        cJSON_Delete(root);
+        cJSON_Delete(arr);
+        cJSON_Delete(disk);
         sd_fat_log_set_read_in_progress(false);
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM");
         return ESP_ERR_NO_MEM;
     }
 
+    /* 先填容量，再扫日志目录 */
+    wifi_ap_logs_fill_disk_json(disk);
+    cJSON_AddItemToObject(root, "disk", disk);
+
     DIR *dir = opendir(WIFI_AP_LOG_MOUNT);
     if (dir == NULL) {
         ESP_LOGW(TAG, "无法打开 %s", WIFI_AP_LOG_MOUNT);
-        /* 无卡时仍返回空数组，前端显示友好提示 */
+        /* 无卡时仍返回空 files，前端显示友好提示 */
     } else {
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL) {
@@ -253,10 +313,11 @@ static esp_err_t api_logs_list(httpd_req_t *req)
         closedir(dir);
     }
 
+    cJSON_AddItemToObject(root, "files", arr);
     sd_fat_log_set_read_in_progress(false);
 
-    char *json = cJSON_PrintUnformatted(arr);
-    cJSON_Delete(arr);
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
     if (json == NULL) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json fail");
         return ESP_ERR_NO_MEM;
