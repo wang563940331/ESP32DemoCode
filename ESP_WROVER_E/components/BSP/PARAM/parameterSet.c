@@ -256,6 +256,10 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
                 case cStorageApCmdNvslogDays:
                     bRst = cJSON_SetIntEx(pObj , cStorageApNvslogDays, (*(u16 *)pData));
                     break;
+                case cStorageApCmdApAlways:
+                    /* 仅允许 0/1 */
+                    bRst = cJSON_SetIntEx(pObj, cStorageApNvsApAlways, ((*pData) ? 1 : 0));
+                    break;
 
                 default:
                     bRst    = false;
@@ -467,6 +471,15 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                     }
                     *((u16 *)pData) = (u16)i32Value;
                     break;
+                case cStorageApCmdApAlways:
+                    if(!cJSON_GetIntEx(pObj, cStorageApNvsApAlways, &i32Value))
+                    {
+                        EN_SLOGE(TAG, "apAlways 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    (*pData) = (u8)((i32Value != 0) ? 1 : 0);
+                    break;
                 default:
                     eRst = eStorageApRstParamErr;
                     EN_SLOGE(TAG, "地址%d异常", eCmd);
@@ -652,6 +665,38 @@ bool sStorageApSetNvslogDays(u16 data)
         data = 90;
     }
     if (sStorageApSet(cStorageApCmdNvslogDays, (const u8 *)&data) == eStorageApRstSuccess) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief 设置 AP 常在线开关
+ * @param always 1=一直在线，0=按策略
+ * @return true 成功
+ */
+bool sStorageApSetApAlways(u8 always)
+{
+    u8 v = always ? 1 : 0;
+    if (sStorageApSet(cStorageApCmdApAlways, (const u8 *)&v) == eStorageApRstSuccess) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief 读取 AP 常在线开关
+ * @param out 输出 0/1，不可为 NULL
+ * @return true 成功（失败时 *out 保持调用方原值）
+ */
+bool sStorageApGetApAlways(u8 *out)
+{
+    u8 v = 0;
+    if (out == NULL) {
+        return false;
+    }
+    if (sStorageApGet(cStorageApCmdApAlways, sizeof(v), &v) == eStorageApRstSuccess) {
+        *out = v ? 1 : 0;
         return true;
     }
     return false;

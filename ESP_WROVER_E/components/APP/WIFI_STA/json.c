@@ -9,6 +9,7 @@
 #include "parameterSet.h"
 #include "esp_heap_caps.h"
 #include "my_log.h"
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -16,6 +17,30 @@ static const char *TAG = "json";
 
 /** 上行发布回调（由 mqtt 注册） */
 static json_publish_fn s_publish_fn = NULL;
+
+/**
+ * @brief cJSON 分配：优先外部 PSRAM
+ * @param size 字节数
+ * @return 指针或 NULL
+ */
+static void *cjson_malloc_spiram(size_t size)
+{
+    void *p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (p == NULL) {
+        p = malloc(size);
+    }
+    return p;
+}
+
+/**
+ * @brief cJSON 释放（兼容内部/外部堆）
+ * @param ptr 指针
+ * @return 无
+ */
+static void cjson_free_spiram(void *ptr)
+{
+    heap_caps_free(ptr);
+}
 
 static bool json_handle_ctrl(const cJSON *root);
 static bool json_send_cmd_ack(const cJSON *root);
@@ -440,9 +465,10 @@ static const json_dispatch_entry_t *json_find_entry(const char *type)
 
 void cjson_init_spiram(void)
 {
+    /* cJSON 的 malloc 只有 size 参数，必须包一层才能指定 SPIRAM */
     cJSON_Hooks hooks = {
-        .malloc_fn = heap_caps_malloc,
-        .free_fn = heap_caps_free
+        .malloc_fn = cjson_malloc_spiram,
+        .free_fn = cjson_free_spiram
     };
     cJSON_InitHooks(&hooks);
     ESP_LOGI(TAG, "cJSON已配置使用SPIRAM");

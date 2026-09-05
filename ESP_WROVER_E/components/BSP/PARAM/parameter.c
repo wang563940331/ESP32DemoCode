@@ -29,6 +29,7 @@ const stParamConfig_t g_stParamConfig[] = {
     {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "admin",                  cStorageApNvsName, 1},     // MQTT用户名变更重连网络
     {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "520110",                 cStorageApNvsName, 1},     // MQTT密码变更重连网络
     {cStorageApCmdNvslogDays,       cStorageApNvslogDays,     PARAM_TYPE_UINT16,  "7",                      cStorageApNvsName, 0},     // SD日志保留天数(1~90)
+    {cStorageApCmdApAlways,         cStorageApNvsApAlways,    PARAM_TYPE_UINT8,   "0",                      cStorageApNvsName, 0},     // AP常在线:1一直/0策略
 
     {cStorageApCmdPk1hV,          cStorageDataNvsPk1hV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},
     {cStorageApCmdPk1hT,          cStorageDataNvsPk1hT,        PARAM_TYPE_UINT32, "0",                      cStorageDataNvsName, 0},

@@ -195,6 +195,8 @@ void app_main(void)
 #endif  
     app_print_version_info();
     NVS_init();
+    /* cJSON 全局走 PSRAM，减轻内部 DRAM（含 AP Web/WS/MQTT 组包） */
+    cjson_init_spiram();
     // mdf_mem_print_heap();
      vTaskDelay(pdMS_TO_TICKS(1000));
     en_log_set();

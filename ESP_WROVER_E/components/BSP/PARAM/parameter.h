@@ -67,6 +67,7 @@
 #define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
 #define cStorageApNvsmqttpasswd         "mqttpasswd"
 #define cStorageApNvslogDays            "logDays"                                //SD日志保留天数(1~90)
+#define cStorageApNvsApAlways           "apAlways"                               //AP常在线:1一直在线,0按策略(BOOT/超时)
 
 #define cStorageDataNvsName               "data"                                    //第一级
 #define cStorageDataNvsPk1hV             "pk1h_v"                                //1小时功率峰值(W)
@@ -131,6 +132,7 @@ typedef enum
     cStorageApCmdNvsmqttuser,                                                       //WEB申请码
     cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
     cStorageApCmdNvslogDays,                                                      //SD日志保留天数
+    cStorageApCmdApAlways,                                                        //AP常在线(1=一直/0=策略)
   
 
     cStorageApCmdPk1hV,                                                         //1小时功率峰值
