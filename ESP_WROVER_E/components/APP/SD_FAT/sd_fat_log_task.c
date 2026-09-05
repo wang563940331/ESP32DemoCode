@@ -32,7 +32,7 @@ static const char* TAG = "sd_fat_log_task";
 /* SD卡挂载路径 */
 #define SD_MOUNT_POINT "/sdcard"
 /* 日志保留天数默认值及合法范围 */
-#define LOG_DAYS_DEFAULT 7
+#define LOG_DAYS_DEFAULT 30
 #define LOG_DAYS_MIN     1
 #define LOG_DAYS_MAX     90
 

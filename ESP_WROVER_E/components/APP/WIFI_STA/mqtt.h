@@ -29,14 +29,9 @@
 #include "mqtt_client.h"
 
 
-// #define MQTT_ADDRESS    "mqtt://47.106.199.35"     //MQTT连接地址
-// #define MQTT_PORT       6004                        //MQTT连接端口号
-// #define MQTT_CLIENT     "mqttx_"              //Client ID（设备唯一，大家最好自行改一下）
-// #define MQTT_USERNAME   "admin"                     //MQTT用户名
-// #define MQTT_PASSWORD   "520110"                  //MQTT密码
-
-#define MQTT_PUBLIC_TOPIC      "563940331/PubTopic"       //测试用的,推送消息主题
-#define MQTT_SUBSCRIBE_TOPIC    "563940331/SubTopic"      //测试用的,需要订阅的主题
+#define MQTT_TOPIC_MAX_LEN     64
+#define MQTT_PUBLIC_TOPIC      "device/pub"       // 上行主题默认值（NVS 空时回退）
+#define MQTT_SUBSCRIBE_TOPIC    "device/sub"      // 下行主题默认值（NVS 空时回退）
 
 typedef enum
 {

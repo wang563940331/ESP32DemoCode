@@ -116,7 +116,7 @@ stShellCmd_t setMQTT =
     .pCmd       = "setMQTT",
     .pFormat    = "格式:setMQTT <domain> <port>",
     .pFunction  = "功能:设置MQTT服务器地址和端口",
-    .pRemarks   = "备注:setMQTT mqtt://47.107.58.46 6004",
+    .pRemarks   = "备注:setMQTT mqtt://mqtt.example.com 1883",
     .pFunc      = ShellsetMQTT,
 };
 
@@ -125,7 +125,7 @@ stShellCmd_t setMQTTUser =
     .pCmd       = "setMQTTUser",
     .pFormat    = "格式:setMQTTUser <user> <passwd>",
     .pFunction  = "功能:设置MQTT用户名和密码",
-    .pRemarks   = "备注:setMQTTUser admin 520110",
+    .pRemarks   = "备注:setMQTTUser mqtt_user mqtt_pass",
     .pFunc      = ShellsetMQTTUser,
 };
 

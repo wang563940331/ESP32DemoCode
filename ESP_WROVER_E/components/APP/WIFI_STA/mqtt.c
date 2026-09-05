@@ -34,6 +34,8 @@ typedef struct {
     eControl start_once;             /**< 下行控制状态 */
     SensorData_t sensor_cache;       /**< Event Bus 传感器缓存 */
     MeterData_t meter_cache;         /**< Event Bus 电表缓存 */
+    char pub_topic[MQTT_TOPIC_MAX_LEN]; /**< 发布主题（上行，来自 NVS） */
+    char sub_topic[MQTT_TOPIC_MAX_LEN]; /**< 订阅主题（下行，来自 NVS） */
 } mqtt_ctx_t;
 
 static mqtt_ctx_t s_ctx = {
@@ -45,6 +47,8 @@ static mqtt_ctx_t s_ctx = {
         .humidity = -1.0f,
     },
     .meter_cache = {0},
+    .pub_topic = {0},
+    .sub_topic = {0},
 };
 
 eControl getStart_once(void)
@@ -146,7 +150,10 @@ static void aliot_mqtt_event_handler(void *event_handler_arg,
         ESP_LOGI(TAG, "MQTT 连接成功");
         ctx->is_connected = true;
         event_publish(EVENT_MQTT_CONNECTED, NULL, 0);
-        esp_mqtt_client_subscribe_single(ctx->client, MQTT_SUBSCRIBE_TOPIC, 1);
+        /* 使用 NVS 配置的订阅主题；空则回退默认宏 */
+        const char *sub = (ctx->sub_topic[0] != '\0') ? ctx->sub_topic : MQTT_SUBSCRIBE_TOPIC;
+        ESP_LOGI(TAG, "MQTT 订阅主题: %s", sub);
+        esp_mqtt_client_subscribe_single(ctx->client, sub, 1);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT 连接断开");
@@ -300,6 +307,19 @@ void mqtt_start(void)
     sStorageApGet(cStorageApCmdNvsmqttpasswd,sizeof(MQTT_PASSWORD),(u8 *)MQTT_PASSWORD);
     sStorageApGet(cStorageApCmdNvsmqttclient,sizeof(MQTT_CLIENT),(u8 *)MQTT_CLIENT);
 
+    /* 从 NVS 加载发布/订阅主题；读失败或为空则用编译期默认值 */
+    memset(s_ctx.pub_topic, 0, sizeof(s_ctx.pub_topic));
+    memset(s_ctx.sub_topic, 0, sizeof(s_ctx.sub_topic));
+    if (sStorageApGet(cStorageApCmdNvsmqttpub, sizeof(s_ctx.pub_topic), (u8 *)s_ctx.pub_topic) != eStorageApRstSuccess
+        || s_ctx.pub_topic[0] == '\0') {
+        strncpy(s_ctx.pub_topic, MQTT_PUBLIC_TOPIC, sizeof(s_ctx.pub_topic) - 1);
+    }
+    if (sStorageApGet(cStorageApCmdNvsmqttsub, sizeof(s_ctx.sub_topic), (u8 *)s_ctx.sub_topic) != eStorageApRstSuccess
+        || s_ctx.sub_topic[0] == '\0') {
+        strncpy(s_ctx.sub_topic, MQTT_SUBSCRIBE_TOPIC, sizeof(s_ctx.sub_topic) - 1);
+    }
+    ESP_LOGI(TAG, "MQTT 主题: pub=%s, sub=%s", s_ctx.pub_topic, s_ctx.sub_topic);
+
     // 域名先解析成 IPv4 再连, 便于对照“IP能连、域名不能连”的问题
     if (mqtt_extract_hostname(MQTT_ADDRESS, hostname, sizeof(hostname))
         && mqtt_resolve_ipv4(hostname, resolved_ip, sizeof(resolved_ip))) {
@@ -335,8 +355,9 @@ void mqtt_start(void)
 
     mqtt_cfg.network.disable_auto_reconnect = true;   // 关闭自动重连，避免FRP透传下clientId冲突死循环
 
-    ESP_LOGI(TAG,"MQTT连接配置:clientId:%s,username:%s,password:%s",mqtt_cfg.credentials.client_id,
-    mqtt_cfg.credentials.username,mqtt_cfg.credentials.authentication.password);
+    /* 不打印密码，避免串口日志泄露 */
+    ESP_LOGI(TAG, "MQTT连接配置: clientId=%s, username=%s",
+             mqtt_cfg.credentials.client_id, mqtt_cfg.credentials.username);
     //设置mqtt配置，返回mqtt操作句柄
     s_ctx.client = esp_mqtt_client_init(&mqtt_cfg);
     //注册mqtt事件回调函数，传入模块上下文
@@ -356,7 +377,9 @@ esp_err_t mqtt_publish_payload(const char *payload)
     if (payload == NULL || s_ctx.client == NULL || !s_ctx.is_connected) {
         return ESP_FAIL;
     }
-    int msg_id = esp_mqtt_client_publish(s_ctx.client, MQTT_PUBLIC_TOPIC,
+    /* 优先用运行时 NVS 主题，兜底编译期默认 */
+    const char *pub = (s_ctx.pub_topic[0] != '\0') ? s_ctx.pub_topic : MQTT_PUBLIC_TOPIC;
+    int msg_id = esp_mqtt_client_publish(s_ctx.client, pub,
                                          payload, (int)strlen(payload), 1, 0);
     return (msg_id >= 0) ? ESP_OK : ESP_FAIL;
 }

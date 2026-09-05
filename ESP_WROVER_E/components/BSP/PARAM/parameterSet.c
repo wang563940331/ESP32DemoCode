@@ -244,6 +244,9 @@ eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData)
                 case cStorageApCmdNvsmqttsub:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttsub, (const char *)pData);
                     break;
+                case cStorageApCmdNvsmqttpub:
+                    bRst = cJSON_SetStringEx(pObj, cStorageApNvsmqttpub, (const char *)pData);
+                    break;
                 case cStorageApCmdNvsmqttclient:
                     bRst = cJSON_SetStringEx(pObj , cStorageApNvsmqttclient, (const char *)pData);
                     break;
@@ -437,7 +440,23 @@ eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData)
                         break;
                     }
                     *((u16 *)pData) = (u16)i32Value;
-                    break;  
+                    break;
+                case cStorageApCmdNvsmqttsub:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttsub, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "mqttsub 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
+                case cStorageApCmdNvsmqttpub:
+                    if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttpub, (char *)pData, u16MaxLen))
+                    {
+                        EN_SLOGE(TAG, "mqttpub 对象不存在");
+                        eRst = eStorageApRstObjNull;
+                        break;
+                    }
+                    break;
                 case cStorageApCmdNvsmqttclient:
                     if(!cJSON_GetStringEx(pObj, cStorageApNvsmqttclient, (char *)pData, u16MaxLen))
                     {
@@ -710,6 +729,34 @@ bool sStorageApSetNvsmqttclient(char *data)
         return(true);
     }
     return(false);
+}
+
+/**
+ * @brief 设置 MQTT 订阅主题（下行）
+ * @param data 主题字符串
+ * @return true 成功，false 失败
+ */
+bool sStorageApSetNvsmqttsub(char *data)
+{
+    /* 空指针直接拒绝，避免写入无效 NVS */
+    if (data == NULL) {
+        return false;
+    }
+    return sStorageApSet(cStorageApCmdNvsmqttsub, (const u8 *)data) == eStorageApRstSuccess;
+}
+
+/**
+ * @brief 设置 MQTT 发布主题（上行）
+ * @param data 主题字符串
+ * @return true 成功，false 失败
+ */
+bool sStorageApSetNvsmqttpub(char *data)
+{
+    /* 空指针直接拒绝，避免写入无效 NVS */
+    if (data == NULL) {
+        return false;
+    }
+    return sStorageApSet(cStorageApCmdNvsmqttpub, (const u8 *)data) == eStorageApRstSuccess;
 }
 
 bool sStorageApSetNvsmqttuser(char *data)

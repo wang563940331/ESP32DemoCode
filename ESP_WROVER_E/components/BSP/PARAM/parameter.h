@@ -62,10 +62,11 @@
 #define cStorageApNvsPassword           "password"                              //热点密码
 #define cStorageApNvsmqttIp             "mqttip"                                    //IP地址
 #define cStorageApNvsmqttport           "mqttport"                               //端口
-#define cStorageApNvsmqttsub            "mqttsub"                                  //连接固定子码掩码
-#define cStorageApNvsmqttclient         "mqttclient"                          //WEB登录密码有效时间(必须U32)
-#define cStorageApNvsmqttuser           "mqttuser"                               //WEB申请码
-#define cStorageApNvsmqttpasswd         "mqttpasswd"
+#define cStorageApNvsmqttsub            "mqttsub"                                // MQTT 订阅主题（下行）
+#define cStorageApNvsmqttpub            "mqttpub"                                // MQTT 发布主题（上行）
+#define cStorageApNvsmqttclient         "mqttclient"                             // MQTT Client ID
+#define cStorageApNvsmqttuser           "mqttuser"                               // MQTT 用户名
+#define cStorageApNvsmqttpasswd         "mqttpasswd"                             // MQTT 密码
 #define cStorageApNvslogDays            "logDays"                                //SD日志保留天数(1~90)
 #define cStorageApNvsApAlways           "apAlways"                               //AP常在线:1一直在线,0按策略(BOOT/超时)
 
@@ -125,14 +126,15 @@ typedef enum
     cStorageApCmdFlg,                                                       //使能标志
     cStorageApCmdSsid,                                                          //热点名称
     cStorageApCmdPassword,                                                      //热点密码
-    cStorageApCmdNvsmqttIp,                                                            //IP地址
-    cStorageApCmdNvsmqttport,                                                       //默认网关地址
-    cStorageApCmdNvsmqttsub,                                                          //连接固定子码掩码
-    cStorageApCmdNvsmqttclient,                                                  //WEB密码有效时间(4个字节时间戳)
-    cStorageApCmdNvsmqttuser,                                                       //WEB申请码
-    cStorageApCmdNvsmqttpasswd,                                                   //WEB登录密码
-    cStorageApCmdNvslogDays,                                                      //SD日志保留天数
-    cStorageApCmdApAlways,                                                        //AP常在线(1=一直/0=策略)
+    cStorageApCmdNvsmqttIp,                                                       // MQTT 地址
+    cStorageApCmdNvsmqttport,                                                     // MQTT 端口
+    cStorageApCmdNvsmqttsub,                                                      // MQTT 订阅主题
+    cStorageApCmdNvsmqttclient,                                                   // MQTT Client ID
+    cStorageApCmdNvsmqttuser,                                                     // MQTT 用户名
+    cStorageApCmdNvsmqttpasswd,                                                   // MQTT 密码
+    cStorageApCmdNvslogDays,                                                      // SD日志保留天数
+    cStorageApCmdApAlways,                                                        // AP常在线(1=一直/0=策略)
+    cStorageApCmdNvsmqttpub,                                                      // MQTT 发布主题
   
 
     cStorageApCmdPk1hV,                                                         //1小时功率峰值

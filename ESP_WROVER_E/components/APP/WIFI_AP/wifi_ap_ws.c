@@ -173,17 +173,20 @@ static esp_err_t wifi_ap_ws_reply_pong(httpd_req_t *req)
 }
 
 /**
- * @brief 组包并回复电表/传感器快照（MeterAll）
+ * @brief 组包并回复电表/传感器快照（MeterAll，字段与 MQTT 上报对齐）
  * @param req WS 请求
  * @return ESP_OK 成功
  */
 static esp_err_t wifi_ap_ws_reply_meter_all(httpd_req_t *req)
 {
+    static uint32_t s_headid = 0;
     char time_str[32];
     char sn[20] = {0};
     char num[32];
+    char headid[16];
     wifi_ap_ws_fill_time(time_str, sizeof(time_str));
     sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8 *)sn);
+    snprintf(headid, sizeof(headid), "%lu", (unsigned long)(++s_headid));
 
     cJSON *root = cJSON_CreateObject();
     cJSON *params = cJSON_CreateObject();
@@ -196,6 +199,7 @@ static esp_err_t wifi_ap_ws_reply_meter_all(httpd_req_t *req)
     cJSON_AddStringToObject(root, "Type", "MeterAll");
     cJSON_AddStringToObject(root, "device", sn);
     cJSON_AddItemToObject(root, "params", params);
+    cJSON_AddStringToObject(params, "headid", headid);
     cJSON_AddStringToObject(params, "time", time_str);
 
     if (g_sensor_data.temperature > -199.0f) {
@@ -225,6 +229,27 @@ static esp_err_t wifi_ap_ws_reply_meter_all(httpd_req_t *req)
     if (g_meter_data.Totol_Energy != 0) {
         snprintf(num, sizeof(num), "%.2f", g_meter_data.Totol_Energy);
         cJSON_AddStringToObject(params, "Totol_Energy", num);
+    }
+    /* 功率峰值窗口，与 MQTT MeterAll 字段一致 */
+    if (g_meter_data.peak_3min.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_3min.peak_power);
+        cJSON_AddStringToObject(params, "PowerPeak_3min", num);
+    }
+    if (g_meter_data.peak_1hour.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1hour.peak_power);
+        cJSON_AddStringToObject(params, "PowerPeak_1h", num);
+    }
+    if (g_meter_data.peak_1day.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1day.peak_power);
+        cJSON_AddStringToObject(params, "PowerPeak_1d", num);
+    }
+    if (g_meter_data.peak_7day.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_7day.peak_power);
+        cJSON_AddStringToObject(params, "PowerPeak_7d", num);
+    }
+    if (g_meter_data.peak_1month.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1month.peak_power);
+        cJSON_AddStringToObject(params, "PowerPeak_1m", num);
     }
 
     char *payload = cJSON_PrintUnformatted(root);

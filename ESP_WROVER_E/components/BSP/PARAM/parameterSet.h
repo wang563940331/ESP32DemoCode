@@ -22,6 +22,8 @@ bool sStorageApSetNvslogDays(u16 data);
 bool sStorageApSetApAlways(u8 always);
 bool sStorageApGetApAlways(u8 *out);
 bool sStorageApSetNvsmqttclient(char *data);
+bool sStorageApSetNvsmqttsub(char *data);
+bool sStorageApSetNvsmqttpub(char *data);
 bool sStorageApSetNvsmqttuser(char *data);
 bool sStorageApSetNvsmqttpasswd(char *data);
 bool sStorageGwSetMeter485En(char *mode);
