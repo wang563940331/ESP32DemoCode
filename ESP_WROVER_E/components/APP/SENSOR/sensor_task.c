@@ -55,7 +55,7 @@ static void sensor_task(void *pvParameters)
 
     EN_SLOGI(TAG, "传感器采集任务启动");
 
-    // 读取传感器模式配置
+    // 读取传感器模式配置（选型逻辑移到上层，驱动层不再读 NVS）
     char buf[20] = {0};
     sStorageGwGet(cStorageApCmdTmpMode, sizeof(buf), (uint8_t *)buf);
 
@@ -65,6 +65,23 @@ static void sensor_task(void *pvParameters)
         vTaskDelete(NULL);
         return;
     }
+
+    /* 把 NVS 中的 tmpMode 字符串映射为驱动类型，并注入给 BSP 驱动 */
+    one_wire_type_t sensor_type;
+    uint8_t sensor_res = 12;  /* DS18B20 默认 12 位分辨率 */
+    if (memcmp(buf, "DS18B20", sizeof("DS18B20")) == 0) {
+        sensor_type = ONE_WIRE_TYPE_DS18B20;
+    } else if (memcmp(buf, "DHT11", sizeof("DHT11")) == 0) {
+        sensor_type = ONE_WIRE_TYPE_DHT11;
+        sensor_res = 0;
+    } else {
+        ESP_LOGE(TAG, "未知传感器模式: %s，任务退出", buf);
+        s_sensor_task_handle = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    /* 注入配置后，one_wire 工厂不再需要读 NVS */
+    one_wire_register_config(GPIO_NUM_27, sensor_type, sensor_res);
 
     // 尝试获取传感器设备（带重试，最多30次/3秒）
     int retry = 0;

@@ -37,6 +37,17 @@ typedef struct {
 } one_wire_device_t;
 
 /**
+ * @brief 注册单总线传感器配置（由上层注入，解除 BSP 对 NVS 的依赖）
+ *        上层（如 sensor_task）读 NVS 选型后调用本函数注入配置，
+ *        驱动层不再直接读取参数存储
+ * @param gpio_num GPIO 引脚号
+ * @param type 传感器类型
+ * @param resolution 分辨率（仅 DS18B20 使用 9-12；DHT11 传 0）
+ * @return ESP_OK 成功，ESP_ERR_INVALID_ARG 参数无效，ESP_ERR_NO_MEM 槽位已满
+ */
+esp_err_t one_wire_register_config(int gpio_num, one_wire_type_t type, uint8_t resolution);
+
+/**
  * @brief 单总线工厂初始化函数
  * @param gpio_num GPIO引脚号
  * @return esp_err_t

@@ -5,7 +5,6 @@
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "my_log.h"
-#include "parameterSet.h"
 #include "rom/ets_sys.h"
 static const char* TAG = "one_wire_bsp";
 
@@ -20,34 +19,58 @@ static const char* TAG = "one_wire_bsp";
 #define DHT11_START_SIGNAL_LOW     18000  // 至少18ms低电平
 #define DHT11_START_SIGNAL_HIGH    30     // 等待30us
 
-// 设备配置映射表（产品配置）
-static const one_wire_config_t one_wire_map[] = {
-// #if(CONFIG_SENSOR_TEMP == CONFIG_SENSOR_DS18B20)
-     {GPIO_NUM_27, ONE_WIRE_TYPE_DS18B20, 12, "DS18B20_1"},
-// #else
-     {GPIO_NUM_27, ONE_WIRE_TYPE_DHT11, 0, "DHT11_1"},  // 切换为DHT11时取消注释
-// #endif
+/**
+ * 运行时传感器配置表：由上层通过 one_wire_register_config 注入，
+ * 驱动层不再直接读取 NVS，解除 BSP 对 PARAM 的策略耦合
+ */
+#define ONE_WIRE_CFG_MAX 4
+/* 槽位 gpio_num 初始化为 -1 表示空闲（BSS 零初始化会让 gpio_num=0 误判为占用） */
+static one_wire_config_t s_slots[ONE_WIRE_CFG_MAX] = {
+    [0 ... ONE_WIRE_CFG_MAX - 1] = { .gpio_num = -1 }
 };
-// static const int one_wire_count = sizeof(one_wire_map) / sizeof(one_wire_map[0]);
 
-// 获取设备配置
-static const one_wire_config_t* get_one_wire_config(int gpio_num) {
-    char tmp[20] = {0};
-    sStorageGwGet(cStorageApCmdTmpMode,sizeof(tmp),(u8 *)tmp);
-    if(memcmp(tmp,"DS18B20",sizeof("DS18B20")) == 0)
-    {
-        return &one_wire_map[0];
-    }else if(memcmp(tmp,"DHT11",sizeof("DHT11")) == 0)
-    {
-        return &one_wire_map[1];
+/**
+ * @brief 注册单总线传感器配置（上层注入）
+ * @param gpio_num GPIO 引脚号
+ * @param type 传感器类型
+ * @param resolution 分辨率（DS18B20 用 9-12；DHT11 传 0）
+ * @return ESP_OK 成功，ESP_ERR_INVALID_ARG 参数无效，ESP_ERR_NO_MEM 槽位已满
+ */
+esp_err_t one_wire_register_config(int gpio_num, one_wire_type_t type, uint8_t resolution)
+{
+    if (gpio_num < 0 || type >= ONE_WIRE_TYPE_MAX) {
+        return ESP_ERR_INVALID_ARG;
     }
+    /* 同一 GPIO 重复注册时覆盖原配置，避免泄漏槽位 */
+    for (int i = 0; i < ONE_WIRE_CFG_MAX; i++) {
+        if (s_slots[i].gpio_num == gpio_num) {
+            s_slots[i].type = type;
+            s_slots[i].resolution = resolution;
+            s_slots[i].name = (type == ONE_WIRE_TYPE_DS18B20) ? "DS18B20_1" : "DHT11_1";
+            return ESP_OK;
+        }
+    }
+    /* 找空槽位（gpio_num < 0 视为空闲）注册 */
+    for (int i = 0; i < ONE_WIRE_CFG_MAX; i++) {
+        if (s_slots[i].gpio_num < 0) {
+            s_slots[i].gpio_num = gpio_num;
+            s_slots[i].type = type;
+            s_slots[i].resolution = resolution;
+            s_slots[i].name = (type == ONE_WIRE_TYPE_DS18B20) ? "DS18B20_1" : "DHT11_1";
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NO_MEM;
+}
 
-    // for (int i = 0; i < one_wire_count; i++) {
-    //     if (one_wire_map[i].gpio_num == gpio_num) {
-    //         return &one_wire_map[i];
-    //     }
-    // }
-     return NULL;
+// 获取设备配置（从运行时注入的配置表查询，不再读 NVS）
+static const one_wire_config_t* get_one_wire_config(int gpio_num) {
+    for (int i = 0; i < ONE_WIRE_CFG_MAX; i++) {
+        if (s_slots[i].gpio_num == gpio_num) {
+            return &s_slots[i];
+        }
+    }
+    return NULL;
 }
 
 // ==================== 通用GPIO操作 ====================
