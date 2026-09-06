@@ -12,8 +12,6 @@
 #include "utility.h"
 #include "driver/uart.h"
 #include "parameterSet.h"
-#include "json.h"
-#include "cJSON.h"
 #include "one_wire_bsp.h"
 #include "event_bus.h"
 static const char *TAG = "sensor_task";

@@ -9,6 +9,7 @@
 
 #include "mqtt.h"
 #include "json.h"
+#include "telemetry.h"
 #include "simple_wifi_sta.h"
 #include <lwip/apps/sntp.h>
 #include "esp_chip_info.h"
@@ -392,17 +393,18 @@ esp_err_t mqtt_publish_payload(const char *payload)
  */
 void send_ctrlacl(const char *data)
 {
-    json_send_ctrlacl(data);
+    /* 上行组包已迁至 telemetry，mqtt 仅转发 */
+    telemetry_send_ctrlacl(data);
 }
 
 /**
- * @brief 电表/传感器快照上行：组包在 json，本函数注入缓存与电量历史
+ * @brief 电表/传感器快照上行：组包在 telemetry，本函数注入本地缓存
  * @param data headid 字符串
  * @return 无
  */
 void send_head(const char *data)
 {
-    json_send_head(data, &s_ctx.sensor_cache, &s_ctx.meter_cache);
+    telemetry_send_head(data, &s_ctx.sensor_cache, &s_ctx.meter_cache);
 }
 
 /**
@@ -530,6 +532,35 @@ void my_task(void *pvParameters)
 }
 
 /**
+ * @brief Control 下行命令适配：open/close/reboot → eControl
+ * @param cmd 命令字符串
+ * @return true 已识别并执行，false 未知命令
+ */
+static bool json_control_adapter(const char *cmd)
+{
+    if (cmd == NULL) {
+        return false;
+    }
+    if (strcmp(cmd, "open") == 0) {
+        ESP_LOGI(TAG, "命令: OPEN");
+        setStart_once(POWERON);
+        return true;
+    }
+    if (strcmp(cmd, "close") == 0) {
+        ESP_LOGI(TAG, "命令: CLOSE");
+        setStart_once(POWEROF);
+        return true;
+    }
+    if (strcmp(cmd, "reboot") == 0) {
+        ESP_LOGI(TAG, "命令: REBOOT");
+        setStart_once(REBOOT);
+        return true;
+    }
+    ESP_LOGW(TAG, "Control: 未知 cmd=%s", cmd);
+    return false;
+}
+
+/**
  * @brief PWM 查询状态适配：把 eControl 转为 BSP 的 pwm_power_state_t
  *        枚举值一一对应，仅做类型转换，无运行时开销
  * @return 当前电源状态
@@ -559,8 +590,9 @@ static void pwm_notify_adapter(const char *msg)
 
 int init_mqtt(void)
 {
-    /* JSON 上行组包通过回调发布，避免 json 直接依赖 mqtt client */
-    json_set_publish_fn(mqtt_publish_payload);//
+    /* 上行组包走 telemetry；下行 Control 走回调，json 不依赖 mqtt.h */
+    telemetry_set_publish_fn(mqtt_publish_payload);
+    json_set_control_fn(json_control_adapter);
     mqtt_event_observers_register();
 
     /* 注入电源状态回调给 BSP/PWM，解除其反向依赖 APP 的 forward declare */

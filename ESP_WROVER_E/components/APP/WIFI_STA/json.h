@@ -1,12 +1,10 @@
 /*
- * @Description: JSON 下行分发 + 上行组包（发布走回调，不依赖 MQTT 细节）
+ * @Description: JSON 下行分发（仅解析/查表/执行 Control；上行组包在 telemetry）
  */
 #ifndef __JSON_H__
 #define __JSON_H__
 
 #include "cJSON.h"
-#include "esp_err.h"
-#include "event_payloads.h"
 #include <stdbool.h>
 
 /**
@@ -15,6 +13,13 @@
  * @return true 成功，false 失败
  */
 typedef bool (*json_handler_fn)(const cJSON *root);
+
+/**
+ * @brief 下行 Control 命令回调（open/close/reboot），由 mqtt 注入，避免 json 依赖 mqtt.h
+ * @param cmd 命令字符串
+ * @return true 已识别并执行，false 未知命令
+ */
+typedef bool (*json_control_fn)(const char *cmd);
 
 /**
  * @brief 下行消息分发表项（Type → 处理函数 + 应答函数）
@@ -26,18 +31,11 @@ typedef struct {
 } json_dispatch_entry_t;
 
 /**
- * @brief 上行发布回调：由 MQTT 等传输层注册
- * @param payload 已序列化的 JSON 字符串（回调期间有效）
- * @return ESP_OK 成功
- */
-typedef esp_err_t (*json_publish_fn)(const char *payload);
-
-/**
- * @brief 注册上行发布回调（通常在 init_mqtt 里传入 mqtt_publish_payload）
- * @param fn 发布函数，NULL 表示取消
+ * @brief 注册 Control 命令回调（通常在 init_mqtt 里注入 setStart_once 适配）
+ * @param fn 控制函数，NULL 表示取消
  * @return 无
  */
-void json_set_publish_fn(json_publish_fn fn);
+void json_set_control_fn(json_control_fn fn);
 
 /**
  * @brief 配置 cJSON 使用 SPIRAM 分配内存
@@ -59,23 +57,5 @@ void json_dispatch(const char *json_string);
  * @return 无
  */
 void parse_json(const char *json_string, void *Start_once);
-
-/**
- * @brief 组包并发布状态变更（原 send_ctrlacl 主包）
- * @param ctrl 状态/控制描述字符串
- * @return 无
- */
-void json_send_ctrlacl(const char *ctrl);
-
-/**
- * @brief 组包并发布电表/传感器快照（含 DailyEnergy）
- * @param headid 序号或 head 标识
- * @param sensor 传感器快照，不可为 NULL
- * @param meter 电表快照，不可为 NULL
- * @return 无
- */
-void json_send_head(const char *headid,
-                    const SensorData_t *sensor,
-                    const MeterData_t *meter);
 
 #endif
