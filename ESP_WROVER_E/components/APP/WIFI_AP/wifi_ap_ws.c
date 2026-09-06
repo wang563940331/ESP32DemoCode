@@ -7,12 +7,16 @@
 #include "wifi_ap.h"
 #include "wifi_ap_mem.h"
 #include "cJSON.h"
-#include "meter_DLT645.h"
-#include "sensor_task.h"
+#include "event_bus.h"
+#include "event_payloads.h"
 #include "parameterSet.h"
 #include "parameter.h"
 #include "utility.h"
 #include "esp_log.h"
+
+/* 临界区保护：事件回调（sensor/meter 任务）与 WS 回复（httpd 任务）跨任务访问缓存 */
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +32,52 @@ static const char *TAG = "WIFI_AP_WS";
 static httpd_handle_t s_httpd = NULL;
 static int s_ws_fds[WIFI_AP_WS_CLIENT_MAX];
 static int s_ws_fd_count = 0;
+
+/* —— 本地遥测缓存：由 event_bus 推送更新，WS 回复时只读缓存 —— */
+static portMUX_TYPE s_cache_lock = portMUX_INITIALIZER_UNLOCKED;
+static SensorData_t s_sensor_cache = { .temperature = -200.0f, .humidity = -1.0f };
+static MeterData_t  s_meter_cache  = { 0 };
+/* 订阅句柄，unregister 时取消，避免泄漏 event_bus 槽位 */
+static int s_sub_sensor = EVENT_SUBSCRIBE_INVALID;
+static int s_sub_meter  = EVENT_SUBSCRIBE_INVALID;
+
+/**
+ * @brief 传感器更新事件回调：拷贝最新一帧到本地缓存
+ * @param type 事件类型（EVENT_SENSOR_UPDATED）
+ * @param data SensorData_t 指针
+ * @param len 载荷长度
+ * @return 无
+ */
+static void wifi_ap_ws_on_sensor(event_type_t type, const void *data, size_t len)
+{
+    (void)type;
+    /* 载荷长度必须匹配，避免读到不完整结构体 */
+    if (data == NULL || len != sizeof(SensorData_t)) {
+        return;
+    }
+    /* 临界区内只做拷贝，不阻塞、不分配 */
+    portENTER_CRITICAL(&s_cache_lock);
+    s_sensor_cache = *(const SensorData_t *)data;
+    portEXIT_CRITICAL(&s_cache_lock);
+}
+
+/**
+ * @brief 电表更新事件回调：拷贝最新一帧到本地缓存
+ * @param type 事件类型（EVENT_METER_UPDATED）
+ * @param data MeterData_t 指针
+ * @param len 载荷长度
+ * @return 无
+ */
+static void wifi_ap_ws_on_meter(event_type_t type, const void *data, size_t len)
+{
+    (void)type;
+    if (data == NULL || len != sizeof(MeterData_t)) {
+        return;
+    }
+    portENTER_CRITICAL(&s_cache_lock);
+    s_meter_cache = *(const MeterData_t *)data;
+    portEXIT_CRITICAL(&s_cache_lock);
+}
 
 /**
  * @brief 记录已握手的 WebSocket 客户端 fd
@@ -174,6 +224,7 @@ static esp_err_t wifi_ap_ws_reply_pong(httpd_req_t *req)
 
 /**
  * @brief 组包并回复电表/传感器快照（MeterAll，字段与 MQTT 上报对齐）
+ *        数据来自本地缓存（由 event_bus 推送），不再直接读 g_meter_data/g_sensor_data
  * @param req WS 请求
  * @return ESP_OK 成功
  */
@@ -187,6 +238,14 @@ static esp_err_t wifi_ap_ws_reply_meter_all(httpd_req_t *req)
     wifi_ap_ws_fill_time(time_str, sizeof(time_str));
     sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8 *)sn);
     snprintf(headid, sizeof(headid), "%lu", (unsigned long)(++s_headid));
+
+    /* 进入临界区拷贝缓存快照，锁外再组 JSON，减少锁持有时间 */
+    SensorData_t sensor_snap;
+    MeterData_t  meter_snap;
+    portENTER_CRITICAL(&s_cache_lock);
+    sensor_snap = s_sensor_cache;
+    meter_snap  = s_meter_cache;
+    portEXIT_CRITICAL(&s_cache_lock);
 
     cJSON *root = cJSON_CreateObject();
     cJSON *params = cJSON_CreateObject();
@@ -202,53 +261,55 @@ static esp_err_t wifi_ap_ws_reply_meter_all(httpd_req_t *req)
     cJSON_AddStringToObject(params, "headid", headid);
     cJSON_AddStringToObject(params, "time", time_str);
 
-    if (g_sensor_data.temperature > -199.0f) {
-        snprintf(num, sizeof(num), "%.2f", g_sensor_data.temperature);
+    /* 传感器字段：温度/湿度（-200/-1 为无效占位，不输出） */
+    if (sensor_snap.temperature > -199.0f) {
+        snprintf(num, sizeof(num), "%.2f", sensor_snap.temperature);
         cJSON_AddStringToObject(params, "temperature", num);
     }
-    if (g_sensor_data.humidity >= 0) {
-        snprintf(num, sizeof(num), "%.2f", g_sensor_data.humidity);
+    if (sensor_snap.humidity >= 0) {
+        snprintf(num, sizeof(num), "%.2f", sensor_snap.humidity);
         cJSON_AddStringToObject(params, "humidity", num);
     }
-    if (g_meter_data.VolageA != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.VolageA);
+    /* 电表瞬时量：0 视为未采到，不输出，避免页面显示一堆 0 */
+    if (meter_snap.VolageA != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.VolageA);
         cJSON_AddStringToObject(params, "VolageA", num);
     }
-    if (g_meter_data.CurrentA != 0) {
-        snprintf(num, sizeof(num), "%.3f", g_meter_data.CurrentA);
+    if (meter_snap.CurrentA != 0) {
+        snprintf(num, sizeof(num), "%.3f", meter_snap.CurrentA);
         cJSON_AddStringToObject(params, "CurrentA", num);
     }
-    if (g_meter_data.PowerPA != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.PowerPA);
+    if (meter_snap.PowerPA != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.PowerPA);
         cJSON_AddStringToObject(params, "PowerPA", num);
     }
-    if (g_meter_data.Frequency != 0) {
-        snprintf(num, sizeof(num), "%.2f", g_meter_data.Frequency);
+    if (meter_snap.Frequency != 0) {
+        snprintf(num, sizeof(num), "%.2f", meter_snap.Frequency);
         cJSON_AddStringToObject(params, "Frequency", num);
     }
-    if (g_meter_data.Totol_Energy != 0) {
-        snprintf(num, sizeof(num), "%.2f", g_meter_data.Totol_Energy);
+    if (meter_snap.Totol_Energy != 0) {
+        snprintf(num, sizeof(num), "%.2f", meter_snap.Totol_Energy);
         cJSON_AddStringToObject(params, "Totol_Energy", num);
     }
     /* 功率峰值窗口，与 MQTT MeterAll 字段一致 */
-    if (g_meter_data.peak_3min.peak_power != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_3min.peak_power);
+    if (meter_snap.peak_3min.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.peak_3min.peak_power);
         cJSON_AddStringToObject(params, "PowerPeak_3min", num);
     }
-    if (g_meter_data.peak_1hour.peak_power != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1hour.peak_power);
+    if (meter_snap.peak_1hour.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.peak_1hour.peak_power);
         cJSON_AddStringToObject(params, "PowerPeak_1h", num);
     }
-    if (g_meter_data.peak_1day.peak_power != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1day.peak_power);
+    if (meter_snap.peak_1day.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.peak_1day.peak_power);
         cJSON_AddStringToObject(params, "PowerPeak_1d", num);
     }
-    if (g_meter_data.peak_7day.peak_power != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_7day.peak_power);
+    if (meter_snap.peak_7day.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.peak_7day.peak_power);
         cJSON_AddStringToObject(params, "PowerPeak_7d", num);
     }
-    if (g_meter_data.peak_1month.peak_power != 0) {
-        snprintf(num, sizeof(num), "%.1f", g_meter_data.peak_1month.peak_power);
+    if (meter_snap.peak_1month.peak_power != 0) {
+        snprintf(num, sizeof(num), "%.1f", meter_snap.peak_1month.peak_power);
         cJSON_AddStringToObject(params, "PowerPeak_1m", num);
     }
 
@@ -476,6 +537,7 @@ static esp_err_t wifi_ap_ws_handler(httpd_req_t *req)
 
 /**
  * @brief 注册 WebSocket 协议入口 /ws（不含 HTML 页面）
+ *        同时订阅传感器/电表事件，维护本地遥测缓存供 WS 回复使用
  * @param server httpd 句柄
  * @return ESP_OK 成功
  */
@@ -486,6 +548,13 @@ esp_err_t wifi_ap_ws_register(httpd_handle_t server)
     }
     s_httpd = server;
     s_ws_fd_count = 0;
+
+    /* 订阅遥测事件：sensor/meter 任务通过 event_bus 推送，WS 不再直读全局变量 */
+    s_sub_sensor = event_subscribe(EVENT_SENSOR_UPDATED, wifi_ap_ws_on_sensor);
+    s_sub_meter  = event_subscribe(EVENT_METER_UPDATED,  wifi_ap_ws_on_meter);
+    if (s_sub_sensor == EVENT_SUBSCRIBE_INVALID || s_sub_meter == EVENT_SUBSCRIBE_INVALID) {
+        ESP_LOGW(TAG, "遥测事件订阅失败 sensor=%d meter=%d", s_sub_sensor, s_sub_meter);
+    }
 
     /* 仅注册 WebSocket 协议入口；HTML/API 由 wifi_ap_web_register 负责 */
     httpd_uri_t ws_uri = {
@@ -509,4 +578,13 @@ void wifi_ap_ws_unregister(void)
 {
     s_ws_fd_count = 0;
     s_httpd = NULL;
+    /* 取消订阅，释放 event_bus 槽位（避免反复注册/注销泄漏） */
+    if (s_sub_sensor != EVENT_SUBSCRIBE_INVALID) {
+        event_unsubscribe(s_sub_sensor);
+        s_sub_sensor = EVENT_SUBSCRIBE_INVALID;
+    }
+    if (s_sub_meter != EVENT_SUBSCRIBE_INVALID) {
+        event_unsubscribe(s_sub_meter);
+        s_sub_meter = EVENT_SUBSCRIBE_INVALID;
+    }
 }
