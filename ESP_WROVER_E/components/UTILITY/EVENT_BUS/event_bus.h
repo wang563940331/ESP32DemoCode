@@ -16,6 +16,10 @@ typedef enum {
     EVENT_METER_UPDATED,        /* 载荷: MeterData_t，见 common/event_payloads.h */
     EVENT_MQTT_CONNECTED,       /* 载荷: 无（data 可为 NULL） */
     EVENT_MQTT_DISCONNECTED,    /* 载荷: 无（data 可为 NULL） */
+    EVENT_AP_STA_CONNECTED,     /* 载荷: 无，SoftAP 有客户端接入 */
+    EVENT_AP_STA_DISCONNECTED,  /* 载荷: 无，SoftAP 客户端断开 */
+    EVENT_SMARTCONFIG_START,     /* 载荷: 无，SmartConfig 配网开始 */
+    EVENT_SMARTCONFIG_STOP,      /* 载荷: 无，SmartConfig 配网结束 */
     EVENT_MAX
 } event_type_t;
 

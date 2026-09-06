@@ -32,6 +32,7 @@
 #include "parameterSet.h"
 #include "wifi_ap.h"
 #include "shell.h"
+#include "event_bus.h"
 //需要把这两个修改成你家WIFI，测试是否连接成功
 #define DEFAULT_WIFI_SSID           "TTS"
 #define DEFAULT_WIFI_PASSWORD       "88888888"
@@ -584,7 +585,9 @@ static void smartconfig_example_task(void * parm)
             // ESP_LOGI(TAG,"ssid:%s",s_ssid_value);
             // write_nvs_password(s_password_value);   //将password写入NVS
             //  ESP_LOGI(TAG,"password:%s",s_password_value);
-            s_is_smartconfig = false;       
+            s_is_smartconfig = false;
+            /* 通知 LED 等观察者：SmartConfig 配网结束 */
+            event_publish(EVENT_SMARTCONFIG_STOP, NULL, 0);
             vTaskDelete(NULL);              //退出任务
         }
     }
@@ -601,6 +604,8 @@ void smartconfig_start(void)
     {
         ESP_LOGI(TAG, "初始化smartconfig网络服务...");
         s_is_smartconfig = true;
+        /* 通知 LED 等观察者：SmartConfig 配网开始 */
+        event_publish(EVENT_SMARTCONFIG_START, NULL, 0);
         // 确保WiFi处于STA模式
         esp_wifi_set_mode(WIFI_MODE_STA);
         esp_wifi_disconnect();

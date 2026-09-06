@@ -30,6 +30,12 @@
 #include "esp_timer.h"
 #include "driver/ledc.h"
 #include "gpio_output_bsp.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "event_bus.h"
+#include "esp_log.h"
+
+static const char *TAG_LED = "led";
 
 // LED模式枚举
 typedef enum {
@@ -41,8 +47,93 @@ typedef enum {
 // 当前LED模式
 static volatile led_mode_t current_mode = LED_MODE_NONE;
 
+/* —— 状态指示灯：由事件总线驱动，不再由 main 轮询 getter —— */
+static volatile struct {
+    bool smartconfig;    /* SmartConfig 配网进行中 */
+    bool ap_client;      /* SoftAP 有客户端连接 */
+    bool mqtt_connected; /* MQTT 已连接 */
+} s_led_flags = { .smartconfig = false, .ap_client = false, .mqtt_connected = false };
+
 /**
- * @brief       初始化LED
+ * @brief SmartConfig 开始事件回调
+ */
+static void led_on_smartconfig_start(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.smartconfig = true;
+}
+
+/**
+ * @brief SmartConfig 结束事件回调
+ */
+static void led_on_smartconfig_stop(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.smartconfig = false;
+}
+
+/**
+ * @brief AP 客户端接入事件回调
+ */
+static void led_on_ap_sta_connected(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.ap_client = true;
+}
+
+/**
+ * @brief AP 客户端断开事件回调
+ */
+static void led_on_ap_sta_disconnected(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.ap_client = false;
+}
+
+/**
+ * @brief MQTT 连接成功事件回调
+ */
+static void led_on_mqtt_connected(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.mqtt_connected = true;
+}
+
+/**
+ * @brief MQTT 连接断开事件回调
+ */
+static void led_on_mqtt_disconnected(event_type_t type, const void *data, size_t len)
+{
+    (void)type; (void)data; (void)len;
+    s_led_flags.mqtt_connected = false;
+}
+
+/**
+ * @brief LED 状态指示任务：根据当前状态标志按优先级选择闪烁模式
+ *        优先级：SmartConfig > AP客户端 > MQTT未连接 > MQTT已连接
+ * @param pvParameters 未使用
+ */
+static void led_state_task(void *pvParameters)
+{
+    (void)pvParameters;
+    while (1) {
+        /* 优先级从高到低，与原 main 轮询逻辑一致 */
+        if (s_led_flags.smartconfig) {
+            led_blink();            /* SmartConfig 模式 */
+        } else if (s_led_flags.ap_client) {
+            led_fast_blink();       /* AP 有客户端连接，快闪 */
+        } else if (!s_led_flags.mqtt_connected) {
+            led_heartbeat();       /* MQTT 未连接，心跳 */
+        } else {
+            led_breath_heart();    /* MQTT 已连接，呼吸+心跳 */
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+/**
+ * @brief       初始化LED：配置GPIO + 订阅状态事件 + 启动状态指示任务
+ *              状态由 event_bus 推送（SmartConfig/AP/MQTT），不再由 main 轮询
  * @param       无
  * @retval      无
  */
@@ -50,6 +141,19 @@ void led_init(void)
 {
     gpio_output_factory_init(LED_GPIO_PIN);
     current_mode = LED_MODE_GPIO;
+
+    /* 订阅状态事件，LED 改为推模型 */
+    event_subscribe(EVENT_SMARTCONFIG_START,    led_on_smartconfig_start);
+    event_subscribe(EVENT_SMARTCONFIG_STOP,     led_on_smartconfig_stop);
+    event_subscribe(EVENT_AP_STA_CONNECTED,     led_on_ap_sta_connected);
+    event_subscribe(EVENT_AP_STA_DISCONNECTED, led_on_ap_sta_disconnected);
+    event_subscribe(EVENT_MQTT_CONNECTED,       led_on_mqtt_connected);
+    event_subscribe(EVENT_MQTT_DISCONNECTED,    led_on_mqtt_disconnected);
+
+    /* 启动状态指示任务（取代 main 中的轮询循环） */
+    if (xTaskCreatePinnedToCore(led_state_task, "led_state", 2048, NULL, 3, NULL, 0) != pdPASS) {
+        ESP_LOGE(TAG_LED, "LED 状态任务创建失败");
+    }
 }
 
 void led_reset(void)

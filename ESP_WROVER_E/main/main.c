@@ -250,23 +250,8 @@ void app_main(void)
 
 
 
-        if(gets_is_smartconfig() == true)
-        {
-            led_blink();   /* SmartConfig模式 */
-        }
-        else if(get_ap_connected_status() == 1)
-        {
-            led_fast_blink();   /* AP模式有客户端连接，优先显示快闪 */
-        }
-        else if(gets_is_mqtt_connected() == false)
-        {
-            led_heartbeat();   /* MQTT未连接 */
-        }
-        else
-        {
-            led_breath_heart();   /* MQTT已连接 */
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(10));
+        /* LED 状态指示已由 led_init 内的事件订阅任务接管，
+           main 不再轮询 smartconfig/ap/mqtt 状态 getter */
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

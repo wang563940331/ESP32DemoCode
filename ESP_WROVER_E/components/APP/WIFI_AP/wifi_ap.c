@@ -19,6 +19,7 @@
 #include "parameter.h"
 #include "version.h"
 #include "cJSON.h"
+#include "event_bus.h"
 // Forward declaration
 esp_err_t mqtt_reinit(void);
 /* HTTP 大页缓冲已不再使用（配置改走 WS） */
@@ -123,11 +124,15 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
         ESP_LOGI(TAG, "客户端连接, AID=%d", event->aid);
         g_ap_connected = 1;
         ESP_LOGI(TAG, "AP连接状态已更新: g_ap_connected=%d", g_ap_connected);
+        /* 通知 LED 等观察者：AP 有客户端接入 */
+        event_publish(EVENT_AP_STA_CONNECTED, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
         ESP_LOGI(TAG, "客户端断开, AID=%d", event->aid);
         g_ap_connected = 0;
         ESP_LOGI(TAG, "AP连接状态已更新: g_ap_connected=%d", g_ap_connected);
+        /* 通知 LED 等观察者：AP 客户端断开 */
+        event_publish(EVENT_AP_STA_DISCONNECTED, NULL, 0);
     }
 }
 

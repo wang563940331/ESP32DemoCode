@@ -9,7 +9,7 @@
 /* 引脚定义 */
 #define BEEP_GPIO_PIN    GPIO_NUM_25  /* BEEP连接的GPIO端口 */
 /* 函数声明*/
-void led_init(void);    
+void led_init(void);    /* 初始化LED（含事件订阅与状态指示任务）*/
 void led_heartbeat(void); //心跳
 void led_blink(void); //闪烁
 void led_breath(void); //呼吸
