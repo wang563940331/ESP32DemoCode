@@ -23,6 +23,7 @@
 #include "app_config.h"
 #include "event_bus.h"
 #include "event_payloads.h"
+#include "pwm.h"
 #include <string.h>
 TaskHandle_t myTaskHandle = NULL;
 static const char *TAG = "mqtt";
@@ -528,11 +529,45 @@ void my_task(void *pvParameters)
     }
 }
 
+/**
+ * @brief PWM 查询状态适配：把 eControl 转为 BSP 的 pwm_power_state_t
+ *        枚举值一一对应，仅做类型转换，无运行时开销
+ * @return 当前电源状态
+ */
+static pwm_power_state_t pwm_get_state_adapter(void)
+{
+    return (pwm_power_state_t)getStart_once();
+}
+
+/**
+ * @brief PWM 设置状态适配：把 BSP 的 pwm_power_state_t 转为 eControl
+ * @param state 目标状态
+ */
+static void pwm_set_state_adapter(pwm_power_state_t state)
+{
+    setStart_once((eControl)state);
+}
+
+/**
+ * @brief PWM 状态变更通知适配：直接转发给上行 JSON 通道
+ * @param msg 通知文本
+ */
+static void pwm_notify_adapter(const char *msg)
+{
+    send_ctrlacl(msg);
+}
+
 int init_mqtt(void)
 {
     /* JSON 上行组包通过回调发布，避免 json 直接依赖 mqtt client */
     json_set_publish_fn(mqtt_publish_payload);//
     mqtt_event_observers_register();
+
+    /* 注入电源状态回调给 BSP/PWM，解除其反向依赖 APP 的 forward declare */
+    pwm_set_power_callbacks(pwm_get_state_adapter,
+                            pwm_set_state_adapter,
+                            pwm_notify_adapter);
+
     xTaskCreatePinnedToCore(my_task, "my_mqtt", 4096, NULL, 10, &myTaskHandle, 0);
     if (!myTaskHandle) {
         ESP_LOGI(TAG, "任务创建失败!\n");

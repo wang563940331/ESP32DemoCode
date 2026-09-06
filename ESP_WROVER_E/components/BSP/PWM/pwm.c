@@ -31,15 +31,26 @@
 #include "driver/ledc.h"
 #include "utility.h"
 
-// Forward declarations from mqtt.h (moved to APP component)
-typedef enum {
-    POWERON = 0,
-    POWEROF = 1,
-    REBOOT = 2,
-} eControl;
-eControl getStart_once(void);
-void setStart_once(eControl data);
-void send_ctrlacl(const char *data);
+/* —— 电源状态回调（由 APP 层注入，BSP 不再 forward declare APP 函数）—— */
+static pwm_get_state_cb_t s_get_state = NULL;
+static pwm_set_state_cb_t s_set_state = NULL;
+static pwm_notify_cb_t    s_notify    = NULL;
+
+/**
+ * @brief 注册电源状态回调，解除 BSP 对 APP 的反向依赖
+ * @param get_cb 查询状态回调，可为 NULL
+ * @param set_cb 设置状态回调，可为 NULL
+ * @param notify_cb 状态变更通知回调，可为 NULL
+ * @return 无
+ */
+void pwm_set_power_callbacks(pwm_get_state_cb_t get_cb,
+                             pwm_set_state_cb_t set_cb,
+                             pwm_notify_cb_t notify_cb)
+{
+    s_get_state = get_cb;
+    s_set_state = set_cb;
+    s_notify    = notify_cb;
+}
 
 TaskHandle_t motor_TaskHandle = NULL;
 static const char*TAG = "pwm";
@@ -91,18 +102,24 @@ void motorStateMachine()
 {
     static uint32_t tick = 0;
     float pwm = PWMPCLOSE;
-    static eControl expressionlod=POWEROF;
-    eControl expression =getStart_once();
+    static pwm_power_state_t expressionlod = PWM_POWER_OFF;
+    /* 未注册查询回调时默认关机，避免空指针解引用 */
+    pwm_power_state_t expression = (s_get_state != NULL)
+                                       ? s_get_state()
+                                       : PWM_POWER_OFF;
 
+    /* 状态跳变：通知上层并打印日志 */
     if(expressionlod != expression)
     {
         expressionlod = expression;
-        if(expressionlod == POWERON)
+        if(expressionlod == PWM_POWER_ON)
         {
-            send_ctrlacl("开机执行");
+            if (s_notify != NULL) {
+                s_notify("开机执行");
+            }
             ESP_LOGI(TAG, "开机");
         }
-        else if(expressionlod == POWEROF)
+        else if(expressionlod == PWM_POWER_OFF)
         {
             ESP_LOGI(TAG, "关机");
         }
@@ -110,28 +127,33 @@ void motorStateMachine()
 
     switch (expression)
     {
-        case POWERON :
+        case PWM_POWER_ON :
         {
             pwm = PWMPEN;
+            /* 开机 1s 后自动回关机，并通知上层"开机完成" */
             if(tickOut(&tick,1000))
             {
                 tickOut(&tick,0);
-                setStart_once(POWEROF);
-                 pwm = PWMPCLOSE;
-                 send_ctrlacl("开机完成");
+                if (s_set_state != NULL) {
+                    s_set_state(PWM_POWER_OFF);
+                }
+                pwm = PWMPCLOSE;
+                if (s_notify != NULL) {
+                    s_notify("开机完成");
+                }
             }
             /* code */
-            break;   
+            break;
         }
 
-        case POWEROF :
+        case PWM_POWER_OFF :
         {
             pwm = PWMPCLOSE;
             tickOut(&tick,0);
             /* code */
             break;
         }
-        case REBOOT :
+        case PWM_POWER_REBOOT :
         {
             esp_restart();
             break;
