@@ -492,7 +492,7 @@ void my_task(void *pvParameters)
         if (s_ctx.is_connected) {
             if (login_status == false) {
                 login_status = true;
-                send_ctrlacl("设备上线");
+                send_ctrlacl("online");
             }
             tickOut(&tims_reconnect, 0);
             tickOut(&tims_reboot, 0);

@@ -21,7 +21,7 @@
 #include "esp_netif.h"
 #include "esp_wifi_types.h"
 #include "esp_smartconfig.h"
-#include "mqtt_client.h"
+// #include "mqtt_client.h"
 #include "driver/uart.h"
 
 // 串口类型枚举

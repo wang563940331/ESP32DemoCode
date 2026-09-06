@@ -484,36 +484,47 @@ void energy_history_update(float meter_total_kwh)
 
 void energy_history_add_to_json(cJSON *root)
 {
-    if (root == NULL || g_energy_history.count == 0) {
-        return;
+    if (root == NULL ) {
+        ESP_LOGE(TAG, "root 为 NULL");
+        return ;
     }
 
-    cJSON *daily_array = cJSON_CreateArray();
+    cJSON *daily_array = cJSON_CreateArray();/* 历史电量数组 */
     if (daily_array == NULL) {
-        return;
+        ESP_LOGE(TAG, "创建 daily_array 失败");
+        return ;
     }
-
-    uint8_t start = (g_energy_history.index + ENERGY_HISTORY_MAX - g_energy_history.count + 1) % ENERGY_HISTORY_MAX;
-
-    for (uint8_t i = 0; i < g_energy_history.count; i++) {
-        uint8_t idx = (start + i) % ENERGY_HISTORY_MAX;
-
-        time_t t = (time_t)g_energy_history.timestamps[idx];
-        struct tm timeinfo;
-        localtime_r(&t, &timeinfo);
-        char date_str[20];
-        strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M", &timeinfo);
-
-        char date_key[16];
-        snprintf(date_key, sizeof(date_key), "date_%u", (unsigned)(i + 1));
-
+    if ( g_energy_history.count == 0) {
+       
         cJSON *item = cJSON_CreateObject();
-        cJSON_AddItemToObject(item, date_key, cJSON_CreateString(date_str));
-        cJSON_AddItemToObject(item, "kWh", energy_json_number3(g_energy_history.usage_kwh[idx]));
+        cJSON_AddItemToObject(item, "date", cJSON_CreateString("NULL"));
+        cJSON_AddItemToObject(item, "kWh", cJSON_CreateString("NULL"));
         cJSON_AddItemToArray(daily_array, item);
+    }else
+    {
+        uint8_t start = (g_energy_history.index + ENERGY_HISTORY_MAX - g_energy_history.count + 1) % ENERGY_HISTORY_MAX;
+
+        for (uint8_t i = 0; i < g_energy_history.count; i++) {
+            uint8_t idx = (start + i) % ENERGY_HISTORY_MAX;
+    
+            time_t t = (time_t)g_energy_history.timestamps[idx];
+            struct tm timeinfo;
+            localtime_r(&t, &timeinfo);
+            char date_str[20];
+            strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M", &timeinfo);
+    
+            char date_key[16];
+            snprintf(date_key, sizeof(date_key), "date_%u", (unsigned)(i + 1));
+    
+            cJSON *item = cJSON_CreateObject();
+            cJSON_AddItemToObject(item, date_key, cJSON_CreateString(date_str));
+            cJSON_AddItemToObject(item, "kWh", energy_json_number3(g_energy_history.usage_kwh[idx]));
+            cJSON_AddItemToArray(daily_array, item);
+        }
     }
 
     cJSON_AddItemToObject(root, "DailyEnergy", daily_array);
+    return ;
 }
 
 cJSON *energy_history_to_items_array(void)

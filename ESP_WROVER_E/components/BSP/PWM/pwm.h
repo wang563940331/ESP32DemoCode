@@ -41,13 +41,14 @@
 #include "esp_system.h"
 
 /**
- * @brief 舵机电源状态（值与上层 eControl 对齐，便于适配层零转换）
- *        BSP 层不依赖 APP 的枚举定义，由上层通过回调注入状态语义
+ * @brief 舵机电源状态（数值必须与 mqtt.h 的 eControl 完全一致，适配层直接强转）
+ *        eControl: POWERON=0, POWEROF=1, REBOOT=2
+ *        BSP 层不依赖 APP 头文件，由上层通过回调注入状态语义
  */
 typedef enum {
-    PWM_POWER_OFF   = 0,  /* 关机（对应 eControl::POWEROF） */
-    PWM_POWER_ON    = 1,  /* 开机（对应 eControl::POWERON） */
-    PWM_POWER_REBOOT = 2, /* 重启（对应 eControl::REBOOT） */
+    PWM_POWER_ON     = 0,  /* 开机（对应 eControl::POWERON） */
+    PWM_POWER_OFF    = 1,  /* 关机（对应 eControl::POWEROF） */
+    PWM_POWER_REBOOT = 2,  /* 重启（对应 eControl::REBOOT） */
 } pwm_power_state_t;
 
 /**

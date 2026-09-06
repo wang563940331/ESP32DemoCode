@@ -7,7 +7,7 @@
 static const char *TAG = "event_bus";
 
 /** 每种事件最多注册的观察者数量 */
-#define EVENT_MAX_SUBSCRIBERS  8
+#define EVENT_MAX_SUBSCRIBERS  40
 
 /** 单条订阅记录 */
 typedef struct {

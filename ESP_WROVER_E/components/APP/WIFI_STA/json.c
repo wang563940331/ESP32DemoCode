@@ -212,9 +212,19 @@ void json_dispatch(const char *json_string)
 
     ESP_LOGI(TAG, "分发 Type=%s", type_str);
     /* 处理成功后按表项 ack 回应答；ack 为 NULL 则跳过 */
-    if (entry->handler(root) && entry->ack != NULL) {
-        entry->ack(root);
+    if (entry->handler(root) == true)
+    {
+        if(entry->ack != NULL) {
+            entry->ack(root);
+        }else
+        {
+            ESP_LOGE(TAG, "处理失败");
+        }        
+    }else
+    {
+        ESP_LOGE(TAG, "处理失败");
     }
+
 
 error:
     cJSON_Delete(root);

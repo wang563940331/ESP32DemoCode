@@ -21,7 +21,7 @@
 #include "esp_netif.h"
 #include "esp_wifi_types.h"
 #include "esp_smartconfig.h"
-#include "mqtt_client.h"
+// #include "mqtt_client.h"
 #include "meter_DLT645.h"
 #include "driver/uart.h"
 #include "event_payloads.h"

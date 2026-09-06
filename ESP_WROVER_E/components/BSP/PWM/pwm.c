@@ -115,13 +115,13 @@ void motorStateMachine()
         if(expressionlod == PWM_POWER_ON)
         {
             if (s_notify != NULL) {
-                s_notify("开机执行");
+                s_notify("start_servo");
             }
-            ESP_LOGI(TAG, "开机");
+            ESP_LOGI(TAG, "舵机按下");
         }
         else if(expressionlod == PWM_POWER_OFF)
         {
-            ESP_LOGI(TAG, "关机");
+            ESP_LOGI(TAG, "舵机抬起");
         }
     }
 
@@ -139,7 +139,7 @@ void motorStateMachine()
                 }
                 pwm = PWMPCLOSE;
                 if (s_notify != NULL) {
-                    s_notify("开机完成");
+                    s_notify("end_servo");
                 }
             }
             /* code */
