@@ -1,7 +1,7 @@
 #include "sd_fat_bsp.h"
-#include "esp_log.h"
 #include "dirent.h"
 #include "string.h"
+#include <sys/stat.h>
 #include "my_log.h"
 static const char* TAG = "sd_fat_bsp";
 
@@ -230,23 +230,21 @@ static esp_err_t sdmmc_list_dir(const char* name, const char* path) {
     if (!dir) return ESP_ERR_NOT_FOUND;
 
     struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_DIR) {
+    while ((entry = readdir(dir)) != NULL) {/* 遍历目录下的文件和文件夹 */
+        if (entry->d_type == DT_DIR) {/* 如果是文件夹 */
             ESP_LOGI(TAG, "  %s/", entry->d_name);
-        } else {
+        } else {/* 普通文件：用 stat 取 st_size，避免 fopen+fseek 打开整文件 */
             char file_path[512];
+            struct stat st;
             snprintf(file_path, sizeof(file_path), "%s/%s", full_path, entry->d_name);
-            FILE* f = fopen(file_path, "r");
-            if (f != NULL) {
-                fseek(f, 0, SEEK_END);
-                long size = ftell(f);
-                fclose(f);
+            /* FatFS/VFS 支持 stat，只读目录项元数据，比 SEEK_END 轻 */
+            if (stat(file_path, &st) == 0) {
+                off_t size = st.st_size;
                 if (size < 1024) {
                     ESP_LOGI(TAG, "%s (%u B)", entry->d_name, (unsigned int)size);
                 } else if (size < 1024 * 1024) {
                     ESP_LOGI(TAG, "%s (%.2f KB)", entry->d_name, (float)size / 1024);
-                }else
-                {
+                } else {
                     ESP_LOGI(TAG, "%s (%.2f MB)", entry->d_name, (float)size / (1024 * 1024));
                 }
             } else {

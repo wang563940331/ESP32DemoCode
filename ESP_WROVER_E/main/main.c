@@ -15,7 +15,6 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <esp_log.h>
 #include <esp_heap_caps.h>
 #include "wifi_ap.h"
 #include "version.h"
@@ -72,7 +71,7 @@ void init_netWork(void)
     
     ESP_LOGI(TAG, "创建网络事件...");
     // 创建事件循环
-    ret = esp_event_loop_create_default();
+    ret = esp_event_loop_create_default();//创建事件循环
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "创建网络事件失败: %s", esp_err_to_name(ret));
         return;
@@ -121,29 +120,11 @@ void init_netWork(void)
     }
 }
 
-void example() {
-    // 初始化SD卡
-    sd_fat_ops_init("SD_CARD");
-    
-    // 写入文件
-    sd_fat_ops_append_file("SD_CARD", "test.txt", "Hello SD Card!", 14);
-    
-    // 读取文件
-    char buffer[256];
-    size_t len = sizeof(buffer);
-    sd_fat_ops_read_file("SD_CARD", "test.txt", buffer, &len);
-    
-    // 列出目录
-    sd_fat_ops_list_dir("SD_CARD", "");
-    
-    // 获取SD卡信息
-    sd_card_info_t info;
-    sd_fat_ops_get_card_info("SD_CARD", &info);
-    
-    // 反初始化
-    sd_fat_ops_deinit("SD_CARD");
-}
 
+/**
+ * @brief 设置日志级别并创建系统信息定时器
+ * @return 无
+ */
 void en_log_set(void)
 {
     log_mutex = xSemaphoreCreateMutex();
@@ -159,8 +140,6 @@ void en_log_set(void)
     esp_log_level_set("WIFI_AP", ESP_LOG_DEBUG);
     
 
-
-    
     TimerHandle_t timer = xTimerCreate("show_system_info", pdMS_TO_TICKS(60*1000),true, NULL, system_info_timercb);
     if(timer != NULL)
     {
@@ -174,48 +153,86 @@ void en_log_set(void)
 
 }
 
-
-
-void app_main(void)
-{
-
-    ESP_LOGI(TAG, "ESP32 运行中...");
-
-    sShellInit();
-    // mdf_mem_print_heap();
+/**
+ * @brief 挂载 SD 卡并启动落盘日志任务（作为串口日志的旁路）
+ * @note 须在 sShellInit / en_log_set 之后调用：shell 命令注册依赖前者，日志级别依赖后者
+ * @return 无
+ */
 #if (SDCARDLOGEN == TRUE)
+static void init_sd_card_log(void)
+{
+    /* 获取 SD/FAT 操作门面，失败则不启日志任务 */
     const sd_fat_ops_t* ops = sd_fat_get_ops();
-    if(ESP_OK == ops->init("SD_CARD"))
-    {
-        sd_fat_log_config_t log_config = SD_FAT_LOG_DEFAULT_CONFIG();
-        sd_fat_log_task_init(&log_config, ops);
+    if (ops == NULL) {
+        ESP_LOGE(TAG, "获取 sd_fat_ops 失败，跳过 SD 日志");
+        return;
     }
-     vTaskDelay(pdMS_TO_TICKS(1000));
 
-#endif  
-    app_print_version_info();
-    NVS_init();
-    /* cJSON 全局走 PSRAM，减轻内部 DRAM（含 AP Web/WS/MQTT 组包） */
-    cjson_init_spiram();
-    // mdf_mem_print_heap();
-     vTaskDelay(pdMS_TO_TICKS(1000));
-    en_log_set();
+    /* 挂载成功后再建落盘任务与 shell log 命令 */
+    if (ops->init("SD_CARD") != ESP_OK) {
+        ESP_LOGE(TAG, "SD 卡初始化失败，跳过 SD 日志");
+        return;
+    }
+
+    sd_fat_log_config_t log_config = SD_FAT_LOG_DEFAULT_CONFIG();
+    if (sd_fat_log_task_init(&log_config, ops) != ESP_OK) {
+        ESP_LOGE(TAG, "SD 日志任务初始化失败");
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));//延时1s等日志存储任务正常运行起来
+}
+#endif
+/**
+ * @brief 设置时区
+ * @return 无
+ */
+void init_TZ(void)
+{
     /* 尽早设置东八区，避免电表历史在 MQTT/SNTP 之前按 UTC 把午夜记成 08:00 */
     setenv("TZ", "CST-8", 1);
     tzset();
-    // mdf_mem_print_heap();
-    // 初始化基本硬件
-    led_init();
-    // mdf_mem_print_heap();
+}
 
-    gpio_output_factory_init(BEEP_GPIO_PIN);   
+void beep_init(void)
+{
+    /* 蜂鸣器：板级配置在业务侧注册，改引脚不必动 gpio_output_bsp */
+    static const gpio_output_config_t beep_cfg = {
+        .gpio_num = BEEP_GPIO_PIN,
+        .type = GPIO_OUTPUT_BUZZER,
+        .active_level = 1,
+        .initial_level = 0,
+        .name = "BEEP",
+    };
+    gpio_output_factory_init(&beep_cfg);
+}
+
+void app_main(void)
+{
+    sShellInit();
+#if (SDCARDLOGEN == TRUE)
+    /* 日志级别就绪后再挂 SD 落盘，与 en_log_set 同属日志子系统 */
+    init_sd_card_log();
+#endif
+    /* 打印版本信息 */
+    app_print_version_info();
+    /* 初始化NVS */
+    NVS_init();
+    /* cJSON 全局走 PSRAM，减轻内部 DRAM（含 AP Web/WS/MQTT 组包） */
+    cjson_init_spiram();
+    /* 设置日志级别并创建系统信息定时器 */
+    en_log_set();
+    /* 尽早设置东八区，避免电表历史在 MQTT/SNTP 之前按 UTC 把午夜记成 08:00 */
+    init_TZ();
+    /* 初始化LED */
+    led_init();
+    /* 初始化蜂鸣器 */
+    beep_init();
     const gpio_output_device_t* dev = gpio_output_factory_get_device(BEEP_GPIO_PIN);
     if (dev) {
         dev->On(BEEP_GPIO_PIN);
     }
 
     vTaskDelay(pdMS_TO_TICKS(300));
-    
+
     if (dev) {
         dev->Off(BEEP_GPIO_PIN);
     }
@@ -248,10 +265,6 @@ void app_main(void)
     while(1)
     {
 
-
-
-        /* LED 状态指示已由 led_init 内的事件订阅任务接管，
-           main 不再轮询 smartconfig/ap/mqtt 状态 getter */
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

@@ -33,9 +33,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "event_bus.h"
-#include "esp_log.h"
+#include "my_log.h"
 
 static const char *TAG_LED = "led";
+
+/** LED 板级配置：改引脚/极性只改这里，不必动 gpio_output_bsp */
+static const gpio_output_config_t s_led_gpio_cfg = {
+    .gpio_num = LED_GPIO_PIN,
+    .type = GPIO_OUTPUT_LED,
+    .active_level = 1,
+    .initial_level = 0,
+    .name = "LED",
+};
 
 // LED模式枚举
 typedef enum {
@@ -139,7 +148,8 @@ static void led_state_task(void *pvParameters)
  */
 void led_init(void)
 {
-    gpio_output_factory_init(LED_GPIO_PIN);
+    /* 业务侧注册并初始化，BSP 不再持有产品引脚表 */
+    gpio_output_factory_init(&s_led_gpio_cfg);
     current_mode = LED_MODE_GPIO;
 
     /* 订阅状态事件，LED 改为推模型 */
@@ -460,8 +470,9 @@ void led_fast_blink(void)
 
     if (current_mode != LED_MODE_GPIO)
     {
+        /* LEDC 切回 GPIO：配置已在 led_init 注册，只需按表重配硬件 */
         gpio_reset_pin(LED_GPIO_PIN);
-        gpio_output_factory_init(LED_GPIO_PIN);
+        gpio_output_factory_reinit(LED_GPIO_PIN);
         current_mode = LED_MODE_GPIO;
     }
 
