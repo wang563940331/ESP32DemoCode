@@ -5,7 +5,7 @@
 #include "wifi_ap_web_energy.h"
 #include "wifi_ap_web_common.h"
 #include "energy_history.h"
-#include "esp_log.h"
+#include "my_log.h"
 #include "cJSON.h"
 
 static const char *TAG = "WIFI_AP_EN";

@@ -4,7 +4,7 @@
 
 #include "wifi_ap_web_pages.h"
 #include "wifi_ap_web_common.h"
-#include "esp_log.h"
+#include "my_log.h"
 
 static const char *TAG = "WIFI_AP_PAGE";
 

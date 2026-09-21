@@ -6,7 +6,6 @@
 #include "telemetry.h"
 #include "cJSON.h"
 #include "esp_heap_caps.h"
-#include "esp_log.h"
 #include "my_log.h"
 
 #include <stdlib.h>

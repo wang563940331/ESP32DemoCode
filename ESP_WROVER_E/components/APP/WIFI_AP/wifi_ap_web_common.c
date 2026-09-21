@@ -4,7 +4,7 @@
 
 #include "wifi_ap_web_common.h"
 #include "wifi_ap_mem.h"
-#include "esp_log.h"
+#include "my_log.h"
 
 #include <stdio.h>
 #include <string.h>

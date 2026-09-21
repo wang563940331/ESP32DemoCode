@@ -12,7 +12,7 @@
 #include "parameterSet.h"
 #include "parameter.h"
 #include "utility.h"
-#include "esp_log.h"
+#include "my_log.h"
 
 /* 临界区保护：事件回调（sensor/meter 任务）与 WS 回复（httpd 任务）跨任务访问缓存 */
 #include "freertos/FreeRTOS.h"

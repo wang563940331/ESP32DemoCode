@@ -1,6 +1,5 @@
 #include "sd_fat_ops.h"
 #include "sd_fat_bsp.h"
-#include "esp_log.h"
 #include "string.h"
 #include "sys/stat.h"
 #include "unistd.h"
