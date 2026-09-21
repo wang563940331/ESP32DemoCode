@@ -35,7 +35,7 @@ typedef enum {
 typedef void (*event_handler_t)(event_type_t type, const void *data, size_t len);
 
 /**
- * @brief 初始化事件总线（创建互斥锁）
+ * @brief 初始化事件总线（互斥锁、投递队列、派发任务）
  * @note 建议在 app_main 最早阶段调用一次；未调用时 subscribe/publish 会懒初始化
  * @return 0 成功，非 0 失败
  */
@@ -57,10 +57,13 @@ int event_subscribe(event_type_t type, event_handler_t handler);
 int event_unsubscribe(int handle);
 
 /**
- * @brief 发布事件（通知所有已注册观察者）
+ * @brief 异步发布事件（入队后立即返回，由 dispatch 任务调用观察者）
+ * @note 可在 esp_event / MQTT 回调中安全调用：不阻塞取订阅表锁。
+ *       载荷在入队时拷贝；观察者回调在 event_bus_dispatch 任务上下文执行。
  * @param type 事件类型
  * @param data 载荷指针，可为 NULL
  * @param len 载荷长度；无载荷时传 0
+ * @return 无
  */
 void event_publish(event_type_t type, const void *data, size_t len);
 
