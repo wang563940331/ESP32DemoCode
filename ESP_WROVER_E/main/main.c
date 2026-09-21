@@ -203,8 +203,35 @@ void beep_init(void)
         .name = "BEEP",
     };
     gpio_output_factory_init(&beep_cfg);
-}
 
+    const gpio_output_device_t* dev = gpio_output_factory_get_device(BEEP_GPIO_PIN);
+    if (dev) {
+        dev->On(BEEP_GPIO_PIN);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    if (dev) {
+        dev->Off(BEEP_GPIO_PIN);
+    }
+
+}
+/**
+ * @brief 打印应用程序版本信息到日志
+ * @return 无
+ */
+ void app_print_version_info(void)
+ {
+     ESP_LOGI(TAG, "========================================");
+     ESP_LOGI(TAG, "应用程序版本信息:");
+     ESP_LOGI(TAG, "  Git哈希:     %s", app_get_version_hash());
+     ESP_LOGI(TAG, "  标签版本:    %s", app_get_version_tag());
+     ESP_LOGI(TAG, "  提交日期:    %s", app_get_version_date());
+     ESP_LOGI(TAG, "  完整版本:    %s", app_get_version_full());
+     ESP_LOGI(TAG, "  编译时间:    %s", __DATE__ " " __TIME__);
+     ESP_LOGI(TAG, "========================================");
+ }
+ 
 void app_main(void)
 {
     sShellInit();
@@ -226,41 +253,31 @@ void app_main(void)
     led_init();
     /* 初始化蜂鸣器 */
     beep_init();
-    const gpio_output_device_t* dev = gpio_output_factory_get_device(BEEP_GPIO_PIN);
-    if (dev) {
-        dev->On(BEEP_GPIO_PIN);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(300));
-
-    if (dev) {
-        dev->Off(BEEP_GPIO_PIN);
-    }
 
     pwm_init();
-    // mdf_mem_print_heap();
+
 
     init_netWork();
-    // mdf_mem_print_heap();
+
 
     // 初始化其他网络服务
     simple_init();
-    // mdf_mem_print_heap();
+
 
     init_mqtt();
-    // mdf_mem_print_heap();
+
 
     meter_DLT645_init();
 
     sensor_task_init();
 
-    const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
-    if(uart2 == NULL)
-    {
-        ESP_LOGE(TAG, "UART2实例化失败");
-        return;
-    }
-    uart2->Init(UART_NUM_2);
+    // const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
+    // if(uart2 == NULL)
+    // {
+    //     ESP_LOGE(TAG, "UART2实例化失败");
+    //     return;
+    // }
+    // uart2->Init(UART_NUM_2);
 
     while(1)
     {

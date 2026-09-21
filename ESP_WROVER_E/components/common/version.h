@@ -38,7 +38,7 @@ const char *app_get_version_full(void);
  * @brief 打印应用程序版本信息到日志
  * @return 无
  */
-void app_print_version_info(void);
+// void app_print_version_info(void);
 
 #ifdef __cplusplus
 }

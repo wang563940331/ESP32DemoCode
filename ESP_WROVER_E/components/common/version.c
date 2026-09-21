@@ -1,4 +1,5 @@
 #include "version.h"
+/* common 被 UTILITY 依赖，不能再包含 my_log.h，否则组件循环依赖 */
 #include "esp_log.h"
 
 static const char *TAG = "VERSION";
@@ -39,18 +40,3 @@ const char *app_get_version_full(void)
     return APP_VERSION_FULL;
 }
 
-/**
- * @brief 打印应用程序版本信息到日志
- * @return 无
- */
-void app_print_version_info(void)
-{
-    ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "应用程序版本信息:");
-    ESP_LOGI(TAG, "  Git哈希:     %s", app_get_version_hash());
-    ESP_LOGI(TAG, "  标签版本:    %s", app_get_version_tag());
-    ESP_LOGI(TAG, "  提交日期:    %s", app_get_version_date());
-    ESP_LOGI(TAG, "  完整版本:    %s", app_get_version_full());
-    ESP_LOGI(TAG, "  编译时间:    %s", __DATE__ " " __TIME__);
-    ESP_LOGI(TAG, "========================================");
-}
