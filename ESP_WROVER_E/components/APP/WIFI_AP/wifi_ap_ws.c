@@ -26,12 +26,12 @@
 static const char *TAG = "WIFI_AP_WS";
 
 /** 最多同时跟踪的 WS 客户端数（与 AP max_connection 对齐） */
-#define WIFI_AP_WS_CLIENT_MAX 4
-#define WIFI_AP_WS_RX_MAX     2048
+#define WIFI_AP_WS_CLIENT_MAX 4 //最大客户端数
+#define WIFI_AP_WS_RX_MAX     2048 //最大接收数据长度
 
-static httpd_handle_t s_httpd = NULL;
-static int s_ws_fds[WIFI_AP_WS_CLIENT_MAX];
-static int s_ws_fd_count = 0;
+static httpd_handle_t s_httpd = NULL; //HTTP服务器句柄
+static int s_ws_fds[WIFI_AP_WS_CLIENT_MAX]; //WS客户端文件描述符数组
+static int s_ws_fd_count = 0; //WS客户端文件描述符计数
 
 /* —— 本地遥测缓存：由 event_bus 推送更新，WS 回复时只读缓存 —— */
 static portMUX_TYPE s_cache_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -88,12 +88,13 @@ static void wifi_ap_ws_add_fd(int fd)
 {
     for (int i = 0; i < s_ws_fd_count; i++) {
         if (s_ws_fds[i] == fd) {
+            ESP_LOGI(TAG, "WS 客户端已存在 fd=%d", fd);
             return;
         }
     }
     if (s_ws_fd_count < WIFI_AP_WS_CLIENT_MAX) {
         s_ws_fds[s_ws_fd_count++] = fd;
-        ESP_LOGI(TAG, "WS 客户端接入 fd=%d, 当前=%d", fd, s_ws_fd_count);
+        ESP_LOGI(TAG, "WS 客户端接入 fd=%d, 当前fd数组位置=%d", fd, s_ws_fd_count);
     } else {
         ESP_LOGW(TAG, "WS 客户端已满，忽略 fd=%d", fd);
     }
@@ -464,12 +465,12 @@ static esp_err_t wifi_ap_ws_handle_text(httpd_req_t *req, const char *text)
  */
 static esp_err_t wifi_ap_ws_handler(httpd_req_t *req)
 {
-    if (req->method == HTTP_GET) {
-        int fd = httpd_req_to_sockfd(req);
-        wifi_ap_ws_add_fd(fd);
-        ESP_LOGI(TAG, "WS 握手完成 fd=%d，下发 Config", fd);
+    if (req->method == HTTP_GET) {//HTTP请求
+        int fd = httpd_req_to_sockfd(req);//获取文件描述符
+        wifi_ap_ws_add_fd(fd);//添加文件描述符
+        ESP_LOGI(TAG, "WS 握手完成 fd=%d，推送Config", fd);
         /* 连接成功后主动推送与网页一致的参数快照 */
-        char *cfg = wifi_ap_config_export_json();
+        char *cfg = wifi_ap_config_export_json();//导出参数json配置表
         if (cfg != NULL) {
             httpd_ws_frame_t ws_pkt = {
                 .final = true,

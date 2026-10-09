@@ -33,8 +33,8 @@ typedef enum {
 } wifiap_param_type_t;
 
 typedef enum {
-    WRITEABLE,
-    READONLY,
+    WRITEABLE,//可写
+    READONLY,//只读
 } param_access_type_t;
 
 /** 参数保存后动作（数值越大优先级越高，可取 max） */
@@ -111,7 +111,7 @@ volatile uint8_t g_ap_connected = 0;
 
 // HTTP服务器句柄
 // #define AP_SSID      "ESP32_AP"
-#define AP_PASS      ""//开放模式
+#define AP_PASS      "88888888"//空为开放模式
 #define AP_CHANNEL   6//信道
 #define MAX_STA_CONN 4
 
@@ -316,14 +316,18 @@ static void config_reboot_if_needed(wifiap_save_action_t max_action, uint32_t de
         esp_restart();
     }
 }
-
+/**
+ * @brief 导出配置为JSON
+ * @return JSON字符串
+ */
 char *wifi_ap_config_export_json(void)
 {
-    load_params_from_nvs();
+    load_params_from_nvs();//加载配置
 
-    cJSON *root = cJSON_CreateObject();
-    cJSON *params = cJSON_CreateObject();
+    cJSON *root = cJSON_CreateObject();//创建根对象
+    cJSON *params = cJSON_CreateObject();//创建参数对象
     if (root == NULL || params == NULL) {
+        ESP_LOGE(TAG, "创建对象失败");
         cJSON_Delete(root);
         cJSON_Delete(params);
         return NULL;
@@ -335,16 +339,16 @@ char *wifi_ap_config_export_json(void)
     cJSON_AddStringToObject(root, "device", sn);
     cJSON_AddItemToObject(root, "params", params);
 
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        config_param_t *param = &config_params[i];
-        char val[128] = {0};
-        config_param_value_to_str(param, val, sizeof(val));
-        cJSON *item = cJSON_CreateObject();
+    for (int i = 0; i < NUM_PARAMS; i++) {//遍历参数
+        config_param_t *param = &config_params[i];//获取参数
+        char val[128] = {0};//参数值
+        config_param_value_to_str(param, val, sizeof(val));//将参数值转换为字符串
+        cJSON *item = cJSON_CreateObject();//创建参数对象
         if (item == NULL) {
             continue;
         }
-        cJSON_AddStringToObject(item, "label", param->label);
-        cJSON_AddStringToObject(item, "value", val);
+        cJSON_AddStringToObject(item, "label", param->label);//添加标签
+        cJSON_AddStringToObject(item, "value", val);//添加值
         cJSON_AddBoolToObject(item, "readonly", param->access == READONLY);
         cJSON_AddItemToObject(params, param->name, item);
     }
