@@ -1,5 +1,5 @@
 /*
- * @Description: JSON 下行分发（仅解析/查表/执行 Control；上行组包在 telemetry）
+ * @Description: JSON 下行责任链分发（Parse→DeviceAuth→TypeRoute→Ack；上行在 telemetry）
  */
 #ifndef __JSON_H__
 #define __JSON_H__
@@ -44,18 +44,10 @@ void json_set_control_fn(json_control_fn fn);
 void cjson_init_spiram(void);
 
 /**
- * @brief 解析下行 JSON，按 Type 字段查表分发；成功后按表项回 Ack
+ * @brief 解析下行 JSON：责任链分发；Type 业务仍查表；成功后回 Ack
  * @param json_string MQTT 等通道收到的 JSON 文本
  * @return 无
  */
 void json_dispatch(const char *json_string);
-
-/**
- * @brief 兼容旧接口，内部转发到 json_dispatch
- * @param json_string JSON 文本
- * @param Start_once 已废弃
- * @return 无
- */
-void parse_json(const char *json_string, void *Start_once);
 
 #endif
