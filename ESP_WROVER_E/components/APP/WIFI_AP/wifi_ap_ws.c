@@ -1,6 +1,7 @@
 /*
  * @Description: SoftAP 下 WebSocket 服务端（ESP32 为 server）
  *               客户端连接: ws://192.168.4.1/ws
+ *               文本帧下行责任链：Parse → TypeRoute（Type 业务仍用分发表）
  */
 
 #include "wifi_ap_ws.h"
@@ -350,7 +351,7 @@ static esp_err_t wifi_ap_ws_reply_config(httpd_req_t *req)
 static esp_err_t wifi_ap_ws_handle_set_config(httpd_req_t *req, const cJSON *params)
 {
     int max_action = 0;
-    int changed = wifi_ap_config_apply_json(params, &max_action);
+    int changed = wifi_ap_config_apply_json(params, &max_action);//应用配置
     if (changed < 0) {
         return wifi_ap_ws_reply(req,
             "{\"Type\":\"Error\",\"params\":{\"msg\":\"invalid params\"}}");
@@ -389,73 +390,271 @@ static esp_err_t wifi_ap_ws_handle_set_config(httpd_req_t *req, const cJSON *par
     return err;
 }
 
+/* ==================== WS 下行责任链：Parse → TypeRoute ==================== */
+
+/** 责任链节点返回值：控制是否继续向后传递 */
+typedef enum {
+    WS_DL_CONTINUE = 0, /* 交给下一节点 */
+    WS_DL_STOP,         /* 已处理完（含 Echo 回退） */
+    WS_DL_ABORT,        /* 失败截断（入口仍做 Cleanup） */
+} ws_dl_result_t;
+
+/** Type 业务处理函数：在 TypeRoute 表内调用 */
+typedef esp_err_t (*ws_type_handler_fn)(httpd_req_t *req, cJSON *root);
+
+/** Type 分发表项（同质业务扩展加表项，不拆成链节点） */
+typedef struct {
+    const char *type;
+    ws_type_handler_fn handler;
+} ws_type_entry_t;
+
+/** 下行责任链上下文：各阶段读写同一份数据 */
+typedef struct {
+    httpd_req_t *req;   /* 当前 WS 请求，用于同步回复 */
+    const char *raw;    /* 原始文本帧 */
+    cJSON *root;        /* Parse 成功后的根对象 */
+    const char *type;   /* 解析出的 Type */
+    esp_err_t err;      /* 最终返回给调用方的错误码 */
+} ws_dl_ctx_t;
+
+/** 责任链节点：阶段名 + 处理函数 + 后继 */
+typedef struct ws_dl_handler {
+    const char *name;
+    ws_dl_result_t (*handle)(ws_dl_ctx_t *ctx);
+    struct ws_dl_handler *next;
+} ws_dl_handler_t;
+
+static esp_err_t wifi_ap_ws_type_ping(httpd_req_t *req, cJSON *root);
+static esp_err_t wifi_ap_ws_type_get_data(httpd_req_t *req, cJSON *root);
+static esp_err_t wifi_ap_ws_type_set_config(httpd_req_t *req, cJSON *root);
+static esp_err_t wifi_ap_ws_type_echo(httpd_req_t *req, cJSON *root);
+static const ws_type_entry_t *wifi_ap_ws_find_type(const char *type);
+static ws_dl_result_t wifi_ap_ws_h_parse(ws_dl_ctx_t *ctx);
+static ws_dl_result_t wifi_ap_ws_h_type_route(ws_dl_ctx_t *ctx);
+static esp_err_t wifi_ap_ws_reply_echo_raw(httpd_req_t *req, const char *text);
+
+/** Type 业务表：Ping / GetData / SetConfig / Echo */
+static const ws_type_entry_t s_ws_type_table[] = {
+    { "Ping", wifi_ap_ws_type_ping },
+    { "GetData", wifi_ap_ws_type_get_data },
+    { "SetConfig", wifi_ap_ws_type_set_config },
+    { "Echo", wifi_ap_ws_type_echo },
+};
+
+/* 责任链节点：Parse → TypeRoute */
+static ws_dl_handler_t s_ws_h_type_route = {
+    .name = "TypeRoute",
+    .handle = wifi_ap_ws_h_type_route,
+    .next = NULL,
+};
+static ws_dl_handler_t s_ws_h_parse = {
+    .name = "Parse",
+    .handle = wifi_ap_ws_h_parse,
+    .next = &s_ws_h_type_route,
+};
+static ws_dl_handler_t *s_ws_dl_chain = &s_ws_h_parse;
+
 /**
- * @brief 解析客户端下行 JSON 并回复
+ * @brief 非 JSON 文本时回 Echo（保持旧行为）
+ * @param req WS 请求
+ * @param text 原始文本
+ * @return ESP_OK 成功
+ */
+static esp_err_t wifi_ap_ws_reply_echo_raw(httpd_req_t *req, const char *text)
+{
+    cJSON *echo = cJSON_CreateObject();
+    cJSON *params = cJSON_CreateObject();
+    if (echo == NULL || params == NULL) {
+        cJSON_Delete(echo);
+        cJSON_Delete(params);
+        return ESP_ERR_NO_MEM;
+    }
+    cJSON_AddStringToObject(echo, "Type", "Echo");
+    cJSON_AddItemToObject(echo, "params", params);
+    cJSON_AddStringToObject(params, "text", text ? text : "");
+
+    char *payload = cJSON_PrintUnformatted(echo);
+    cJSON_Delete(echo);
+    if (payload == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    esp_err_t err = wifi_ap_ws_reply(req, payload);
+    free(payload);
+    return err;
+}
+
+/**
+ * @brief Type=Ping：回复 Pong
+ * @param req WS 请求
+ * @param root JSON 根（未用）
+ * @return ESP_OK 成功
+ */
+static esp_err_t wifi_ap_ws_type_ping(httpd_req_t *req, cJSON *root)
+{
+    (void)root;
+    return wifi_ap_ws_reply_pong(req);
+}
+
+/**
+ * @brief Type=GetData：按 params.get 回复 MeterAll/Config
+ * @param req WS 请求
+ * @param root JSON 根对象
+ * @return ESP_OK 成功
+ */
+static esp_err_t wifi_ap_ws_type_get_data(httpd_req_t *req, cJSON *root)
+{
+    cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "params");
+    cJSON *get_item = cJSON_IsObject(params)
+                          ? cJSON_GetObjectItemCaseSensitive(params, "get")
+                          : NULL;
+    const char *get_str = (cJSON_IsString(get_item) && get_item->valuestring)
+                              ? get_item->valuestring
+                              : "";
+
+    if (strcmp(get_str, "MeterAll") == 0 || strcmp(get_str, "Status") == 0) {
+        return wifi_ap_ws_reply_meter_all(req);
+    }
+    if (strcmp(get_str, "Config") == 0) {
+        return wifi_ap_ws_reply_config(req);
+    }
+    return wifi_ap_ws_reply(req,
+        "{\"Type\":\"Error\",\"params\":{\"msg\":\"unknown get\"}}");
+}
+
+/**
+ * @brief Type=SetConfig：写入参数并回 CmdAck
+ * @param req WS 请求
+ * @param root JSON 根对象
+ * @return ESP_OK 成功
+ */
+static esp_err_t wifi_ap_ws_type_set_config(httpd_req_t *req, cJSON *root)
+{
+    cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "params");
+    return wifi_ap_ws_handle_set_config(req, params);
+}
+
+/**
+ * @brief Type=Echo：原样回显 JSON
+ * @param req WS 请求
+ * @param root JSON 根对象
+ * @return ESP_OK 成功
+ */
+static esp_err_t wifi_ap_ws_type_echo(httpd_req_t *req, cJSON *root)
+{
+    char *payload = cJSON_PrintUnformatted(root);
+    if (payload == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    esp_err_t err = wifi_ap_ws_reply(req, payload);
+    free(payload);
+    return err;
+}
+
+/**
+ * @brief 按 Type 查找业务表项
+ * @param type Type 字符串
+ * @return 表项指针，未找到 NULL
+ */
+static const ws_type_entry_t *wifi_ap_ws_find_type(const char *type)
+{
+    if (type == NULL) {
+        return NULL;
+    }
+    const size_t n = sizeof(s_ws_type_table) / sizeof(s_ws_type_table[0]);
+    for (size_t i = 0; i < n; i++) {
+        if (strcmp(s_ws_type_table[i].type, type) == 0) {
+            return &s_ws_type_table[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @brief 责任链节点：解析 JSON；失败则 Echo 原文并 STOP
+ * @param ctx 下行上下文
+ * @return CONTINUE 解析成功；STOP 已 Echo 回退
+ */
+static ws_dl_result_t wifi_ap_ws_h_parse(ws_dl_ctx_t *ctx)
+{
+    if (ctx == NULL || ctx->req == NULL || ctx->raw == NULL) {
+        if (ctx) {
+            ctx->err = ESP_ERR_INVALID_ARG;
+        }
+        return WS_DL_ABORT;
+    }
+
+    ctx->root = cJSON_Parse(ctx->raw);
+    if (ctx->root == NULL) {
+        /* 非 JSON：保持旧行为，包一层 Echo 回给客户端 */
+        ESP_LOGI(TAG, "[Parse] 非JSON，回 Echo");
+        ctx->err = wifi_ap_ws_reply_echo_raw(ctx->req, ctx->raw);
+        return WS_DL_STOP;
+    }
+    return WS_DL_CONTINUE;
+}
+
+/**
+ * @brief 责任链节点：按 Type 查表执行业务并回复
+ * @param ctx 下行上下文
+ * @return STOP 业务已处理（含未知 Type 错误回复）
+ */
+static ws_dl_result_t wifi_ap_ws_h_type_route(ws_dl_ctx_t *ctx)
+{
+    if (ctx == NULL || ctx->req == NULL || ctx->root == NULL) {
+        if (ctx) {
+            ctx->err = ESP_ERR_INVALID_STATE;
+        }
+        return WS_DL_ABORT;
+    }
+
+    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(ctx->root, "Type");
+    ctx->type = (cJSON_IsString(type_item) && type_item->valuestring)
+                    ? type_item->valuestring
+                    : "";
+
+    const ws_type_entry_t *entry = wifi_ap_ws_find_type(ctx->type);
+    if (entry == NULL || entry->handler == NULL) {
+        ESP_LOGW(TAG, "[TypeRoute] 未知 Type=%s", ctx->type);
+        ctx->err = wifi_ap_ws_reply(ctx->req,
+            "{\"Type\":\"Error\",\"params\":{\"msg\":\"unknown Type\"}}");
+        return WS_DL_STOP;
+    }
+
+    // ESP_LOGI(TAG, "[TypeRoute] 分发 Type=%s", ctx->type);
+    ctx->err = entry->handler(ctx->req, ctx->root);
+    return WS_DL_STOP;
+}
+
+/**
+ * @brief 解析客户端下行 JSON 并回复（责任链：Parse → TypeRoute）
  * @param req WS 请求
  * @param text 客户端文本帧
  * @return ESP_OK 成功
  */
 static esp_err_t wifi_ap_ws_handle_text(httpd_req_t *req, const char *text)
 {
-    // ESP_LOGI(TAG, "WS RX: %s", text);
+    ws_dl_ctx_t ctx = {
+        .req = req,
+        .raw = text,
+        .root = NULL,
+        .type = NULL,
+        .err = ESP_OK,
+    };
 
-    cJSON *root = cJSON_Parse(text);
-    if (root == NULL) {
-        cJSON *echo = cJSON_CreateObject();
-        cJSON *params = cJSON_CreateObject();
-        cJSON_AddStringToObject(echo, "Type", "Echo");
-        cJSON_AddItemToObject(echo, "params", params);
-        cJSON_AddStringToObject(params, "text", text);
-        char *payload = cJSON_PrintUnformatted(echo);
-        cJSON_Delete(echo);
-        if (payload == NULL) {
-            return ESP_ERR_NO_MEM;
+    /* 沿链传递；ABORT/STOP 后跳出，Cleanup 始终在出口执行 */
+    for (ws_dl_handler_t *h = s_ws_dl_chain; h != NULL; h = h->next) {
+        ws_dl_result_t result = h->handle(&ctx);
+        if (result == WS_DL_STOP || result == WS_DL_ABORT) {
+            break;
         }
-        esp_err_t err = wifi_ap_ws_reply(req, payload);
-        free(payload);
-        return err;
     }
 
-    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(root, "Type");
-    const char *type_str = (cJSON_IsString(type_item) && type_item->valuestring)
-                               ? type_item->valuestring
-                               : "";
-
-    esp_err_t err = ESP_OK;
-    if (strcmp(type_str, "Ping") == 0) {
-        err = wifi_ap_ws_reply_pong(req);
-    } else if (strcmp(type_str, "GetData") == 0) {
-        cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "params");
-        cJSON *get_item = cJSON_IsObject(params)
-                              ? cJSON_GetObjectItemCaseSensitive(params, "get")
-                              : NULL;
-        const char *get_str = (cJSON_IsString(get_item) && get_item->valuestring)
-                                  ? get_item->valuestring
-                                  : "";
-        if (strcmp(get_str, "MeterAll") == 0 || strcmp(get_str, "Status") == 0) {
-            err = wifi_ap_ws_reply_meter_all(req);
-        } else if (strcmp(get_str, "Config") == 0) {
-            err = wifi_ap_ws_reply_config(req);
-        } else {
-            err = wifi_ap_ws_reply(req,
-                "{\"Type\":\"Error\",\"params\":{\"msg\":\"unknown get\"}}");
-        }
-    } else if (strcmp(type_str, "SetConfig") == 0) {
-        cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "params");
-        err = wifi_ap_ws_handle_set_config(req, params);
-    } else if (strcmp(type_str, "Echo") == 0) {
-        char *payload = cJSON_PrintUnformatted(root);
-        if (payload) {
-            err = wifi_ap_ws_reply(req, payload);
-            free(payload);
-        }
-    } else {
-        err = wifi_ap_ws_reply(req,
-            "{\"Type\":\"Error\",\"params\":{\"msg\":\"unknown Type\"}}");
+    /* Cleanup：不依赖链上节点释放 */
+    if (ctx.root != NULL) {
+        cJSON_Delete(ctx.root);
+        ctx.root = NULL;
     }
-
-    cJSON_Delete(root);
-    return err;
+    return ctx.err;
 }
 
 /**
@@ -525,9 +724,9 @@ static esp_err_t wifi_ap_ws_handler(httpd_req_t *req)
     }
     buf[ws_pkt.len] = '\0';
 
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {/* 处理文本帧 */
         ret = wifi_ap_ws_handle_text(req, (const char *)buf);
-    } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
+    } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {/* 处理 Ping 帧 */
         ws_pkt.type = HTTPD_WS_TYPE_PONG;
         ret = httpd_ws_send_frame(req, &ws_pkt);
     }

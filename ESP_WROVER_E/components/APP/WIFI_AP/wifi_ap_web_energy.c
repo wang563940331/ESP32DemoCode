@@ -102,7 +102,11 @@ static esp_err_t api_energy_history(httpd_req_t *req)
     cJSON_free(json);
     return err;
 }
-
+/*
+ * @brief 注册历史电量页面与 JSON API
+ * @param server httpd 句柄
+ * @return ESP_OK 成功
+*/
 esp_err_t wifi_ap_web_energy_register(httpd_handle_t server)
 {
     if (server == NULL) {

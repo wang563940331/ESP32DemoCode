@@ -129,15 +129,15 @@ void en_log_set(void)
 {
     log_mutex = xSemaphoreCreateMutex();
     // 设置日志级别为调试
-    esp_log_level_set("*", ESP_LOG_DEBUG);
-    esp_log_level_set("main", ESP_LOG_DEBUG);
-    esp_log_level_set("pwm", ESP_LOG_DEBUG);
-    esp_log_level_set("json", ESP_LOG_DEBUG);
-    esp_log_level_set("mqtt", ESP_LOG_DEBUG);
-    esp_log_level_set("wifista", ESP_LOG_DEBUG);
-    esp_log_level_set("parameter", ESP_LOG_INFO);
-    esp_log_level_set("parameterSet", ESP_LOG_INFO);
-    esp_log_level_set("WIFI_AP", ESP_LOG_DEBUG);
+    // esp_log_level_set("*", ESP_LOG_DEBUG);
+    // esp_log_level_set("main", ESP_LOG_DEBUG);
+    // esp_log_level_set("pwm", ESP_LOG_DEBUG);
+    // esp_log_level_set("json", ESP_LOG_DEBUG);
+    // esp_log_level_set("mqtt", ESP_LOG_DEBUG);
+    // esp_log_level_set("wifista", ESP_LOG_DEBUG);
+    // esp_log_level_set("parameter", ESP_LOG_INFO);
+    // esp_log_level_set("parameterSet", ESP_LOG_INFO);
+    // esp_log_level_set("WIFI_AP", ESP_LOG_DEBUG);
     
 
     TimerHandle_t timer = xTimerCreate("show_system_info", pdMS_TO_TICKS(60*1000),true, NULL, system_info_timercb);

@@ -55,8 +55,8 @@ esp_err_t sd_fat_ops_init(const char* device_name) {
             if (ret == ESP_OK) {
                 ESP_LOGI(TAG, "SD卡挂载成功");
                 
-                ESP_LOGI(TAG, "列出SD卡根目录文件:");
-                s_sd_device->ListDir(device_name, "");
+                // ESP_LOGI(TAG, "列出SD卡根目录文件:");
+                // s_sd_device->ListDir(device_name, "");
                 
                 sdmmc_card_t* card = NULL;
                 ret = s_sd_device->GetCardHandle(device_name, &card);

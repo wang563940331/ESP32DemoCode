@@ -158,9 +158,9 @@ static void load_params_from_nvs(void)
  */
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "/wsconfig");
-    httpd_resp_send(req, NULL, 0);
+    httpd_resp_set_status(req, "302 Found");//302 Found 重定向到 /wsconfig 页面
+    httpd_resp_set_hdr(req, "Location", "/wsconfig");//Location 头指定重定向目标
+    httpd_resp_send(req, NULL, 0);//发送重定向响应
     return ESP_OK;
 }
 
@@ -173,14 +173,14 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
     
     if (param->type == WIFIAP_PARAM_INT && value) {
         int v = atoi(value);
-        // 日志保留天数强制钳位到 1~90
-        if (strcmp(param->name, "logdays") == 0) {
-            if (v < 1) {
-                v = 1;
-            } else if (v > 90) {
-                v = 90;
-            }
-        }
+        // // 日志保留天数强制钳位到 1~90
+        // if (strcmp(param->name, "logdays") == 0) {
+        //     if (v < 1) {
+        //         v = 1;
+        //     } else if (v > 90) {
+        //         v = 90;
+        //     }
+        // }
         *(uint16_t *)param->value = (uint16_t)v;
     } else if (param->type == WIFIAP_PARAM_TOGGLE && value) {
         uint8_t v = (uint8_t)atoi(value);
@@ -293,7 +293,10 @@ static int config_apply_one(config_param_t *param, const char *value, wifiap_sav
     char old_val[128] = {0};
     config_param_value_to_str(param, old_val, sizeof(old_val));
     int changed = (strcmp(old_val, value) != 0) ? 1 : 0;
-    ESP_LOGI(TAG, "参数 %s=%s %s", param->name, value, changed ? "(变更)" : "(未变)");
+    if(changed)
+    {
+        EN_SLOGI(TAG, "参数 %s=%s 变更", param->name, value);
+    }
     save_param_to_nvs(param, (char *)value);
     /* 多参数同时改时取最高优先级动作 */
     if (changed && max_action != NULL && param->save_action > *max_action) {
@@ -357,7 +360,12 @@ char *wifi_ap_config_export_json(void)
     cJSON_Delete(root);
     return payload;
 }
-
+/*  
+ * @brief 应用 JSON 配置
+ * @param params JSON 参数
+ * @param out_max_action 输出最大动作
+ * @return 变更数量
+ */
 int wifi_ap_config_apply_json(const cJSON *params, int *out_max_action)
 {
     if (params == NULL || !cJSON_IsObject(params)) {
@@ -371,7 +379,7 @@ int wifi_ap_config_apply_json(const cJSON *params, int *out_max_action)
 
     for (int i = 0; i < NUM_PARAMS; i++) {
         config_param_t *param = &config_params[i];
-        cJSON *item = cJSON_GetObjectItemCaseSensitive(params, param->name);
+        cJSON *item = cJSON_GetObjectItemCaseSensitive(params, param->name);//获取参数值
         if (item == NULL) {
             continue;
         }

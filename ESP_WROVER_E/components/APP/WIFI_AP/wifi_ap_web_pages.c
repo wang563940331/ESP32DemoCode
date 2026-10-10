@@ -172,7 +172,11 @@ static esp_err_t page_wstest_redir(httpd_req_t *req)
 {
     return wifi_ap_web_redirect(req, "/wsconfig");
 }
-
+/*
+ * @brief 注册业务页面
+ * @param server httpd 句柄
+ * @return ESP_OK 成功
+*/
 esp_err_t wifi_ap_web_pages_register(httpd_handle_t server)
 {
     if (server == NULL) {

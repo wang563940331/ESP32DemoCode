@@ -34,7 +34,7 @@ static const char* TAG = "sd_fat_log_task";
 /* 日志保留天数默认值及合法范围 */
 #define LOG_DAYS_DEFAULT 30
 #define LOG_DAYS_MIN     1
-#define LOG_DAYS_MAX     90
+#define LOG_DAYS_MAX     360
 
 /**
  * @brief 读取系统参数中的日志保留天数, 并钳位到 1~90
@@ -615,7 +615,7 @@ static void sdCardLogTask(void* arg)
             }else {
                 uint16_t pool_total = mp_get_pool_size(&log_pool);
                 uint16_t pool_used = mp_get_used_count(&log_pool);
-                if(pool_used>=2)
+                if(pool_used>=5)
                 {
                     ESP_LOGW(TAG, "追加日志到文件: %s, 大小: %u 字节, 内存池: %u/%u (已用/总数)", 
                     path, (unsigned int)total_len, pool_used, pool_total);

@@ -677,12 +677,12 @@ bool sStorageApSetNvsmqttport(u16 data)
 
 bool sStorageApSetNvslogDays(u16 data)
 {
-    // 日志保留天数限制在 1~90
-    if (data < 1) {
-        data = 1;
-    } else if (data > 90) {
-        data = 90;
-    }
+    // // 日志保留天数限制在 1~90
+    // if (data < 1) {
+    //     data = 1;
+    // } else if (data > 90) {
+    //     data = 90;
+    // }
     if (sStorageApSet(cStorageApCmdNvslogDays, (const u8 *)&data) == eStorageApRstSuccess) {
         return true;
     }
