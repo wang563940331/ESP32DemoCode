@@ -13,6 +13,13 @@
 
 extern bool sStorageApSetFlg(bool eFlg);
 eStorageApRst_t sStorageApGet(eStorageApCmd_t eCmd, u16 u16MaxLen, u8 *pData);
+/**
+ * @brief AP 区参数统一写入（按 eCmd 映射 JSON 键，供表驱动调用方使用）
+ * @param eCmd 存储命令
+ * @param pData 待写入数据指针（字符串或整数地址，依命令而定）
+ * @return eStorageApRstSuccess 成功，其它失败
+ */
+eStorageApRst_t sStorageApSet(eStorageApCmd_t eCmd, const u8 *pData);
 bool sStorageApSetssid(char *data);
 bool sStorageApSetPassword(char *data);
 bool sStorageApSetPassword(char *data);

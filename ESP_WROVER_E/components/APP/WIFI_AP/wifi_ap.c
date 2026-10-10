@@ -185,13 +185,37 @@ static esp_err_t root_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// 保存单个参数到NVS
-static void save_param_to_nvs(config_param_t *param, char *value) {
+/**
+ * @brief 按 config_params 表项把内存值写入 NVS（与 load 对称，不再 per-cmd switch）
+ * @param param 参数表项（含 storage / storage_cmd / value）
+ * @return eStorageApRstSuccess 成功或无需落盘；其它为失败
+ */
+static eStorageApRst_t config_param_persist(const config_param_t *param)
+{
+    if (param == NULL || param->storage_cmd < 0 || param->value == NULL) {
+        return eStorageApRstSuccess;
+    }
+
+    /* 表驱动：storage + storage_cmd 决定走 AP 区还是 GW 区统一 Set */
+    if (param->storage == STORAGE_GW) {
+        return sStorageGwSet((eStorageApCmd_t)param->storage_cmd, (const u8 *)param->value);
+    }
+    return sStorageApSet((eStorageApCmd_t)param->storage_cmd, (const u8 *)param->value);
+}
+
+/**
+ * @brief 解析字符串值写入内存，再按表项持久化到 NVS
+ * @param param 参数描述
+ * @param value 表单/JSON 传来的字符串值
+ * @return 无
+ */
+static void save_param_to_nvs(config_param_t *param, char *value)
+{
     /* 跳过只读参数 */
     if (param->access == READONLY) {
         return;
     }
-    
+
     if (param->type == WIFIAP_PARAM_INT && value) {
         int v = atoi(value);
         // // 日志保留天数强制钳位到 1~90
@@ -205,6 +229,7 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
         *(uint16_t *)param->value = (uint16_t)v;
     } else if (param->type == WIFIAP_PARAM_TOGGLE && value) {
         uint8_t v = (uint8_t)atoi(value);
+        /* apAlways 仅允许 0/1，与 parameterSet 写入侧一致 */
         if (strcmp(param->name, "apAlways") == 0) {
             v = v ? 1 : 0;
         }
@@ -212,67 +237,27 @@ static void save_param_to_nvs(config_param_t *param, char *value) {
     } else if (value) {
         strncpy((char *)param->value, value, param->max_len - 1);
         ((char *)param->value)[param->max_len - 1] = '\0';
-        
-        // Domain特殊处理：添加mqtt://前缀
+
+        /* Domain 特殊处理：统一补 mqtt:// 前缀 */
         if (param->type == WIFIAP_PARAM_STRING && strcmp(param->name, "domain") == 0) {
             char temp[128];
             char *protocol_end = strstr((char *)param->value, "://");
             if (protocol_end) {
                 strncpy(temp, protocol_end + 3, sizeof(temp) - 1);
+                temp[sizeof(temp) - 1] = '\0';
             } else {
                 strncpy(temp, (char *)param->value, sizeof(temp) - 1);
+                temp[sizeof(temp) - 1] = '\0';
             }
             snprintf((char *)param->value, param->max_len, "mqtt://%s", temp);
         }
     }
-    
-    // 保存到NVS
-    if (param->storage_cmd >= 0) {
-        switch (param->storage_cmd) {
-            case cStorageApCmdNvsmqttIp:
-                sStorageApSetNvsmqttIp((char *)param->value);
-                break;
-            case cStorageApCmdNvsmqttport:
-                sStorageApSetNvsmqttport(*(uint16_t *)param->value);
-                break;
-            case cStorageApCmdNvslogDays:
-                sStorageApSetNvslogDays(*(uint16_t *)param->value);
-                break;
-            case cStorageApCmdApAlways:
-                sStorageApSetApAlways(*(uint8_t *)param->value);
-                break;
-            case cStorageApCmdSsid:
-                sStorageApSetssid((char *)param->value);
-                break;
-            case cStorageApCmdPassword:
-                sStorageApSetPassword((char *)param->value);
-                break;
-            case cStorageApCmdGwNvsSn:
-                sStorageGwSet(cStorageApCmdGwNvsSn, (u8 *)param->value);
-                break;
-            case cStorageApCmdTmpMode:
-                sStorageGwSet(cStorageApCmdTmpMode, (u8 *)param->value);
-                break;
-            case cStorageApCmdNvsmqttuser:
-                sStorageApSetNvsmqttuser((char *)param->value);
-                break;
-            case cStorageApCmdNvsmqttpasswd:
-                sStorageApSetNvsmqttpasswd((char *)param->value);
-                break;
-            case cStorageApCmdNvsmqttpub:
-                /* 上行发布主题变更后需重连以生效 */
-                sStorageApSetNvsmqttpub((char *)param->value);
-                break;
-            case cStorageApCmdNvsmqttsub:
-                /* 下行订阅主题变更后需重连以重新 subscribe */
-                sStorageApSetNvsmqttsub((char *)param->value);
-                break;
-            case cStorageApCmdMeter485En:
-                sStorageGwSetMeter485En((char *)param->value);
-                break;
-            default:
-                break;
-        }
+
+    /* 落盘：由 config_params 的 storage/storage_cmd 驱动，避免与 parameterSet 再维护一份 switch */
+    eStorageApRst_t rst = config_param_persist(param);
+    if (rst != eStorageApRstSuccess && param->storage_cmd >= 0) {
+        ESP_LOGE(TAG, "参数 %s 写入失败 rst=%d cmd=%d",
+                 param->name, (int)rst, param->storage_cmd);
     }
 }
 
