@@ -228,7 +228,7 @@ void beep_init(void)
      ESP_LOGI(TAG, "  标签版本:    %s", app_get_version_tag());
      ESP_LOGI(TAG, "  提交日期:    %s", app_get_version_date());
      ESP_LOGI(TAG, "  完整版本:    %s", app_get_version_full());
-     ESP_LOGI(TAG, "  编译时间:    %s", __DATE__ " " __TIME__);
+     ESP_LOGI(TAG, "  编译时间:    %s", app_get_build_time());
      ESP_LOGI(TAG, "========================================");
  }
  

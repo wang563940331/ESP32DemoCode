@@ -69,6 +69,8 @@ typedef struct {
 char g_domain[128] = "mqtt.example.com";
 uint16_t g_port = 1883;
 char g_string_var[256] = APP_VERSION_FULL;
+char g_commit_date[64] = APP_VERSION_DATE;           /* Git 提交日期（只读展示） */
+char g_build_time[64] = "";                          /* 固件编译时间（中文，导出前填充） */
 char g_wifi_name[24] = "";
 char g_wifi_passwd[24] = "";
 char g_sn[20] = "";  // 序列号（只读）
@@ -86,6 +88,8 @@ config_param_t config_params[] = {
     {"domain", "Domain", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_domain), g_domain, 0, "mqtt.example.com", cStorageApCmdNvsmqttIp, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"port", "Port", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_port), &g_port, 1883, NULL, cStorageApCmdNvsmqttport, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"Version", "Version", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_string_var), g_string_var, 0, APP_VERSION_FULL, -1, READONLY, WIFIAP_ACTION_NONE},
+    {"CommitDate", "提交日期", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_commit_date), g_commit_date, 0, APP_VERSION_DATE, -1, READONLY, WIFIAP_ACTION_NONE},
+    {"BuildTime", "编译时间", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_build_time), g_build_time, 0, "", -1, READONLY, WIFIAP_ACTION_NONE},
     {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE, WIFIAP_ACTION_REBOOT},
@@ -136,6 +140,21 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     }
 }
 
+/**
+ * @brief 刷新版本类只读字段（不进 NVS，导出配置前调用）
+ * @return 无
+ */
+static void refresh_version_readonly_fields(void)
+{
+    /* 完整版本 / 提交日期 / 中文编译时间，保证配置页不显示英文月份 */
+    strncpy(g_string_var, app_get_version_full(), sizeof(g_string_var) - 1);
+    g_string_var[sizeof(g_string_var) - 1] = '\0';
+    strncpy(g_commit_date, app_get_version_date(), sizeof(g_commit_date) - 1);
+    g_commit_date[sizeof(g_commit_date) - 1] = '\0';
+    strncpy(g_build_time, app_get_build_time(), sizeof(g_build_time) - 1);
+    g_build_time[sizeof(g_build_time) - 1] = '\0';
+}
+
 // 从NVS加载所有参数
 static void load_params_from_nvs(void)
 {
@@ -149,6 +168,8 @@ static void load_params_from_nvs(void)
             }
         }
     }
+    /* 版本信息与 NVS 无关，每次加载后回填，避免空串或英文编译时间 */
+    refresh_version_readonly_fields();
 }
 
 /**

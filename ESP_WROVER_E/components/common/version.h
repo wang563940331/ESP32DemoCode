@@ -35,6 +35,12 @@ const char *app_get_version_date(void);
 const char *app_get_version_full(void);
 
 /**
+ * @brief 获取固件编译时间（中文格式，如 2026年10月10日 16:21:30）
+ * @return 编译时间字符串（静态缓冲，勿 free）
+ */
+const char *app_get_build_time(void);
+
+/**
  * @brief 打印应用程序版本信息到日志
  * @return 无
  */
