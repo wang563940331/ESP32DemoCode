@@ -27,19 +27,19 @@ typedef struct {
  * @brief 电表数据结构（Event Bus 与 MQTT 等订阅方共用）
  */
 typedef struct {
-    float Totol_Energy;
-    float VolageA;
-    float VolageEVEN;
-    float CurrentA;
-    float CurrentEVEN;
-    float PowerPA;
-    float PowerEVEN;
-    float Frequency;
-    PowerPeakWindow_t peak_3min;
-    PowerPeakWindow_t peak_1hour;
-    PowerPeakWindow_t peak_1day;
-    PowerPeakWindow_t peak_7day;
-    PowerPeakWindow_t peak_1month;
+    float Totol_Energy;//总电能
+    float VolageA;//A相电压
+    float VolageEVEN;//平均电压
+    float CurrentA;//A相电流
+    float CurrentEVEN;//平均电流
+    float PowerPA;//A相功率
+    float PowerEVEN;//平均功率
+    float Frequency;//频率
+    PowerPeakWindow_t peak_3min;//3分钟功率峰值
+    PowerPeakWindow_t peak_1hour;//1小时功率峰值
+    PowerPeakWindow_t peak_1day;//1天功率峰值
+    PowerPeakWindow_t peak_7day;//7天功率峰值
+    PowerPeakWindow_t peak_1month;//1个月功率峰值
 } MeterData_t;
 
 #ifdef __cplusplus

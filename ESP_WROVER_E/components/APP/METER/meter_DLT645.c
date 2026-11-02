@@ -143,10 +143,175 @@ uint16_t dlt645_build_frame(const uint8_t *address, uint8_t control_code,
     return frame_len;
 }
 
+/* ==================== DI 表驱动：解析 handler + 轮询表 ==================== */
+
+/**
+ * @brief DI 解析回调：解码后的数据域（含前 4 字节 DI）
+ * @param decoded 已减 0x33 的数据域
+ * @param data_length 数据域长度
+ * @return true 本 DI 已识别并处理（长度不足则内部跳过仍返回 true）
+ */
+typedef bool (*dlt645_di_handler_fn)(const uint8_t *decoded, uint8_t data_length);
+
+/** DI 分发表项：标识 → 名称 → 处理函数 */
+typedef struct {
+    uint32_t di;                 /**< 数据标识 */
+    const char *name;            /**< 日志用短名 */
+    dlt645_di_handler_fn handler;/**< 解析函数，不可为 NULL */
+} dlt645_di_entry_t;
+
+/** 滑动平均累加器（电压/电流/功率共用形态） */
+typedef struct {
+    uint8_t count;
+    float sum;
+} dlt645_avg_acc_t;
+
+static dlt645_avg_acc_t s_avg_volt = {0};
+static dlt645_avg_acc_t s_avg_curr = {0};
+static dlt645_avg_acc_t s_avg_power = {0};
+
+/**
+ * @brief 累计采样并在满 DATAEVEN 次后写平均值
+ * @param acc 累加器
+ * @param sample 本次采样值
+ * @param avg_out 平均值输出（写回 MeterData）
+ * @return 无
+ */
+static void dlt645_avg_push(dlt645_avg_acc_t *acc, float sample, float *avg_out)
+{
+    if (acc == NULL || avg_out == NULL) {
+        return;
+    }
+    acc->sum += sample;
+    if (++acc->count >= DATAEVEN) {
+        *avg_out = acc->sum / (float)acc->count;
+        acc->count = 0;
+        acc->sum = 0.0f;
+    }
+}
+
+/**
+ * @brief 解析有功总电能 DI
+ * @param decoded 数据域
+ * @param data_length 长度
+ * @return true
+ */
+static bool dlt645_di_energy(const uint8_t *decoded, uint8_t data_length)
+{
+    /* [4字节DI][4字节BCD] → kWh，系数 0.01 */
+    if (data_length >= 8) {
+        g_meter_data.Totol_Energy = Bcd4ToHexUint32((uint8_t *)&decoded[4]) * 0.01f;
+        energy_history_update(g_meter_data.Totol_Energy);
+    }
+    return true;
+}
+
+/**
+ * @brief 解析 A 相电压 DI
+ * @param decoded 数据域
+ * @param data_length 长度
+ * @return true
+ */
+static bool dlt645_di_volt_a(const uint8_t *decoded, uint8_t data_length)
+{
+    /* [4字节DI][2字节BCD] → V，系数 0.1 */
+    if (data_length >= 6) {
+        g_meter_data.VolageA = bcd2ToHex16D((uint8_t *)&decoded[4]) * 0.1f;
+        dlt645_avg_push(&s_avg_volt, g_meter_data.VolageA, &g_meter_data.VolageEVEN);
+    }
+    return true;
+}
+
+/**
+ * @brief 解析 A 相电流 DI
+ * @param decoded 数据域
+ * @param data_length 长度
+ * @return true
+ */
+static bool dlt645_di_curr_a(const uint8_t *decoded, uint8_t data_length)
+{
+    /* [4字节DI][3字节BCD] → A，系数 0.001 */
+    if (data_length >= 7) {
+        g_meter_data.CurrentA = Bcd3ToHexUint32((uint8_t *)&decoded[4]) * 0.001f;
+        dlt645_avg_push(&s_avg_curr, g_meter_data.CurrentA, &g_meter_data.CurrentEVEN);
+    }
+    return true;
+}
+
+/**
+ * @brief 解析有功功率 DI
+ * @param decoded 数据域
+ * @param data_length 长度
+ * @return true
+ */
+static bool dlt645_di_power(const uint8_t *decoded, uint8_t data_length)
+{
+    /* [4字节DI][3字节BCD] → W，系数 0.1；并更新峰值窗口 */
+    if (data_length >= 7) {
+        g_meter_data.PowerPA = Bcd3ToHexUint32((uint8_t *)&decoded[4]) * 0.1f;
+        dlt645_avg_push(&s_avg_power, g_meter_data.PowerPA, &g_meter_data.PowerEVEN);
+        dlt645_update_power_peaks(g_meter_data.PowerPA);
+    }
+    return true;
+}
+
+/**
+ * @brief 解析电网频率 DI
+ * @param decoded 数据域
+ * @param data_length 长度
+ * @return true
+ */
+static bool dlt645_di_freq(const uint8_t *decoded, uint8_t data_length)
+{
+    /* [4字节DI][2字节BCD] → Hz，系数 0.01 */
+    if (data_length >= 6) {
+        g_meter_data.Frequency = bcd2ToHex16D((uint8_t *)&decoded[4]) * 0.01f;
+    }
+    return true;
+}
+
+/** DI 解析表：新增物理量在此加一行即可 */
+static const dlt645_di_entry_t s_dlt645_di_table[] = {
+    { ENERGE_DI,    "电能", dlt645_di_energy },
+    { VOLT_A_DI,    "电压", dlt645_di_volt_a },
+    { CUR_A_DI,     "电流", dlt645_di_curr_a },
+    { POWER_DI,     "功率", dlt645_di_power },
+    { FREQUENCY_DI, "频率", dlt645_di_freq },
+};
+
+/** 轮询发送顺序表：与解析表 DI 集合一致，顺序可单独调整 */
+static const uint32_t s_dlt645_poll_di[] = {
+    ENERGE_DI,
+    VOLT_A_DI,
+    CUR_A_DI,
+    POWER_DI,
+    FREQUENCY_DI,
+};
+
+/**
+ * @brief 按 DI 查表并调用对应解析函数
+ * @param di 数据标识
+ * @param decoded 已解码数据域
+ * @param data_length 数据域长度
+ * @return true 命中并处理；false 未知 DI
+ */
+static bool dlt645_dispatch_di(uint32_t di, const uint8_t *decoded, uint8_t data_length)
+{
+    const size_t n = sizeof(s_dlt645_di_table) / sizeof(s_dlt645_di_table[0]);
+    for (size_t i = 0; i < n; i++) {
+        if (s_dlt645_di_table[i].di == di) {
+            ESP_LOGD(TAG, "DI 命中 %s (0x%08X)", s_dlt645_di_table[i].name, di);
+            return s_dlt645_di_table[i].handler(decoded, data_length);
+        }
+    }
+    ESP_LOGW(TAG, "数据标识未知 (0x%08X)", di);
+    return false;
+}
+
 /*
  * @brief 解析DLT645响应帧并提取物理量
  * 帧结构: [可选 FE FE FE FE] | 68 | A0-A5 | 68 | 控制码 | 数据长度 | 数据域(已+0x33) | 校验和 | 16
- * 数据域前4字节为数据标识(DI)，后续为BCD编码的数值
+ * 数据域前4字节为数据标识(DI)，后续为BCD编码的数值；DI 分发走 s_dlt645_di_table
  * @param response  响应帧起始指针
  * @param len       响应帧长度
  * @return true     解析成功
@@ -154,13 +319,6 @@ uint16_t dlt645_build_frame(const uint8_t *address, uint8_t control_code,
  */
 bool dlt645_parse_response(const uint8_t *response, uint16_t len)
 {
-    // 滑动平均计数器 (保留跨调用的累计)
-    static uint8_t count1 = 0;   // 电压平均计数
-    static uint8_t count2 = 0;   // 电流平均计数
-    static uint8_t count3 = 0;   // 功率平均计数
-    static float VolageA_ALL = 0.0f;   // 电压累计和
-    static float CurrentA_ALL = 0.0f;  // 电流累计和
-    static float PowerPA_ALL = 0.0f;   // 功率累计和
     uint8_t decoded_data[200];
 
     /* 无前导最短: 68+地址6+68+控+长+校验+16 = 12；有 FE*4 则再加 4 */
@@ -260,64 +418,9 @@ bool dlt645_parse_response(const uint8_t *response, uint16_t len)
 
         ESP_LOGD(TAG, "数据标识: 0x%08X", data_id_value);
 
-        // 根据数据标识路由到不同解析逻辑
-        switch (data_id_value) {
-        case ENERGE_DI:     // 有功总电能 (kWh)，数据域: [4字节DI][4字节BCD值]
-            if (data_length >= 8) {
-                g_meter_data.Totol_Energy = Bcd4ToHexUint32(&decoded_data[4]) * 0.01f;
-                /* 电量历史与 MQTT 无关，在读到累计电量时直接更新/持久化 */
-                energy_history_update(g_meter_data.Totol_Energy);
-            }
-            break;
-        case VOLT_A_DI:     // A相电压 (V)，数据域: [4字节DI][2字节BCD值]
-            if (data_length >= 6) {
-                g_meter_data.VolageA = bcd2ToHex16D(&decoded_data[4]) * 0.1f;
-                VolageA_ALL += g_meter_data.VolageA;
-                // 每DATAEVEN(10)次采样后求一次平均值
-                if (++count1 >= DATAEVEN) {
-                    g_meter_data.VolageEVEN = VolageA_ALL / count1;
-                    count1 = 0;
-                    VolageA_ALL = 0.0f;
-                }
-                // ESP_LOGI(TAG, "Voltage A: %.1f V (avg: %.2f V)", g_meter_data.VolageA, g_meter_data.VolageEVEN);
-            }
-            break;
-        case CUR_A_DI:      // A相电流 (A)，数据域: [4字节DI][3字节BCD值]
-            if (data_length >= 7) {
-                g_meter_data.CurrentA = Bcd3ToHexUint32(&decoded_data[4]) * 0.001f;
-                CurrentA_ALL += g_meter_data.CurrentA;
-                if (++count2 >= DATAEVEN) {
-                    g_meter_data.CurrentEVEN = CurrentA_ALL / count2;
-                    count2 = 0;
-                    CurrentA_ALL = 0.0f;
-                }
-                // ESP_LOGI(TAG, "Current A: %.3f A (avg: %.4f A)", g_meter_data.CurrentA, g_meter_data.CurrentEVEN);
-            }
-            break;
-        case POWER_DI:      // 有功功率 (W)，数据域: [4字节DI][3字节BCD值]
-            if (data_length >= 7) {
-                g_meter_data.PowerPA = Bcd3ToHexUint32(&decoded_data[4]) * 0.1f;
-                PowerPA_ALL += g_meter_data.PowerPA;
-                if (++count3 >= DATAEVEN) {
-                    g_meter_data.PowerEVEN = PowerPA_ALL / count3;
-                    count3 = 0;
-                    PowerPA_ALL = 0.0f;
-                }
-                // 更新各时间窗口的功率峰值
-                dlt645_update_power_peaks(g_meter_data.PowerPA);
-                // ESP_LOGI(TAG, "Power: %.1f W (avg: %.2f W)", g_meter_data.PowerPA, g_meter_data.PowerEVEN);
-            }
-            break;
-        case FREQUENCY_DI:  // 电网频率 (Hz)，数据域: [4字节DI][2字节BCD值]
-            if (data_length >= 6) {
-                g_meter_data.Frequency = bcd2ToHex16D(&decoded_data[4]) * 0.01f;
-                // ESP_LOGI(TAG, "Frequency: %.2f Hz", g_meter_data.Frequency);
-            }
-            break;
-        default:
-            ESP_LOGW(TAG, "数据标识未知 (0x%08X)", data_id_value);
-            break;
-        }
+        /* 表驱动分发，替代原 switch(DI) */
+        (void)dlt645_dispatch_di(data_id_value, decoded_data, data_length);
+
         /* 解析成功后发布完整电表快照，供 MQTT 等观察者更新缓存 */
         event_publish(EVENT_METER_UPDATED, &g_meter_data, sizeof(g_meter_data));
     }
@@ -521,21 +624,20 @@ void dlt645_task(void *pvParameters)
 {
     uint32_t times = 0;
     uint16_t len = 0;
-    static uint8_t send_count = 0;   // 轮询计数: 0=电能 1=电压 2=电流 3=功率 4=频率
+    static uint8_t send_count = 0;   /* 轮询下标，对应 s_dlt645_poll_di[] */
+    const size_t poll_n = sizeof(s_dlt645_poll_di) / sizeof(s_dlt645_poll_di[0]);
     s_uart_dev = (const uart_device_t *)pvParameters;
     EN_SLOGI(TAG, "DLT645任务启动");
        while (1) {
         // 1秒定时器: 触发一次读数据请求
         if (tickOut(&times, 1000)) {
             tickOut(&times, 0);
-            // 按顺序轮询5个数据项
-            switch (send_count++) {
-            case 0: dlt645_send_read(ENERGE_DI);    break;
-            case 1: dlt645_send_read(VOLT_A_DI);    break;
-            case 2: dlt645_send_read(CUR_A_DI);     break;
-            case 3: dlt645_send_read(POWER_DI);     break;
-            case 4: dlt645_send_read(FREQUENCY_DI); break;
-            default: send_count = 0; break;
+            /* 表驱动轮询：按 s_dlt645_poll_di 顺序发读请求 */
+            if (poll_n > 0) {
+                if (send_count >= poll_n) {
+                    send_count = 0;
+                }
+                dlt645_send_read(s_dlt645_poll_di[send_count++]);
             }
         }
 
