@@ -1,7 +1,4 @@
-
-
 ![1788625682131](image/FlashDownloadTool烧录说明/1788625682131.png)
-
 
 # 用 ESP Flash Download Tool v3.6.4 烧录
 
@@ -127,15 +124,3 @@ Flash  dio / 40m / 8MB
 **不要**把 `RemoteControlO_Com.bin` 烧到 `0x0`。
 
 ---
-
-## 7. 分区一览（对照 `partitions.csv`）
-
-| 分区        | 偏移    | 大小         | 是否用工具单独烧                 |
-| ----------- | ------- | ------------ | -------------------------------- |
-| bootloader  | 0x1000  | （bin 自身） | 是                               |
-| 分区表      | 0x8000  | —           | 是                               |
-| nvs         | 0x9000  | 0x6000       | 否（运行时写入）                 |
-| phy_init    | 0xf000  | 0x1000       | 否                               |
-| factory APP | 0x10000 | 0x180000     | 是（`RemoteControlO_Com.bin`） |
-
-APP 分区 1.5MB，当前固件约 1.2MB 量级，空间够用。
