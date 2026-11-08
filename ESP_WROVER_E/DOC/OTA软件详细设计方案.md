@@ -187,7 +187,7 @@
 | 项     | 说明                                                                    |
 | ------ | ----------------------------------------------------------------------- |
 | 作用   | 把本地 `build/RemoteControlO_Com.bin` 上传到 FTP 目录 |
-| 远程名 | `RemoteControlO<分支-短哈希>.bin`（与固件 `APP_VERSION_FULL` 一致） |
+| 远程名 | `RemoteControlO<版本>.bin`；**优先从 bin 内嵌版本提取**，与 `StatusChange.version` 一致 |
 | 与编译 | **不挂钩**；需手动 `./otapush.sh` |
 | 机密   | `OTA_FTP_HOST` / `USER` / `PASS` 等环境变量或根目录 `.env`，不进 Git |
 | 设备侧 | MQTT 可指定该确切名，或 `FILENAME=NEW` 取目录最新 |

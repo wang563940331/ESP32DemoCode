@@ -43,36 +43,53 @@ fi
 DEFAULT_BIN="${ROOT_DIR}/build/RemoteControlO_Com.bin"
 LOCAL_FILE="${1:-${DEFAULT_BIN}}"
 
-# 解析与固件一致的版本号（分支-8位短哈希）
-resolve_app_version() {
+# 从 bin 内嵌字符串提取 APP_VERSION_FULL（与 StatusChange.version 一致）
+extract_version_from_bin() {
+    local bin="$1"
+    local ver=""
+    if [[ ! -f "${bin}" ]] || ! command -v strings >/dev/null 2>&1; then
+        return 1
+    fi
+    # 匹配固件内 "分支-8位哈希"，如 main-0e4bd8ef
+    ver="$(strings "${bin}" | grep -oE '[A-Za-z0-9._/-]+-[0-9a-f]{8}' | head -1 || true)"
+    if [[ -n "${ver}" ]]; then
+        echo "${ver}"
+        return 0
+    fi
+    return 1
+}
+
+# 回退：本地 HEAD（与 CMakeLists 注入规则一致）
+resolve_app_version_git() {
     local branch hash
     if ! command -v git >/dev/null 2>&1; then
         echo "unknown-unknown"
         return
     fi
     branch="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-    hash="$(git -C "${ROOT_DIR}" rev-parse --short=8 "origin/${branch}" 2>/dev/null || true)"
-    if [[ -z "${hash}" ]]; then
-        hash="$(git -C "${ROOT_DIR}" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
-    fi
+    hash="$(git -C "${ROOT_DIR}" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
     echo "${branch}-${hash}"
 }
 
+if [[ ! -f "${LOCAL_FILE}" ]]; then
+    echo "[ERROR] 找不到固件文件: ${LOCAL_FILE}"
+    echo "        请先 idf.py build，或传入显式路径: ./otapush.sh xxx.bin"
+    exit 1
+fi
+
+# 版本优先级：显式第3参 > bin 内嵌 > git HEAD
 APP_VER="${3:-}"
 if [[ -z "${APP_VER}" ]]; then
-    APP_VER="$(resolve_app_version)"
+    APP_VER="$(extract_version_from_bin "${LOCAL_FILE}" || true)"
+fi
+if [[ -z "${APP_VER}" ]]; then
+    APP_VER="$(resolve_app_version_git)"
 fi
 
 if [[ -n "${2:-}" ]]; then
     REMOTE_NAME="$(basename "${2}")"
 else
     REMOTE_NAME="RemoteControlO${APP_VER}.bin"
-fi
-
-if [[ ! -f "${LOCAL_FILE}" ]]; then
-    echo "[ERROR] 找不到固件文件: ${LOCAL_FILE}"
-    echo "        请先 idf.py build，或传入显式路径: ./otapush.sh xxx.bin"
-    exit 1
 fi
 
 FILE_SIZE="$(wc -c < "${LOCAL_FILE}" | tr -d ' ')"
