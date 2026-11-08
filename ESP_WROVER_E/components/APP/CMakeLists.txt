@@ -12,6 +12,8 @@ include(${CMAKE_CURRENT_LIST_DIR}/WIFI_STA/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/WIFI_AP/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/SD_FAT/CMakeLists.txt)
 include(${CMAKE_CURRENT_LIST_DIR}/LED/CMakeLists.txt)
+# OTA 业务：状态机/触发入口；FTP 传输在 MIDDLEWARE
+include(${CMAKE_CURRENT_LIST_DIR}/OTA/CMakeLists.txt)
 
 # APP 直接使用 UTILITY 头文件（event_bus、utility 等）
 list(APPEND APP_REQUIRES UTILITY)

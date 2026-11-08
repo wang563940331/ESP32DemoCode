@@ -31,6 +31,7 @@
 #include "app_config.h"
 #include "gpio_output_bsp.h"
 #include "meter_DLT645.h"
+#include "OTA.h"
 #include <stdlib.h>
 #include <time.h>
 // 定义日志标签
@@ -270,6 +271,9 @@ void app_main(void)
     meter_DLT645_init();
 
     sensor_task_init();
+
+    /* OTA：仅 MQTT FtpOTA，不对外暴露串口 update / 默认 FTP 信息 */
+    ota_app_init();
 
     // const uart_device_t* uart2 = uart_factory_get_device(UART_NUM_2); 
     // if(uart2 == NULL)
