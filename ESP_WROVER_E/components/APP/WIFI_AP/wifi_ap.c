@@ -79,8 +79,8 @@ char g_mqtt_user[64] = "";   // MQTT用户名
 char g_mqtt_passwd[64] = ""; // MQTT密码
 char g_mqtt_pub[64] = "";    // MQTT 发布主题（上行）
 char g_mqtt_sub[64] = "";    // MQTT 订阅主题（下行）
-char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF=关闭
-uint16_t g_log_days = 7;        // SD日志保留天数(1~90)
+char g_meter485_mode[20] = "";  // 485电表模式: DLT645=开启, OFF/NULL=关闭
+uint16_t g_log_days = 30;       // SD日志保留天数(1~90)
 uint8_t g_ap_always = 0;        // AP常在线:1一直在线,0按策略
 
 // 参数描述数组 - 集中管理所有参数
@@ -93,13 +93,13 @@ config_param_t config_params[] = {
     {"wifi", "WiFi名称", WIFIAP_PARAM_WIFI_SSID, STORAGE_AP, sizeof(g_wifi_name), g_wifi_name, 0, "", cStorageApCmdSsid, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"passwd", "WiFi密码", WIFIAP_PARAM_WIFI_PASSWD, STORAGE_AP, sizeof(g_wifi_passwd), g_wifi_passwd, 0, "", cStorageApCmdPassword, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"sn", "序列号", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_sn), g_sn, 0, "", cStorageApCmdGwNvsSn, WRITEABLE, WIFIAP_ACTION_REBOOT},
-    {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "", cStorageApCmdTmpMode, WRITEABLE, WIFIAP_ACTION_REBOOT},
+    {"tmpmode", "温度模式", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_tmpmode), g_tmpmode, 0, "NULL", cStorageApCmdTmpMode, WRITEABLE, WIFIAP_ACTION_REBOOT},
     {"mqttuser", "MQTT用户名", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_user), g_mqtt_user, 0, "", cStorageApCmdNvsmqttuser, WRITEABLE, WIFIAP_ACTION_RECONNECT},
     {"mqttpass", "MQTT密码", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_passwd), g_mqtt_passwd, 0, "", cStorageApCmdNvsmqttpasswd, WRITEABLE, WIFIAP_ACTION_RECONNECT},
-    {"mqttpub", "MQTT发布主题", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_pub), g_mqtt_pub, 0, "device/pub", cStorageApCmdNvsmqttpub, WRITEABLE, WIFIAP_ACTION_RECONNECT},
-    {"mqttsub", "MQTT订阅主题", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_sub), g_mqtt_sub, 0, "device/sub", cStorageApCmdNvsmqttsub, WRITEABLE, WIFIAP_ACTION_RECONNECT},
-    {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "DLT645", cStorageApCmdMeter485En, WRITEABLE, WIFIAP_ACTION_REBOOT},
-    {"logdays", "日志保留天数", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_log_days), &g_log_days, 7, NULL, cStorageApCmdNvslogDays, WRITEABLE, WIFIAP_ACTION_NONE},
+    {"mqttpub", "MQTT发布主题", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_pub), g_mqtt_pub, 0, "NULL", cStorageApCmdNvsmqttpub, WRITEABLE, WIFIAP_ACTION_RECONNECT},
+    {"mqttsub", "MQTT订阅主题", WIFIAP_PARAM_STRING, STORAGE_AP, sizeof(g_mqtt_sub), g_mqtt_sub, 0, "NULL", cStorageApCmdNvsmqttsub, WRITEABLE, WIFIAP_ACTION_RECONNECT},
+    {"meter485en", "485电表", WIFIAP_PARAM_STRING, STORAGE_GW, sizeof(g_meter485_mode), g_meter485_mode, 0, "NULL", cStorageApCmdMeter485En, WRITEABLE, WIFIAP_ACTION_REBOOT},
+    {"logdays", "日志保留天数", WIFIAP_PARAM_INT, STORAGE_AP, sizeof(g_log_days), &g_log_days, 30, NULL, cStorageApCmdNvslogDays, WRITEABLE, WIFIAP_ACTION_NONE},
     {"apAlways", "AP常在线(1一直/0策略)", WIFIAP_PARAM_TOGGLE, STORAGE_AP, sizeof(g_ap_always), &g_ap_always, 1, NULL, cStorageApCmdApAlways, WRITEABLE, WIFIAP_ACTION_NONE},
 };
 #define NUM_PARAMS (sizeof(config_params) / sizeof(config_param_t))

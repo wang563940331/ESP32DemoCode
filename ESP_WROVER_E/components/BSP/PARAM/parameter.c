@@ -14,8 +14,8 @@ const stParamConfig_t g_stParamConfig[] = {
     // ====== 网关参数组 ======
     {cStorageApCmdGwNvsSn,          cStorageGwNvsSn,          PARAM_TYPE_STRING,  "12345678900001",         cStorageGwNvsName, 2},     // SN变更需重启
     {cStorageApCmdGwNvsDeviceType,  cStorageGwNvsDeviceType,  PARAM_TYPE_UINT8,   "0",                      cStorageGwNvsName, 2},     // 设备类型变更需重启
-    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "DHT11",                 cStorageGwNvsName, 2},     // 温度模式变更需重启
-    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "DLT645",                cStorageGwNvsName, 2},     // 485电表模式变更需重启
+    {cStorageApCmdTmpMode,          cStorageGwNvsTmpMode,     PARAM_TYPE_STRING,   "NULL",                  cStorageGwNvsName, 2},     // 温度模式变更需重启；NULL=不启用
+    {cStorageApCmdMeter485En,       cStorageGwNvsMeter485En,  PARAM_TYPE_STRING,   "NULL",                  cStorageGwNvsName, 2},     // 485电表模式变更需重启；NULL=不启用
 
 
     // ====== AP参数组 ======
@@ -24,12 +24,12 @@ const stParamConfig_t g_stParamConfig[] = {
     {cStorageApCmdPassword,         cStorageApNvsPassword,    PARAM_TYPE_STRING,  "88888888",               cStorageApNvsName, 1},     // WiFi密码变更重连网络
     {cStorageApCmdNvsmqttIp,        cStorageApNvsmqttIp,      PARAM_TYPE_STRING,  "mqtt://mqtt.example.com", cStorageApNvsName, 1},    // MQTT IP变更重连网络
     {cStorageApCmdNvsmqttport,      cStorageApNvsmqttport,    PARAM_TYPE_UINT16,  "1883",                   cStorageApNvsName, 1},     // MQTT端口变更重连网络
-    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "device/sub",             cStorageApNvsName, 1},     // MQTT 订阅主题
-    {cStorageApCmdNvsmqttpub,       cStorageApNvsmqttpub,     PARAM_TYPE_STRING,  "device/pub",             cStorageApNvsName, 1},     // MQTT 发布主题
+    {cStorageApCmdNvsmqttsub,       cStorageApNvsmqttsub,     PARAM_TYPE_STRING,  "NULL",                   cStorageApNvsName, 1},     // MQTT 订阅主题；NULL→{sn}/SubTopic
+    {cStorageApCmdNvsmqttpub,       cStorageApNvsmqttpub,     PARAM_TYPE_STRING,  "NULL",                   cStorageApNvsName, 1},     // MQTT 发布主题；NULL→{sn}/PubTopic
     {cStorageApCmdNvsmqttclient,    cStorageApNvsmqttclient,  PARAM_TYPE_STRING,  "",                       cStorageApNvsName, 1},     // MQTT客户端ID变更重连网络
     {cStorageApCmdNvsmqttuser,      cStorageApNvsmqttuser,    PARAM_TYPE_STRING,  "mqtt_user",              cStorageApNvsName, 1},     // MQTT用户名变更重连网络
     {cStorageApCmdNvsmqttpasswd,    cStorageApNvsmqttpasswd,  PARAM_TYPE_STRING,  "mqtt_pass",              cStorageApNvsName, 1},     // MQTT密码变更重连网络
-    {cStorageApCmdNvslogDays,       cStorageApNvslogDays,     PARAM_TYPE_UINT16,  "7",                      cStorageApNvsName, 0},     // SD日志保留天数(1~90)
+    {cStorageApCmdNvslogDays,       cStorageApNvslogDays,     PARAM_TYPE_UINT16,  "30",                     cStorageApNvsName, 0},     // SD日志保留天数(1~90)
     {cStorageApCmdApAlways,         cStorageApNvsApAlways,    PARAM_TYPE_UINT8,   "0",                      cStorageApNvsName, 0},     // AP常在线:1一直/0策略
 
     {cStorageApCmdPk1hV,          cStorageDataNvsPk1hV,        PARAM_TYPE_FLOAT,  "0",                      cStorageDataNvsName, 0},

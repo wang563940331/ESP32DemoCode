@@ -57,8 +57,10 @@ static void sensor_task(void *pvParameters)
     char buf[20] = {0};
     sStorageGwGet(cStorageApCmdTmpMode, sizeof(buf), (uint8_t *)buf);
 
-    if (memcmp(buf, "OFF", sizeof("OFF")) == 0) {
-        ESP_LOGI(TAG, "传感器模式=OFF，任务退出");
+    /* OFF / NULL 均表示不启用温湿度采集 */
+    if (memcmp(buf, "OFF", sizeof("OFF")) == 0
+        || memcmp(buf, "NULL", sizeof("NULL")) == 0) {
+        ESP_LOGI(TAG, "传感器模式=%s，任务退出", buf[0] ? buf : "空");
         s_sensor_task_handle = NULL;
         vTaskDelete(NULL);
         return;
