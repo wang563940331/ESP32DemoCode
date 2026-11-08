@@ -37,6 +37,10 @@
 
 static const char *TAG_LED = "led";
 
+/** led_state 任务栈：呼吸灯会走 LEDC 初始化，2048 易溢出 */
+#define LED_STATE_TASK_STACK    (4096)
+#define LED_STATE_TASK_PRIO     (3)
+
 /** LED 板级配置：改引脚/极性只改这里，不必动 gpio_output_bsp */
 static const gpio_output_config_t s_led_gpio_cfg = {
     .gpio_num = LED_GPIO_PIN,
@@ -161,7 +165,9 @@ void led_init(void)
     event_subscribe(EVENT_MQTT_DISCONNECTED,    led_on_mqtt_disconnected);
 
     /* 启动状态指示任务（取代 main 中的轮询循环） */
-    if (xTaskCreatePinnedToCore(led_state_task, "led_state", 2048, NULL, 3, NULL, 0) != pdPASS) {
+    if (xTaskCreatePinnedToCore(led_state_task, "led_state",
+                                LED_STATE_TASK_STACK, NULL,
+                                LED_STATE_TASK_PRIO, NULL, 0) != pdPASS) {
         ESP_LOGE(TAG_LED, "LED 状态任务创建失败");
     }
 }
