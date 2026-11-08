@@ -1,6 +1,7 @@
 /*
  * @Description: 上行遥测组包模块
- *               从 json.c 拆出：负责 StatusChange / MeterAll / CmdAck / GetData-Ack 组包，
+ *               从 json.c 拆出：负责 StatusChange / MeterAll / Control_ACK / GetData_ACK /
+ *               FtpOTA_ACK / FtpOTA_Status 组包，
  *               依赖 energy_history 与 parameterSet；发布走回调，不直接依赖 MQTT client
  */
 #ifndef __TELEMETRY_H__
@@ -53,17 +54,32 @@ void telemetry_send_head(const char *headid,
                          const MeterData_t *meter);
 
 /**
- * @brief 组包并发布指令应答（CmdAck），供 json 下行分发表 ack 调用
+ * @brief 组包并发布远程控制应答（Control_ACK），供 json 下行分发表 ack 调用
  * @param root 原下行根对象（当前未用）
  * @return true 已组包并尝试发布
  */
-bool telemetry_build_cmd_ack(const cJSON *root);
+bool telemetry_build_control_ack(const cJSON *root);
 
 /**
- * @brief 组包并发布历史电量应答（GetData-Ack），供 json 下行分发表 ack 调用
+ * @brief 组包并发布召唤电量历史应答（GetData_ACK），供 json 下行分发表 ack 调用
  * @param root 原下行根对象（当前未用）
  * @return true 已组包并尝试发布
  */
-bool telemetry_build_get_ack(const cJSON *root);
+bool telemetry_build_get_data_ack(const cJSON *root);
+
+/**
+ * @brief 组包并发布 FTP OTA 受理应答（FtpOTA_ACK）
+ * @param root 原下行根对象（当前未用）
+ * @return true 已组包并尝试发布
+ */
+bool telemetry_build_ftp_ota_ack(const cJSON *root);
+
+/**
+ * @brief 组包并发布 FTP OTA 进度（FtpOTA_Status）
+ * @param status 状态字符串，如 "download"
+ * @param progress 进度百分比字符串，如 "50"（每 10% 一次）
+ * @return 无
+ */
+void telemetry_send_ftp_ota_status(const char *status, const char *progress);
 
 #endif

@@ -1,11 +1,13 @@
 /*
- * @Description: 上行遥测组包（StatusChange / MeterAll / CmdAck / GetData-Ack）
+ * @Description: 上行遥测组包（StatusChange / MeterAll / Control_ACK / GetData_ACK /
+ *               FtpOTA_ACK / FtpOTA_Status）
  *               依赖 energy_history、parameterSet；发布走回调，不直接依赖 MQTT client
  */
 
 #include "telemetry.h"
 #include "energy_history.h"
 #include "parameterSet.h"
+#include "version.h"
 #include "esp_heap_caps.h"
 
 #include "my_log.h"
@@ -109,6 +111,8 @@ void telemetry_send_ctrlacl(const char *ctrl)
     cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
     cJSON_AddItemToObject(root, "params", params);
     cJSON_AddItemToObject(params, "ctrlacl", cJSON_CreateString(ctrl));
+    /* 固件版本：标签-短哈希，便于平台识别 OTA 后版本 */
+    cJSON_AddItemToObject(params, "version", cJSON_CreateString(app_get_version_full()));
     cJSON_AddItemToObject(params, "time", cJSON_CreateString(time_str));
 
     char *payload = cJSON_PrintUnformatted(root);
@@ -209,37 +213,89 @@ void telemetry_send_head(const char *headid,
     telemetry_publish_free(payload);
 }
 
-bool telemetry_build_cmd_ack(const cJSON *root)
+/**
+ * @brief 组包并发布远程控制应答（Control_ACK）
+ * @param root 原下行根对象（当前未用）
+ * @return true 已组包并尝试发布
+ */
+bool telemetry_build_control_ack(const cJSON *root)
 {
     (void)root;
 
     char sn[20] = {0};
+    /* 应答 device 填本机 SN */
     telemetry_fill_sn_and_time(sn, sizeof(sn), NULL, 0);
 
     cJSON *ack = cJSON_CreateObject();
     if (ack == NULL) {
-        ESP_LOGE(TAG, "CmdAck: 创建根对象失败");
+        ESP_LOGE(TAG, "Control_ACK: 创建根对象失败");
         return false;
     }
 
     cJSON *params = cJSON_CreateObject();
     if (params == NULL) {
         cJSON_Delete(ack);
-        ESP_LOGE(TAG, "CmdAck: 创建 params 失败");
+        ESP_LOGE(TAG, "Control_ACK: 创建 params 失败");
         return false;
     }
 
-    cJSON_AddItemToObject(ack, "Type", cJSON_CreateString("CmdAck"));
+    /* Type / device / params.ack 按协议 Control_ACK 固定字段 */
+    cJSON_AddItemToObject(ack, "Type", cJSON_CreateString("Control_ACK"));
     cJSON_AddItemToObject(ack, "device", cJSON_CreateString(sn));
     cJSON_AddItemToObject(ack, "params", params);
-    cJSON_AddItemToObject(params, "ack", cJSON_CreateString("CmdAck"));
+    cJSON_AddItemToObject(params, "ack", cJSON_CreateString("ok"));
 
     char *payload = cJSON_PrintUnformatted(ack);
     cJSON_Delete(ack);
     return telemetry_publish_free(payload) == ESP_OK;
 }
 
-bool telemetry_build_get_ack(const cJSON *root)
+/**
+ * @brief 组包并发布召唤电量历史应答（GetData_ACK）
+ * @param root 原下行根对象（当前未用）
+ * @return true 已组包并尝试发布
+ */
+bool telemetry_build_get_data_ack(const cJSON *root)
+{
+    (void)root;
+
+    char sn[20] = {0};
+    /* 应答 device 填本机 SN */
+    telemetry_fill_sn_and_time(sn, sizeof(sn), NULL, 0);
+
+    cJSON *ack = cJSON_CreateObject();
+    if (ack == NULL) {
+        ESP_LOGE(TAG, "GetData_ACK: 创建根对象失败");
+        return false;
+    }
+
+    cJSON *params = cJSON_CreateObject();
+    if (params == NULL) {
+        cJSON_Delete(ack);
+        ESP_LOGE(TAG, "GetData_ACK: 创建 params 失败");
+        return false;
+    }
+
+    /* Type / device / params.ack 按协议 GetData_ACK 固定字段 */
+    cJSON_AddItemToObject(ack, "Type", cJSON_CreateString("GetData_ACK"));
+    cJSON_AddItemToObject(ack, "device", cJSON_CreateString(sn));
+    cJSON_AddItemToObject(ack, "params", params);
+    cJSON_AddItemToObject(params, "ack", cJSON_CreateString("ok"));
+
+    /* DailyEnergy 由 energy_history 追加到 params（有历史才追加） */
+    energy_history_add_to_json(params);
+
+    char *payload = cJSON_PrintUnformatted(ack);
+    cJSON_Delete(ack);
+    return telemetry_publish_free(payload) == ESP_OK;
+}
+
+/**
+ * @brief 组包并发布 FTP OTA 受理应答（FtpOTA_ACK）
+ * @param root 原下行根对象（当前未用）
+ * @return true 已组包并尝试发布
+ */
+bool telemetry_build_ftp_ota_ack(const cJSON *root)
 {
     (void)root;
 
@@ -248,25 +304,66 @@ bool telemetry_build_get_ack(const cJSON *root)
 
     cJSON *ack = cJSON_CreateObject();
     if (ack == NULL) {
-        ESP_LOGE(TAG, "GetAck: 创建根对象失败");
+        ESP_LOGE(TAG, "FtpOTA_ACK: 创建根对象失败");
         return false;
     }
 
     cJSON *params = cJSON_CreateObject();
     if (params == NULL) {
         cJSON_Delete(ack);
-        ESP_LOGE(TAG, "GetAck: 创建 params 失败");
+        ESP_LOGE(TAG, "FtpOTA_ACK: 创建 params 失败");
         return false;
     }
 
-    cJSON_AddItemToObject(ack, "Type", cJSON_CreateString("CmdAck"));
+    cJSON_AddItemToObject(ack, "Type", cJSON_CreateString("FtpOTA_ACK"));
     cJSON_AddItemToObject(ack, "device", cJSON_CreateString(sn));
     cJSON_AddItemToObject(ack, "params", params);
-
-    /* 历史电量由 energy_history 追加到 params */
-    energy_history_add_to_json(params);
+    cJSON_AddItemToObject(params, "ack", cJSON_CreateString("OK"));
 
     char *payload = cJSON_PrintUnformatted(ack);
     cJSON_Delete(ack);
     return telemetry_publish_free(payload) == ESP_OK;
+}
+
+/**
+ * @brief 组包并发布 FTP OTA 进度（FtpOTA_Status）
+ * @param status 状态字符串，如 "download"；为空则用 "download"
+ * @param progress 进度百分比字符串，如 "50"；不可为空
+ * @return 无
+ */
+void telemetry_send_ftp_ota_status(const char *status, const char *progress)
+{
+    if ((progress == NULL) || (progress[0] == '\0')) {
+        ESP_LOGW(TAG, "FtpOTA_Status: progress 为空，跳过");
+        return;
+    }
+
+    char sn[20] = {0};
+    /* 应答 device 填本机 SN */
+    telemetry_fill_sn_and_time(sn, sizeof(sn), NULL, 0);
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        ESP_LOGE(TAG, "FtpOTA_Status: 创建根对象失败");
+        return;
+    }
+
+    cJSON *params = cJSON_CreateObject();
+    if (params == NULL) {
+        cJSON_Delete(root);
+        ESP_LOGE(TAG, "FtpOTA_Status: 创建 params 失败");
+        return;
+    }
+
+    /* Type / device / params 按协议 FtpOTA_Status */
+    cJSON_AddItemToObject(root, "Type", cJSON_CreateString("FtpOTA_Status"));
+    cJSON_AddItemToObject(root, "device", cJSON_CreateString(sn));
+    cJSON_AddItemToObject(root, "params", params);
+    cJSON_AddItemToObject(params, "status",
+                          cJSON_CreateString((status != NULL && status[0] != '\0') ? status : "download"));
+    cJSON_AddItemToObject(params, "progress", cJSON_CreateString(progress));
+
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    (void)telemetry_publish_free(payload);
 }

@@ -5,12 +5,14 @@
 
 #include "json.h"
 #include "telemetry.h"
+#include "OTA.h"
 #include "cJSON.h"
 #include "esp_heap_caps.h"
 #include "my_log.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 static const char *TAG = "json";
 
@@ -42,6 +44,7 @@ typedef struct mqtt_dl_handler {
 
 static bool json_handle_ctrl(const cJSON *root);
 static bool json_handle_get_data(const cJSON *root);
+static bool json_handle_ftp_ota(const cJSON *root);
 static const json_dispatch_entry_t *json_find_entry(const char *type);
 static mqtt_dl_result_t mqtt_dl_h_parse(mqtt_dl_ctx_t *ctx);
 static mqtt_dl_result_t mqtt_dl_h_device_auth(mqtt_dl_ctx_t *ctx);
@@ -53,8 +56,9 @@ static mqtt_dl_result_t mqtt_dl_h_ack(mqtt_dl_ctx_t *ctx);
  * ack 委托 telemetry，json 不直接依赖 energy_history / parameterSet
  */
 static const json_dispatch_entry_t s_json_dispatch_table[] = {
-    { "Control", json_handle_ctrl, telemetry_build_cmd_ack },
-    { "GetData", json_handle_get_data, telemetry_build_get_ack },
+    { "Control", json_handle_ctrl, telemetry_build_control_ack },
+    { "GetData", json_handle_get_data, telemetry_build_get_data_ack },
+    { "FtpOTA", json_handle_ftp_ota, telemetry_build_ftp_ota_ack },
 };
 
 /* 责任链节点实例（静态串成 Parse → DeviceAuth → TypeRoute → Ack） */
@@ -165,6 +169,119 @@ static bool json_handle_get_data(const cJSON *root)
 
     ESP_LOGE(TAG, "GetData: 未知 get=%s", cmd_value);
     return false;
+}
+
+/**
+ * @brief 从 cJSON 项读取字符串（支持 number 转字符串），并去掉首尾空白
+ * @param item JSON 字段
+ * @param out 输出缓冲
+ * @param out_len 缓冲长度
+ * @return true 读取成功，false 类型不支持或为空
+ */
+static bool json_copy_param_str(const cJSON *item, char *out, size_t out_len)
+{
+    char *p;
+    char *end;
+    size_t n;
+
+    if ((item == NULL) || (out == NULL) || (out_len == 0)) {
+        return false;
+    }
+    out[0] = '\0';
+
+    if (cJSON_IsString(item) && (item->valuestring != NULL)) {
+        strncpy(out, item->valuestring, out_len - 1);
+        out[out_len - 1] = '\0';
+    } else if (cJSON_IsNumber(item)) {
+        snprintf(out, out_len, "%d", item->valueint);
+    } else {
+        return false;
+    }
+
+    // 去掉前导空白（兼容 " swdplus.xyz"）
+    p = out;
+    while (*p != '\0' && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (p != out) {
+        memmove(out, p, strlen(p) + 1);
+    }
+    n = strlen(out);
+    if (n == 0) {
+        return false;
+    }
+    end = out + n - 1;
+    while (end > out && isspace((unsigned char)*end)) {
+        *end = '\0';
+        end--;
+    }
+    return (out[0] != '\0');
+}
+
+/**
+ * @brief 处理 Type=FtpOTA：按 params 连接 FTP 并启动固件 OTA
+ * @param root JSON 根对象
+ * @return true 已启动 OTA 任务，false 参数缺失或启动失败
+ */
+static bool json_handle_ftp_ota(const cJSON *root)
+{
+    ota_app_ftp_cfg_t cfg;
+    char port_buf[16];
+    cJSON *params;
+    long port_val;
+
+    params = cJSON_GetObjectItemCaseSensitive(root, "params");
+    if (!cJSON_IsObject(params)) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 params 对象");
+        return false;
+    }
+
+    memset(&cfg, 0, sizeof(cfg));
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "IP"),
+                             cfg.host, sizeof(cfg.host))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 IP");
+        return false;
+    }
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "PORT"),
+                             port_buf, sizeof(port_buf))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 PORT");
+        return false;
+    }
+    port_val = strtol(port_buf, NULL, 10);
+    if ((port_val <= 0) || (port_val > 65535)) {
+        ESP_LOGW(TAG, "FtpOTA: PORT 非法 %s", port_buf);
+        return false;
+    }
+    cfg.port = (uint16_t)port_val;
+
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "USER"),
+                             cfg.user, sizeof(cfg.user))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 USER");
+        return false;
+    }
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "PASSWD"),
+                             cfg.passwd, sizeof(cfg.passwd))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 PASSWD");
+        return false;
+    }
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "PATH"),
+                             cfg.path, sizeof(cfg.path))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 PATH");
+        return false;
+    }
+    if (!json_copy_param_str(cJSON_GetObjectItemCaseSensitive(params, "FILENAME"),
+                             cfg.filename, sizeof(cfg.filename))) {
+        ESP_LOGW(TAG, "FtpOTA: 缺少 FILENAME");
+        return false;
+    }
+
+    ESP_LOGI(TAG, "FtpOTA: %s:%u %s/%s 用户:%s",
+             cfg.host, (unsigned)cfg.port, cfg.path, cfg.filename, cfg.user);
+    if (!ota_app_start_ftp_ex(&cfg)) {
+        ESP_LOGE(TAG, "FtpOTA: 启动失败（忙或参数错误）");
+        return false;
+    }
+    return true;
 }
 
 /**
