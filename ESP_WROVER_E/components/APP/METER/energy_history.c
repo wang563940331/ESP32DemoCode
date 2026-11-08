@@ -308,7 +308,7 @@ static void energy_history_save_to_nvs(void)
 
 #if ENERGY_HISTORY_DAILY_SCHEDULE
 /**
- * @brief 确保本地时区为 CST-8（避免未设 TZ 时按 UTC 算午夜 → 显示成 08:00）
+ * @brief 确保本地时区为北京时间 CST-8（避免未设 TZ 时按 UTC 算午夜 → 显示成 08:00）
  * @return 无
  */
 static void energy_history_ensure_timezone(void)

@@ -41,6 +41,12 @@ const char *app_get_version_full(void);
 const char *app_get_build_time(void);
 
 /**
+ * @brief 获取固件编译时间（协议格式 YYYY-MM-DD HH:MM:SS，构建机本地时，工程约定北京时间）
+ * @return 编译时间字符串（静态缓冲，勿 free）
+ */
+const char *app_get_build_time_iso(void);
+
+/**
  * @brief 打印应用程序版本信息到日志
  * @return 无
  */

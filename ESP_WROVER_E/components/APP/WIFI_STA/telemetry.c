@@ -113,6 +113,9 @@ void telemetry_send_ctrlacl(const char *ctrl)
     cJSON_AddItemToObject(params, "ctrlacl", cJSON_CreateString(ctrl));
     /* 固件版本：标签-短哈希，便于平台识别 OTA 后版本 */
     cJSON_AddItemToObject(params, "version", cJSON_CreateString(app_get_version_full()));
+    /* 编译时间（协议格式，与 time 同形；构建约定北京时间） */
+    cJSON_AddItemToObject(params, "buildtime", cJSON_CreateString(app_get_build_time_iso()));
+    /* 当前北京时间 YYYY-MM-DD HH:MM:SS（TZ=CST-8） */
     cJSON_AddItemToObject(params, "time", cJSON_CreateString(time_str));
 
     char *payload = cJSON_PrintUnformatted(root);

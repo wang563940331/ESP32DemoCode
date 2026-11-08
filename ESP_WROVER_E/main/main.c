@@ -188,7 +188,7 @@ static void init_sd_card_log(void)
  */
 void init_TZ(void)
 {
-    /* 尽早设置东八区，避免电表历史在 MQTT/SNTP 之前按 UTC 把午夜记成 08:00 */
+    /* 全项目统一北京时间（东八区），避免 localtime 按 UTC 显示 */
     setenv("TZ", "CST-8", 1);
     tzset();
 }
@@ -235,6 +235,9 @@ void beep_init(void)
  
 void app_main(void)
 {
+    /* 最先设置北京时间，后续日志/电表/遥测 localtime 一律东八区 */
+    init_TZ();
+
     sShellInit();
 #if (SDCARDLOGEN == TRUE)
     /* 日志级别就绪后再挂 SD 落盘，与 en_log_set 同属日志子系统 */
@@ -248,8 +251,6 @@ void app_main(void)
     cjson_init_spiram();
     /* 设置日志级别并创建系统信息定时器 */
     en_log_set();
-    /* 尽早设置东八区，避免电表历史在 MQTT/SNTP 之前按 UTC 把午夜记成 08:00 */
-    init_TZ();
     /* 初始化LED */
     led_init();
     /* 初始化蜂鸣器 */

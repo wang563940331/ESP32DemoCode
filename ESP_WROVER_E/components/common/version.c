@@ -104,3 +104,42 @@ const char *app_get_build_time(void)
     s_ready = 1;
     return s_build_time;
 }
+
+/**
+ * @brief 获取固件编译时间（协议格式 YYYY-MM-DD HH:MM:SS）
+ * @return 编译时间字符串（静态缓冲，勿 free）
+ */
+const char *app_get_build_time_iso(void)
+{
+    /* "%04d-%02d-%02d HH:MM:SS" 最长约 19 字节，留足余量避免 -Wformat-truncation */
+    static char s_iso[32];
+    static int s_ready = 0;
+    char mon_abbr[4] = {0};
+    int day = 0;
+    int year = 0;
+    int month;
+    int hh = 0, mm = 0, ss = 0;
+
+    if (s_ready) {
+        return s_iso;
+    }
+
+    /* __DATE__/__TIME__ 为构建机本地时刻；工程约定构建机使用北京时间 */
+    if (sscanf(__DATE__, "%3s %d %d", mon_abbr, &day, &year) != 3) {
+        snprintf(s_iso, sizeof(s_iso), "1970-01-01 00:00:00");
+        s_ready = 1;
+        return s_iso;
+    }
+    month = version_month_from_abbr(mon_abbr);
+    if (month <= 0) {
+        snprintf(s_iso, sizeof(s_iso), "1970-01-01 00:00:00");
+        s_ready = 1;
+        return s_iso;
+    }
+    /* 拆开 __TIME__，避免把整段 %s 拼进定长缓冲触发截断告警 */
+    (void)sscanf(__TIME__, "%d:%d:%d", &hh, &mm, &ss);
+    snprintf(s_iso, sizeof(s_iso), "%04d-%02d-%02d %02d:%02d:%02d",
+             year, month, day, hh, mm, ss);
+    s_ready = 1;
+    return s_iso;
+}
