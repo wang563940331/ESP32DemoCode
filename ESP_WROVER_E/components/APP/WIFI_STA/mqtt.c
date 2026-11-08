@@ -26,6 +26,7 @@
 #include "event_payloads.h"
 #include "pwm.h"
 #include <string.h>
+#include <strings.h>
 TaskHandle_t myTaskHandle = NULL;
 static const char *TAG = "mqtt";
 
@@ -39,6 +40,53 @@ typedef struct {
     char pub_topic[MQTT_TOPIC_MAX_LEN]; /**< 发布主题（上行，来自 NVS） */
     char sub_topic[MQTT_TOPIC_MAX_LEN]; /**< 订阅主题（下行，来自 NVS） */
 } mqtt_ctx_t;
+
+/**
+ * @brief 判断 MQTT 主题是否未配置（空串或字面量 NULL）
+ * @param topic 主题字符串，可为 NULL
+ * @return true 表示需按序列号生成默认主题；false 表示已配置有效主题
+ */
+static bool mqtt_topic_is_unset(const char *topic)
+{
+    /* 空指针或空串视为未配置 */
+    if (topic == NULL || topic[0] == '\0') {
+        return true;
+    }
+    /* 出厂默认值约定为字面量 "NULL"，大小写不敏感 */
+    if (strcasecmp(topic, "NULL") == 0) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief 按设备序列号生成默认发布/订阅主题：{sn}/PubTopic、{sn}/SubTopic
+ * @param pub_out 发布主题输出缓冲
+ * @param pub_len 发布主题缓冲长度
+ * @param sub_out 订阅主题输出缓冲
+ * @param sub_len 订阅主题缓冲长度
+ * @return 无
+ */
+static void mqtt_fill_topics_from_sn(char *pub_out, size_t pub_len,
+                                     char *sub_out, size_t sub_len)
+{
+    char sn[32] = {0};
+
+    /* 从网关 NVS 读取序列号；失败则用 device 兜底，避免主题为空 */
+    if (sStorageGwGet(cStorageApCmdGwNvsSn, sizeof(sn), (u8 *)sn) != eStorageApRstSuccess
+        || sn[0] == '\0') {
+        strncpy(sn, "device", sizeof(sn) - 1);
+    }
+
+    if (pub_out != NULL && pub_len > 0) {
+        snprintf(pub_out, pub_len, "%s/PubTopic", sn);
+    }
+    if (sub_out != NULL && sub_len > 0) {
+        snprintf(sub_out, sub_len, "%s/SubTopic", sn);
+    }
+    ESP_LOGI(TAG, "MQTT 主题未配置，使用 SN 默认: pub=%s, sub=%s",
+             pub_out ? pub_out : "", sub_out ? sub_out : "");
+}
 
 static mqtt_ctx_t s_ctx = {
     .client = NULL,
@@ -112,9 +160,9 @@ void initialize_sntp() {
         return;
     }
     
-    // 设置时区（应在sntp_init之前调用）
+    /* 北京时间（与 main init_TZ 一致，SNTP 前再确认一次） */
     setenv("TZ", "CST-8", 1);
-    tzset(); // 更新时区设置
+    tzset();
     // 配置SNTP
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
     sntp_setservername(2, "pool.ntp.org");
@@ -152,8 +200,13 @@ static void aliot_mqtt_event_handler(void *event_handler_arg,
         ESP_LOGI(TAG, "MQTT 连接成功");
         ctx->is_connected = true;
         event_publish(EVENT_MQTT_CONNECTED, NULL, 0);
-        /* 使用 NVS 配置的订阅主题；空则回退默认宏 */
-        const char *sub = (ctx->sub_topic[0] != '\0') ? ctx->sub_topic : MQTT_SUBSCRIBE_TOPIC;
+        /* 运行时主题已在 init 阶段解析；此处仅防空再兜底 */
+        char sn_sub[MQTT_TOPIC_MAX_LEN] = {0};
+        const char *sub = ctx->sub_topic;
+        if (mqtt_topic_is_unset(sub)) {
+            mqtt_fill_topics_from_sn(NULL, 0, sn_sub, sizeof(sn_sub));
+            sub = sn_sub;
+        }
         ESP_LOGI(TAG, "MQTT 订阅主题: %s", sub);
         esp_mqtt_client_subscribe_single(ctx->client, sub, 1);
         break;
@@ -304,21 +357,25 @@ void mqtt_start(void)
     ESP_LOGI(TAG,"MQTT初始化!");
 
     sStorageApGet(cStorageApCmdNvsmqttIp,sizeof(MQTT_ADDRESS),(u8 *)MQTT_ADDRESS);
-    sStorageApGet(cStorageApCmdNvsmqttport,sizeof(MQTT_PORT),(u16 *)&MQTT_PORT);
+    /* 接口统一按 u8* 传缓冲，端口按小端写入 uint16_t */
+    sStorageApGet(cStorageApCmdNvsmqttport, sizeof(MQTT_PORT), (u8 *)&MQTT_PORT);
     sStorageApGet(cStorageApCmdNvsmqttuser,sizeof(MQTT_USERNAME),(u8 *)MQTT_USERNAME);
     sStorageApGet(cStorageApCmdNvsmqttpasswd,sizeof(MQTT_PASSWORD),(u8 *)MQTT_PASSWORD);
     sStorageApGet(cStorageApCmdNvsmqttclient,sizeof(MQTT_CLIENT),(u8 *)MQTT_CLIENT);
 
-    /* 从 NVS 加载发布/订阅主题；读失败或为空则用编译期默认值 */
+    /* 从 NVS 加载发布/订阅主题；空或 NULL 则按 {sn}/PubTopic、{sn}/SubTopic */
     memset(s_ctx.pub_topic, 0, sizeof(s_ctx.pub_topic));
     memset(s_ctx.sub_topic, 0, sizeof(s_ctx.sub_topic));
-    if (sStorageApGet(cStorageApCmdNvsmqttpub, sizeof(s_ctx.pub_topic), (u8 *)s_ctx.pub_topic) != eStorageApRstSuccess
-        || s_ctx.pub_topic[0] == '\0') {
-        strncpy(s_ctx.pub_topic, MQTT_PUBLIC_TOPIC, sizeof(s_ctx.pub_topic) - 1);
-    }
-    if (sStorageApGet(cStorageApCmdNvsmqttsub, sizeof(s_ctx.sub_topic), (u8 *)s_ctx.sub_topic) != eStorageApRstSuccess
-        || s_ctx.sub_topic[0] == '\0') {
-        strncpy(s_ctx.sub_topic, MQTT_SUBSCRIBE_TOPIC, sizeof(s_ctx.sub_topic) - 1);
+    (void)sStorageApGet(cStorageApCmdNvsmqttpub, sizeof(s_ctx.pub_topic), (u8 *)s_ctx.pub_topic);
+    (void)sStorageApGet(cStorageApCmdNvsmqttsub, sizeof(s_ctx.sub_topic), (u8 *)s_ctx.sub_topic);
+    /* 直接写入 ctx，避免同长 strncpy 触发 -Werror=stringop-truncation */
+    if (mqtt_topic_is_unset(s_ctx.pub_topic) && mqtt_topic_is_unset(s_ctx.sub_topic)) {
+        mqtt_fill_topics_from_sn(s_ctx.pub_topic, sizeof(s_ctx.pub_topic),
+                                 s_ctx.sub_topic, sizeof(s_ctx.sub_topic));
+    } else if (mqtt_topic_is_unset(s_ctx.pub_topic)) {
+        mqtt_fill_topics_from_sn(s_ctx.pub_topic, sizeof(s_ctx.pub_topic), NULL, 0);
+    } else if (mqtt_topic_is_unset(s_ctx.sub_topic)) {
+        mqtt_fill_topics_from_sn(NULL, 0, s_ctx.sub_topic, sizeof(s_ctx.sub_topic));
     }
     ESP_LOGI(TAG, "MQTT 主题: pub=%s, sub=%s", s_ctx.pub_topic, s_ctx.sub_topic);
 
@@ -379,8 +436,13 @@ esp_err_t mqtt_publish_payload(const char *payload)
     if (payload == NULL || s_ctx.client == NULL || !s_ctx.is_connected) {
         return ESP_FAIL;
     }
-    /* 优先用运行时 NVS 主题，兜底编译期默认 */
-    const char *pub = (s_ctx.pub_topic[0] != '\0') ? s_ctx.pub_topic : MQTT_PUBLIC_TOPIC;
+    /* 优先用 init 已解析的主题；异常为空时再按 SN 生成 */
+    char sn_pub[MQTT_TOPIC_MAX_LEN] = {0};
+    const char *pub = s_ctx.pub_topic;
+    if (mqtt_topic_is_unset(pub)) {
+        mqtt_fill_topics_from_sn(sn_pub, sizeof(sn_pub), NULL, 0);
+        pub = sn_pub;
+    }
     int msg_id = esp_mqtt_client_publish(s_ctx.client, pub,
                                          payload, (int)strlen(payload), 1, 0);
     return (msg_id >= 0) ? ESP_OK : ESP_FAIL;

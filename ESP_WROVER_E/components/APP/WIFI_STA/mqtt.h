@@ -30,8 +30,9 @@
 
 
 #define MQTT_TOPIC_MAX_LEN     64
-#define MQTT_PUBLIC_TOPIC      "device/pub"       // 上行主题默认值（NVS 空时回退）
-#define MQTT_SUBSCRIBE_TOPIC    "device/sub"      // 下行主题默认值（NVS 空时回退）
+/* NVS 主题为 NULL/空时，运行时使用 {sn}/PubTopic 与 {sn}/SubTopic */
+#define MQTT_PUBLIC_TOPIC      "device/pub"       // 兼容旧宏，勿再作空主题回退
+#define MQTT_SUBSCRIBE_TOPIC    "device/sub"      // 兼容旧宏，勿再作空主题回退
 
 typedef enum
 {
